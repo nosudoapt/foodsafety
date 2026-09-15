@@ -1,0 +1,28 @@
+{
+  "name": "FoodSafe - Digital HACCP Food Safety Management",
+  "short_name": "FoodSafe",
+  "description": "Digital HACCP food safety management app for cafés, restaurants, takeaways, pubs and catering businesses.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#f0fdf4",
+  "theme_color": "#16a34a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "food", "health"],
+  "scope": "/",
+  "lang": "en",
+  "dir": "ltr"
+}
