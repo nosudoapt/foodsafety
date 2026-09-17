@@ -108,6 +108,21 @@ export default function BetweenTheBunsHome() {
               Allergen info for all bun types — Dairy, Egg, Gluten
             </p>
           </Link>
+
+          <Link
+            href="/between-the-buns/gluten-free"
+            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
+          >
+            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-2xl mb-4">
+              🥗
+            </div>
+            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
+              Gluten Free Menu
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Safe options for gluten-free and Celiac customers
+            </p>
+          </Link>
         </div>
 
         <div className="mt-8 text-center">
