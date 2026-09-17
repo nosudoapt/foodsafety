@@ -35,7 +35,7 @@ export default function BetweenTheBunsHome() {
           </Link>
 
           <Link
-            href="/between-the-buns/checks"
+            href="/checks"
             className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
           >
             <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-2xl mb-4">
