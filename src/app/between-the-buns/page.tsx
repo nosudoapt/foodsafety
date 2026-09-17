@@ -35,6 +35,21 @@ export default function BetweenTheBunsHome() {
           </Link>
 
           <Link
+            href="/between-the-buns/prep-list"
+            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
+          >
+            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-2xl mb-4">
+              📋
+            </div>
+            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
+              Daily Prep List
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Track par, on hand, make quantities — keep 7 days of records
+            </p>
+          </Link>
+
+          <Link
             href="/checks"
             className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
           >
@@ -50,10 +65,10 @@ export default function BetweenTheBunsHome() {
           </Link>
 
           <Link
-            href="/between-the-buns/temperatures"
+            href="/temperatures"
             className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
           >
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-2xl mb-4">
+            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl mb-4">
               🌡️
             </div>
             <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
@@ -61,21 +76,6 @@ export default function BetweenTheBunsHome() {
             </h3>
             <p className="text-sm text-gray-600 mt-1">
               Record cooking, cooling, and storage temperatures
-            </p>
-          </Link>
-
-          <Link
-            href="/between-the-buns/cleaning"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              🧹
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Cleaning Schedule
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Daily, weekly, and monthly cleaning tasks
             </p>
           </Link>
         </div>
