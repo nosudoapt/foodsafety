@@ -93,6 +93,21 @@ export default function BetweenTheBunsHome() {
               Weekly cleaning tasks — each item done once per week
             </p>
           </Link>
+
+          <Link
+            href="/between-the-buns/allergen-chart"
+            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
+          >
+            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-2xl mb-4">
+              ⚠️
+            </div>
+            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
+              Bun Allergy Chart
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Allergen info for all bun types — Dairy, Egg, Gluten
+            </p>
+          </Link>
         </div>
 
         <div className="mt-8 text-center">
