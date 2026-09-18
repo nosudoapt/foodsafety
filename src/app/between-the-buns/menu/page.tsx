@@ -160,30 +160,42 @@ export default function MenuPage() {
           })
         )}
 
-        {/* Procedures Section */}
-        <div className="mt-8">
-          <h2 className="text-lg font-bold text-gray-900 mb-4">Procedures</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {Object.entries(procedures).map(([key, proc]) => (
-              <div
-                key={key}
-                className="bg-white rounded-xl border border-gray-200 p-4"
-              >
-                <h3 className="font-bold text-gray-900 mb-2">{proc.title}</h3>
-                <ol className="space-y-1">
-                  {proc.steps.map((step, idx) => (
-                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                      <span className="font-bold text-red-600 flex-shrink-0">
-                        {idx + 1}.
-                      </span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
+        {/* Procedures Section - filter based on search */}
+        {(() => {
+          const relevantProcedures = Object.entries(procedures).filter(([key]) => {
+            if (!search) return true;
+            return (
+              key.toLowerCase().includes(search.toLowerCase()) ||
+              procedures[key as keyof typeof procedures].title.toLowerCase().includes(search.toLowerCase())
+            );
+          });
+          if (relevantProcedures.length === 0) return null;
+          return (
+            <div className="mt-8">
+              <h2 className="text-lg font-bold text-gray-900 mb-4">Procedures</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {relevantProcedures.map(([key, proc]) => (
+                  <div
+                    key={key}
+                    className="bg-white rounded-xl border border-gray-200 p-4"
+                  >
+                    <h3 className="font-bold text-gray-900 mb-2">{proc.title}</h3>
+                    <ol className="space-y-1">
+                      {proc.steps.map((step, idx) => (
+                        <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                          <span className="font-bold text-red-600 flex-shrink-0">
+                            {idx + 1}.
+                          </span>
+                          {step}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          );
+        })()}
 
         <div className="text-center py-6">
           <p className="text-xs text-gray-400">© Between the Buns — Recipe Cheat Sheets</p>

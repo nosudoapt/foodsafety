@@ -138,6 +138,21 @@ export default function BetweenTheBunsHome() {
               All burgers, wraps, salads, smoothies & milkshakes with ingredients
             </p>
           </Link>
+
+          <Link
+            href="/admin"
+            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
+          >
+            <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl mb-4">
+              ⚙️
+            </div>
+            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
+              Admin Panel
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Documents, inspections, staff licenses & management
+            </p>
+          </Link>
         </div>
 
         <div className="mt-8 text-center">

@@ -37,16 +37,23 @@ export default function PrepListPage() {
   };
 
   const updateEntry = (itemName: string, field: keyof PrepEntry, value: string) => {
-    setPrepData((prev) => ({
-      ...prev,
-      [itemName]: {
-        par: prev[itemName]?.par || "",
-        oh: prev[itemName]?.oh || "",
-        make: prev[itemName]?.make || "",
-        initial: prev[itemName]?.initial || "",
-        [field]: value,
-      },
-    }));
+    setPrepData((prev) => {
+      const current = prev[itemName] || { par: "", oh: "", make: "", initial: "" };
+      const updated = { ...current, [field]: value };
+
+      // Auto-calculate Make = Par - OH (only when both are numbers)
+      if (field === "par" || field === "oh") {
+        const par = parseFloat(field === "par" ? value : current.par);
+        const oh = parseFloat(field === "oh" ? value : current.oh);
+        if (!isNaN(par) && !isNaN(oh)) {
+          updated.make = String(Math.max(0, par - oh));
+        } else {
+          updated.make = "";
+        }
+      }
+
+      return { ...prev, [itemName]: updated };
+    });
   };
 
   const savePrepList = () => {
@@ -215,8 +222,9 @@ export default function PrepListPage() {
                           <input
                             type="text"
                             value={prepData[item.name]?.make || ""}
-                            onChange={(e) => updateEntry(item.name, "make", e.target.value)}
-                            className="w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 bg-white focus:ring-1 focus:ring-red-500 text-center"
+                            readOnly
+                            className="w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 bg-gray-50 text-center font-bold"
+                            title="Auto-calculated: Par - OH"
                           />
                           <input
                             type="text"

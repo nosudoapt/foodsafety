@@ -1,11 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { cleaningTasks, generateWeekDates, getWeekLabel } from "@/lib/btb-cleaning";
+
+interface PhotoEntry {
+  before: string | null;
+  after: string | null;
+}
 
 interface TaskCompletion {
   [taskIndex: number]: {
-    [date: string]: string; // date -> initial
+    [date: string]: {
+      initial: string;
+      photos: PhotoEntry;
+    };
   };
 }
 
@@ -24,11 +32,23 @@ function getStartOfWeek(date: Date): Date {
   return d;
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function CleaningSchedulePage() {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
   const [taskData, setTaskData] = useState<TaskCompletion>({});
   const [savedSchedules, setSavedSchedules] = useState<SavedSchedule[]>([]);
   const [activeTab, setActiveTab] = useState<"today" | "history">("today");
+  const [photoModal, setPhotoModal] = useState<{ taskIdx: number; date: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadType, setUploadType] = useState<"before" | "after">("before");
 
   const weekDates = generateWeekDates(currentWeekStart);
   const weekLabel = getWeekLabel(weekDates);
@@ -54,13 +74,16 @@ export default function CleaningSchedulePage() {
       ...prev,
       [taskIdx]: {
         ...(prev[taskIdx] || {}),
-        [date]: initial,
+        [date]: {
+          initial,
+          photos: prev[taskIdx]?.[date]?.photos || { before: null, after: null },
+        },
       },
     }));
   };
 
   const isTaskDone = (taskIdx: number, date: string) => {
-    return !!taskData[taskIdx]?.[date];
+    return !!taskData[taskIdx]?.[date]?.initial;
   };
 
   const getCompletedCount = () => {
@@ -71,6 +94,52 @@ export default function CleaningSchedulePage() {
       });
     });
     return count;
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0] || !photoModal) return;
+    const file = e.target.files[0];
+    const base64 = await fileToBase64(file);
+
+    setTaskData((prev) => {
+      const current = prev[photoModal.taskIdx]?.[photoModal.date] || { initial: "", photos: { before: null, after: null } };
+      return {
+        ...prev,
+        [photoModal.taskIdx]: {
+          ...(prev[photoModal.taskIdx] || {}),
+          [photoModal.date]: {
+            ...current,
+            photos: {
+              ...current.photos,
+              [uploadType]: base64,
+            },
+          },
+        },
+      };
+    });
+
+    setPhotoModal(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removePhoto = (taskIdx: number, date: string, type: "before" | "after") => {
+    setTaskData((prev) => {
+      const current = prev[taskIdx]?.[date];
+      if (!current) return prev;
+      return {
+        ...prev,
+        [taskIdx]: {
+          ...prev[taskIdx],
+          [date]: {
+            ...current,
+            photos: {
+              ...current.photos,
+              [type]: null,
+            },
+          },
+        },
+      };
+    });
   };
 
   const saveSchedule = () => {
@@ -100,6 +169,38 @@ export default function CleaningSchedulePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Photo Upload Modal */}
+      {photoModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h3 className="font-bold text-gray-900 mb-1">
+              Upload {uploadType === "before" ? "Before" : "After"} Photo
+            </h3>
+            <p className="text-sm text-gray-500 mb-4">
+              Task {photoModal.taskIdx + 1}: {cleaningTasks[photoModal.taskIdx]}
+            </p>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handlePhotoUpload}
+              className="w-full mb-4"
+            />
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setPhotoModal(null)}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-6xl mx-auto px-4 py-4">
@@ -173,9 +274,9 @@ export default function CleaningSchedulePage() {
             </div>
 
             {/* Schedule Table */}
-            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
               {/* Header Row */}
-              <div className="grid grid-cols-[1fr_repeat(7,60px)] bg-gray-50 border-b border-gray-200">
+              <div className="grid grid-cols-[1fr_repeat(7,80px)] bg-gray-50 border-b border-gray-200 min-w-[700px]">
                 <div className="px-4 py-3 text-xs font-bold text-gray-500 uppercase">
                   Task
                 </div>
@@ -204,9 +305,9 @@ export default function CleaningSchedulePage() {
               {cleaningTasks.map((task, taskIdx) => (
                 <div
                   key={taskIdx}
-                  className={`grid grid-cols-[1fr_repeat(7,60px)] border-b border-gray-100 ${
+                  className={`grid grid-cols-[1fr_repeat(7,80px)] border-b border-gray-100 ${
                     taskIdx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                  }`}
+                  } min-w-[700px]`}
                 >
                   <div className="px-4 py-3 text-sm font-medium text-gray-900">
                     <span className="text-gray-400 mr-2">{taskIdx + 1}.</span>
@@ -215,33 +316,128 @@ export default function CleaningSchedulePage() {
                   {weekDates.map((date, dateIdx) => {
                     const isToday = new Date().toISOString().split("T")[0] === date;
                     const isDone = isTaskDone(taskIdx, date);
+                    const photos = taskData[taskIdx]?.[date]?.photos;
                     return (
                       <div
                         key={dateIdx}
-                        className={`border-l border-gray-200 flex items-center justify-center ${
+                        className={`border-l border-gray-200 flex flex-col items-center justify-center py-1 gap-1 ${
                           isToday ? "bg-red-50" : ""
                         }`}
                       >
                         <input
                           type="text"
-                          value={taskData[taskIdx]?.[date] || ""}
+                          value={taskData[taskIdx]?.[date]?.initial || ""}
                           onChange={(e) =>
                             updateInitial(taskIdx, date, e.target.value.toUpperCase())
                           }
                           maxLength={3}
-                          className={`w-12 h-10 text-center text-xs font-bold border-0 rounded ${
+                          className={`w-12 h-8 text-center text-xs font-bold border-0 rounded ${
                             isDone
                               ? "bg-green-100 text-green-700"
                               : "bg-transparent text-gray-900 focus:ring-2 focus:ring-red-500"
                           }`}
                           placeholder="—"
                         />
+                        {/* Photo buttons */}
+                        {isDone && (
+                          <div className="flex gap-0.5">
+                            <button
+                              onClick={() => {
+                                setUploadType("before");
+                                setPhotoModal({ taskIdx, date });
+                              }}
+                              className={`text-[8px] px-1 py-0.5 rounded font-medium ${
+                                photos?.before
+                                  ? "bg-blue-100 text-blue-700"
+                                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                              }`}
+                              title={photos?.before ? "Before photo uploaded ✓" : "Upload before photo"}
+                            >
+                              📷B
+                            </button>
+                            <button
+                              onClick={() => {
+                                setUploadType("after");
+                                setPhotoModal({ taskIdx, date });
+                              }}
+                              className={`text-[8px] px-1 py-0.5 rounded font-medium ${
+                                photos?.after
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                              }`}
+                              title={photos?.after ? "After photo uploaded ✓" : "Upload after photo"}
+                            >
+                              📷A
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               ))}
             </div>
+
+            {/* Photo Preview */}
+            {Object.keys(taskData).length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-sm font-bold text-gray-700 mb-2">Uploaded Photos</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  {Object.entries(taskData).map(([taskIdx, dates]) =>
+                    Object.entries(dates).map(([date, data]) => {
+                      if (typeof data === "string") return null;
+                      const photos = data.photos;
+                      if (!photos?.before && !photos?.after) return null;
+                      return (
+                        <div key={`${taskIdx}-${date}`} className="bg-white rounded-lg border border-gray-200 p-2">
+                          <p className="text-[10px] font-bold text-gray-500 mb-1 truncate">
+                            Task {Number(taskIdx) + 1} · {date}
+                          </p>
+                          <div className="flex gap-1">
+                            {photos.before && (
+                              <div className="relative flex-1">
+                                <img
+                                  src={photos.before}
+                                  alt="Before"
+                                  className="w-full h-16 object-cover rounded"
+                                />
+                                <span className="absolute bottom-0.5 left-0.5 bg-blue-600 text-white text-[7px] px-1 rounded">
+                                  Before
+                                </span>
+                                <button
+                                  onClick={() => removePhoto(Number(taskIdx), date, "before")}
+                                  className="absolute top-0.5 right-0.5 bg-red-500 text-white w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
+                            {photos.after && (
+                              <div className="relative flex-1">
+                                <img
+                                  src={photos.after}
+                                  alt="After"
+                                  className="w-full h-16 object-cover rounded"
+                                />
+                                <span className="absolute bottom-0.5 left-0.5 bg-green-600 text-white text-[7px] px-1 rounded">
+                                  After
+                                </span>
+                                <button
+                                  onClick={() => removePhoto(Number(taskIdx), date, "after")}
+                                  className="absolute top-0.5 right-0.5 bg-red-500 text-white w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Save Button */}
             <div className="mt-6 flex gap-3">
@@ -278,10 +474,18 @@ export default function CleaningSchedulePage() {
                   d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
                 let completedTasks = 0;
+                let photoCount = 0;
                 cleaningTasks.forEach((_, idx) => {
                   const dates = generateWeekDates(weekStart);
                   dates.forEach((date) => {
-                    if (schedule.data[idx]?.[date]) completedTasks++;
+                    const entry = schedule.data[idx]?.[date];
+                    if (entry) {
+                      completedTasks++;
+                      if (typeof entry === "object") {
+                        if (entry.photos?.before) photoCount++;
+                        if (entry.photos?.after) photoCount++;
+                      }
+                    }
                   });
                 });
 
@@ -296,7 +500,7 @@ export default function CleaningSchedulePage() {
                           {format(weekStart)} – {format(weekEnd)}
                         </h3>
                         <p className="text-xs text-gray-500">
-                          {completedTasks}/{cleaningTasks.length * 7} tasks · Saved{" "}
+                          {completedTasks}/{cleaningTasks.length * 7} tasks · {photoCount} photos · Saved{" "}
                           {new Date(schedule.savedAt).toLocaleDateString()}
                         </p>
                       </div>
