@@ -1,6 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabase";
+import {
+  getSessionUser,
+  getProfileContext,
+  readLocal,
+  writeLocal,
+} from "@/lib/admin-store";
 
 interface InspectionItem {
   id: string;
@@ -25,6 +32,21 @@ interface SavedInspection {
   maxScore: number;
   notes: string;
   savedAt: string;
+}
+
+const STORAGE_KEY = "btb-inhouse-inspections";
+
+function rowToSaved(row: Record<string, unknown>): SavedInspection {
+  return {
+    id: String(row.id),
+    date: String(row.inspection_date || ""),
+    inspector: String(row.inspector_name || ""),
+    sections: (row.sections as InspectionSection[]) || [],
+    overallScore: Number(row.overall_score || 0),
+    maxScore: Number(row.max_score || 0),
+    notes: String(row.notes || ""),
+    savedAt: String(row.created_at || ""),
+  };
 }
 
 const defaultSections: InspectionSection[] = [
@@ -86,6 +108,36 @@ export default function InHouseInspectionPage() {
   const [savedInspections, setSavedInspections] = useState<SavedInspection[]>([]);
   const [activeTab, setActiveTab] = useState<"form" | "history">("form");
 
+  useEffect(() => {
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
+      void (async () => {
+        const user = await getSessionUser();
+        if (cancelled) return;
+        if (user) {
+          const { data, error } = await supabase
+            .from("inhouse_inspections")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+          if (!cancelled && !error && data) {
+            const mapped = data.map(rowToSaved);
+            setSavedInspections(mapped);
+            writeLocal(STORAGE_KEY, mapped);
+            return;
+          }
+        }
+        if (!cancelled) {
+          setSavedInspections(readLocal<SavedInspection[]>(STORAGE_KEY, []));
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
   const updateItemStatus = (sectionIdx: number, itemIdx: number, status: "pass" | "fail" | "na") => {
     setSections((prev) => {
       const updated = [...prev];
@@ -143,14 +195,15 @@ export default function InHouseInspectionPage() {
     return Math.round((getOverallScore() / max) * 100);
   };
 
-  const saveInspection = () => {
+  const saveInspection = async () => {
     if (!inspectorName) {
       alert("Please enter inspector name");
       return;
     }
 
+    const id = crypto.randomUUID();
     const newInspection: SavedInspection = {
-      id: Date.now().toString(),
+      id,
       date: inspectionDate,
       inspector: inspectorName,
       sections: JSON.parse(JSON.stringify(sections)),
@@ -160,8 +213,28 @@ export default function InHouseInspectionPage() {
       savedAt: new Date().toISOString(),
     };
 
-    setSavedInspections((prev) => [newInspection, ...prev]);
+    const next = [newInspection, ...savedInspections];
+    setSavedInspections(next);
+    writeLocal(STORAGE_KEY, next);
     setActiveTab("history");
+
+    const user = await getSessionUser();
+    if (user) {
+      const ctx = await getProfileContext();
+      const { error } = await supabase.from("inhouse_inspections").insert({
+        id,
+        user_id: user.id,
+        restaurant_name: ctx.restaurantName,
+        inspection_date: inspectionDate,
+        inspector_name: inspectorName,
+        sections: newInspection.sections,
+        overall_score: newInspection.overallScore,
+        max_score: newInspection.maxScore,
+        notes,
+        quarter: `Q${Math.floor(new Date(inspectionDate).getMonth() / 3) + 1} ${new Date(inspectionDate).getFullYear()}`,
+      });
+      if (error) console.warn("inhouse_inspections insert failed:", error.message);
+    }
   };
 
   const loadInspection = (inspection: SavedInspection) => {
@@ -174,7 +247,19 @@ export default function InHouseInspectionPage() {
 
   const deleteInspection = (id: string) => {
     if (!confirm("Delete this inspection?")) return;
-    setSavedInspections((prev) => prev.filter((i) => i.id !== id));
+    const next = savedInspections.filter((i) => i.id !== id);
+    setSavedInspections(next);
+    writeLocal(STORAGE_KEY, next);
+    void (async () => {
+      const user = await getSessionUser();
+      if (user) {
+        await supabase
+          .from("inhouse_inspections")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", user.id);
+      }
+    })();
   };
 
   const getScoreColor = (percentage: number) => {

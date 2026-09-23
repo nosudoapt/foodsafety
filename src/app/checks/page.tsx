@@ -53,20 +53,34 @@ const defaultClosingItems = [
   { id: "c20", text: "DOUBLE CHECK: All locks, appliances & lights before leaving", completed: false, section: "Kitchen" },
 ];
 
+interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  section: string;
+}
+
+interface DailyCheckRecord {
+  id: string;
+  user_id: string;
+  restaurant_name: string;
+  check_type: "opening" | "closing";
+  checklist_items: ChecklistItem[];
+  completed: boolean;
+  completed_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
 export default function ChecksPage() {
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<DailyCheckRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkType, setCheckType] = useState<"opening" | "closing">("opening");
   const [checklistItems, setChecklistItems] = useState(defaultOpeningItems);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [activeCheckId, setActiveCheckId] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<"all" | "opening" | "closing">("all");
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchHistory();
-  }, []);
 
   const fetchHistory = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -79,14 +93,20 @@ export default function ChecksPage() {
       .order("created_at", { ascending: false })
       .limit(50);
 
-    setHistory(data || []);
+    setHistory((data as DailyCheckRecord[]) || []);
     setLoading(false);
   };
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      fetchHistory();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const handleCheckTypeChange = (type: "opening" | "closing") => {
     setCheckType(type);
     setChecklistItems(type === "opening" ? defaultOpeningItems : defaultClosingItems);
-    setActiveCheckId(null);
     setNotes("");
   };
 
@@ -123,7 +143,6 @@ export default function ChecksPage() {
     if (!error) {
       setChecklistItems(checkType === "opening" ? defaultOpeningItems : defaultClosingItems);
       setNotes("");
-      setActiveCheckId(null);
       fetchHistory();
     }
     setSaving(false);
@@ -327,7 +346,7 @@ export default function ChecksPage() {
           <div className="divide-y divide-gray-200">
             {filteredHistory.map((check) => {
               const items = check.checklist_items || [];
-              const completedItems = items.filter((i: any) => i.completed).length;
+              const completedItems = items.filter((i: ChecklistItem) => i.completed).length;
               const expanded = expandedHistoryId === check.id;
 
               return (
@@ -396,7 +415,7 @@ export default function ChecksPage() {
                   {expanded && (
                     <div className="px-4 pb-4">
                       <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-                        {items.map((item: any) => (
+                        {items.map((item: ChecklistItem) => (
                           <div
                             key={item.id}
                             className="flex items-center gap-2 text-sm"

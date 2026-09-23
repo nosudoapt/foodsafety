@@ -37,8 +37,21 @@ const frequencyIcons: Record<string, string> = {
   monthly: "🗓️",
 };
 
+interface CleaningRecord {
+  id: string;
+  user_id: string;
+  restaurant_name: string;
+  task_name: string;
+  area: string;
+  frequency: "daily" | "weekly" | "monthly";
+  completed: boolean;
+  completed_at: string | null;
+  notes: string;
+  created_at: string;
+}
+
 export default function CleaningPage() {
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<CleaningRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"tasks" | "history">("tasks");
@@ -48,10 +61,6 @@ export default function CleaningPage() {
     frequency: "daily" as "daily" | "weekly" | "monthly",
     notes: "",
   });
-
-  useEffect(() => {
-    fetchRecords();
-  }, []);
 
   const fetchRecords = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -64,9 +73,16 @@ export default function CleaningPage() {
       .order("created_at", { ascending: false })
       .limit(100);
 
-    setRecords(data || []);
+    setRecords((data as CleaningRecord[]) || []);
     setLoading(false);
   };
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      fetchRecords();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

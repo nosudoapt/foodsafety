@@ -1,9 +1,63 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
 
 type DateRange = "today" | "week" | "month" | "all";
+
+interface TemperatureRecord {
+  id: string;
+  user_id: string;
+  restaurant_name: string;
+  equipment_name: string;
+  record_type: string;
+  food_item: string;
+  temperature: number;
+  min_safe_temp: number;
+  max_safe_temp: number;
+  is_safe: boolean;
+  notes: string;
+  recorded_at: string;
+  created_at: string;
+}
+
+interface DailyCheckRecord {
+  id: string;
+  user_id: string;
+  restaurant_name: string;
+  check_type: "opening" | "closing";
+  checklist_items: unknown;
+  completed: boolean;
+  completed_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+interface CleaningRecord {
+  id: string;
+  user_id: string;
+  restaurant_name: string;
+  task_name: string;
+  area: string;
+  frequency: "daily" | "weekly" | "monthly";
+  completed: boolean;
+  completed_at: string | null;
+  notes: string;
+  created_at: string;
+}
+
+interface CorrectiveActionRecord {
+  id: string;
+  user_id: string;
+  restaurant_name: string;
+  issue_description: string;
+  severity: "low" | "medium" | "high" | "critical";
+  action_taken: string;
+  resolved: boolean;
+  resolved_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
 
 interface TemperatureSummary {
   total: number;
@@ -76,16 +130,12 @@ function getDateRangeFilter(range: DateRange): string | null {
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>("week");
-  const [temperatureData, setTemperatureData] = useState<any[]>([]);
-  const [dailyChecksData, setDailyChecksData] = useState<any[]>([]);
-  const [cleaningData, setCleaningData] = useState<any[]>([]);
-  const [correctiveData, setCorrectiveData] = useState<any[]>([]);
+  const [temperatureData, setTemperatureData] = useState<TemperatureRecord[]>([]);
+  const [dailyChecksData, setDailyChecksData] = useState<DailyCheckRecord[]>([]);
+  const [cleaningData, setCleaningData] = useState<CleaningRecord[]>([]);
+  const [correctiveData, setCorrectiveData] = useState<CorrectiveActionRecord[]>([]);
 
-  useEffect(() => {
-    fetchAllData();
-  }, [dateRange]);
-
-  const fetchAllData = async () => {
+  const fetchAllData = useCallback(async () => {
     setLoading(true);
     const {
       data: { session },
@@ -103,27 +153,27 @@ export default function ReportsPage() {
         .from("temperature_records")
         .select("*")
         .eq("user_id", userId)
-        .then((r) => r.data || []),
+        .then((r) => (r.data as TemperatureRecord[]) || []),
       supabase
         .from("daily_checks")
         .select("*")
         .eq("user_id", userId)
-        .then((r) => r.data || []),
+        .then((r) => (r.data as DailyCheckRecord[]) || []),
       supabase
         .from("cleaning_records")
         .select("*")
         .eq("user_id", userId)
-        .then((r) => r.data || []),
+        .then((r) => (r.data as CleaningRecord[]) || []),
       supabase
         .from("corrective_actions")
         .select("*")
         .eq("user_id", userId)
-        .then((r) => r.data || []),
+        .then((r) => (r.data as CorrectiveActionRecord[]) || []),
     ]);
 
-    const filterByDate = (items: any[], field: string) => {
+    const filterByDate = <T,>(items: T[], field: keyof T) => {
       if (!since) return items;
-      return items.filter((item) => new Date(item[field]) >= new Date(since));
+      return items.filter((item) => new Date(item[field] as string) >= new Date(since));
     };
 
     setTemperatureData(filterByDate(temps, "recorded_at"));
@@ -131,7 +181,14 @@ export default function ReportsPage() {
     setCleaningData(filterByDate(cleaning, "created_at"));
     setCorrectiveData(filterByDate(actions, "created_at"));
     setLoading(false);
-  };
+  }, [dateRange]);
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      fetchAllData();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [fetchAllData]);
 
   const temperatureSummary: TemperatureSummary = {
     total: temperatureData.length,

@@ -1,158 +1,192 @@
 "use client";
 
 import Link from "next/link";
+import {
+  BookOpen,
+  ListTodo,
+  CheckCircle2,
+  Thermometer,
+  CalendarCheck,
+  AlertTriangle,
+  WheatOff,
+  UtensilsCrossed,
+  Settings,
+  ListChecks,
+  KeyRound,
+  BookOpenCheck,
+  Files,
+  Rocket,
+  ScrollText,
+  ClipboardList,
+} from "lucide-react";
+import type { ComponentType, SVGProps } from "react";
+
+interface HubCard {
+  href: string;
+  title: string;
+  description: string;
+  icon: ComponentType<SVGProps<SVGSVGElement> & { strokeWidth?: number | string }>;
+  accent: string;
+}
+
+const cards: HubCard[] = [
+  {
+    href: "/between-the-buns/prep-manual",
+    title: "Prep Manual",
+    description: "Searchable recipes and preparation guides — 21 recipes",
+    icon: BookOpen,
+    accent: "bg-red-50 text-red-600",
+  },
+  {
+    href: "/between-the-buns/prep-count",
+    title: "Daily Prep Count",
+    description: "MAKE = PAR − OH · keeps 1 week of records",
+    icon: ListTodo,
+    accent: "bg-orange-50 text-orange-600",
+  },
+  {
+    href: "/between-the-buns/order-sheet",
+    title: "Order Sheet",
+    description: "ORDER = PAR − OH · keeps 3 months of records",
+    icon: ClipboardList,
+    accent: "bg-amber-50 text-amber-600",
+  },
+  {
+    href: "/checks",
+    title: "Daily Checks",
+    description: "Opening and closing duty checklists",
+    icon: CheckCircle2,
+    accent: "bg-emerald-50 text-emerald-600",
+  },
+  {
+    href: "/temperatures",
+    title: "Temperature Log",
+    description: "Daily temp sheet — 90-day record",
+    icon: Thermometer,
+    accent: "bg-blue-50 text-blue-600",
+  },
+  {
+    href: "/between-the-buns/cleaning-schedule",
+    title: "Cleaning Schedule",
+    description: "Weekly tasks with before & after photos",
+    icon: CalendarCheck,
+    accent: "bg-purple-50 text-purple-600",
+  },
+  {
+    href: "/between-the-buns/allergen-chart",
+    title: "Bun Allergy Chart",
+    description: "Allergen info for all bun types — Dairy, Egg, Gluten",
+    icon: AlertTriangle,
+    accent: "bg-amber-50 text-amber-600",
+  },
+  {
+    href: "/between-the-buns/gluten-free",
+    title: "Gluten Free Menu",
+    description: "Safe options for gluten-free and Celiac customers",
+    icon: WheatOff,
+    accent: "bg-green-50 text-green-600",
+  },
+  {
+    href: "/between-the-buns/menu",
+    title: "Recipe Cheat Sheets",
+    description: "Burgers, wraps, salads, smoothies & milkshakes",
+    icon: UtensilsCrossed,
+    accent: "bg-yellow-50 text-yellow-700",
+  },
+  {
+    href: "/admin/steps",
+    title: "Steps to do",
+    description: "Power, internet, debit machine & phone outages",
+    icon: ListChecks,
+    accent: "bg-red-50 text-red-600",
+  },
+  {
+    href: "/admin/procedures",
+    title: "Procedure Cheat Sheet",
+    description: "Temps, hygiene, storage & emergency procedures",
+    icon: ScrollText,
+    accent: "bg-rose-50 text-rose-600",
+  },
+  {
+    href: "/admin/vault",
+    title: "Login Vault",
+    description: "POS, bank, delivery & utility credentials",
+    icon: KeyRound,
+    accent: "bg-slate-100 text-slate-600",
+  },
+  {
+    href: "/admin/handbook",
+    title: "Employee Handbook",
+    description: "Read, digitally sign, keep the record",
+    icon: BookOpenCheck,
+    accent: "bg-indigo-50 text-indigo-600",
+  },
+  {
+    href: "/admin/print-materials",
+    title: "Material to Print",
+    description: "Application, incident report & warning letter",
+    icon: Files,
+    accent: "bg-cyan-50 text-cyan-700",
+  },
+  {
+    href: "/admin/new-restaurant",
+    title: "Open a New Restaurant",
+    description: "Full checklist from lease to grand opening",
+    icon: Rocket,
+    accent: "bg-orange-50 text-orange-600",
+  },
+  {
+    href: "/admin",
+    title: "Admin Panel",
+    description: "Documents, inspections, licenses & marketing",
+    icon: Settings,
+    accent: "bg-gray-100 text-gray-600",
+  },
+];
 
 export default function BetweenTheBunsHome() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50">
+    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-orange-50">
       {/* Header */}
       <div className="bg-red-600 text-white">
-        <div className="max-w-4xl mx-auto px-4 py-8 text-center">
-          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <span className="text-red-600 font-bold text-2xl">BTB</span>
+        <div className="max-w-4xl mx-auto px-4 py-10 text-center">
+          <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-red-900/20">
+            <span className="text-red-600 font-bold text-xl">BTB</span>
           </div>
-          <h1 className="text-3xl font-bold">Between the Buns</h1>
-          <p className="text-red-100 mt-2">Staff Resource Hub</p>
+          <h1 className="text-3xl font-bold tracking-tight">Between the Buns</h1>
+          <p className="text-red-100 mt-2 text-sm">Staff Resource Hub</p>
         </div>
       </div>
 
       {/* Menu */}
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Link
-            href="/between-the-buns/prep-manual"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              📖
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Prep Manual
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Searchable recipes and preparation guides — 21 recipes
-            </p>
-          </Link>
-
-          <Link
-            href="/between-the-buns/prep-list"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              📋
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Daily Prep List
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Track par, on hand, make quantities — keep 7 days of records
-            </p>
-          </Link>
-
-          <Link
-            href="/checks"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              ✅
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Daily Checks
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Opening and closing duty checklists
-            </p>
-          </Link>
-
-          <Link
-            href="/temperatures"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              🌡️
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Temperature Log
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Record cooking, cooling, and storage temperatures
-            </p>
-          </Link>
-
-          <Link
-            href="/between-the-buns/cleaning-schedule"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              🧹
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Cleaning Schedule
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Weekly cleaning tasks — each item done once per week
-            </p>
-          </Link>
-
-          <Link
-            href="/between-the-buns/allergen-chart"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              ⚠️
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Bun Allergy Chart
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Allergen info for all bun types — Dairy, Egg, Gluten
-            </p>
-          </Link>
-
-          <Link
-            href="/between-the-buns/gluten-free"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              🥗
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Gluten Free Menu
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Safe options for gluten-free and Celiac customers
-            </p>
-          </Link>
-
-          <Link
-            href="/between-the-buns/menu"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              🍔
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Recipe Cheat Sheets
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              All burgers, wraps, salads, smoothies & milkshakes with ingredients
-            </p>
-          </Link>
-
-          <Link
-            href="/admin"
-            className="bg-white rounded-xl p-6 border border-gray-200 hover:shadow-lg hover:border-red-300 transition-all group"
-          >
-            <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl mb-4">
-              ⚙️
-            </div>
-            <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors">
-              Admin Panel
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Documents, inspections, staff licenses & management
-            </p>
-          </Link>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {cards.map((card) => {
+            const Icon = card.icon;
+            return (
+              <Link
+                key={card.href + card.title}
+                href={card.href}
+                className="group bg-white rounded-xl p-5 border border-gray-200/80 hover:shadow-md hover:border-red-200 transition-all cursor-pointer"
+              >
+                <div className="flex items-start gap-4">
+                  <div
+                    className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${card.accent}`}
+                  >
+                    <Icon className="h-5 w-5" strokeWidth={1.75} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-semibold text-gray-900 group-hover:text-red-600 transition-colors text-[15px]">
+                      {card.title}
+                    </h3>
+                    <p className="text-[13px] text-gray-500 mt-0.5 leading-snug">
+                      {card.description}
+                    </p>
+                  </div>
+                </div>
+              </Link>
+            );
+          })}
         </div>
 
         <div className="mt-8 text-center">

@@ -1,6 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Upload, Save, RotateCcw, CalendarCheck2, FileText, Link2 } from "lucide-react";
+import { PageHeader, Card, Button, Badge, inputClass, Field } from "@/components/ui";
+import { supabase } from "@/lib/supabase";
+import {
+  getSessionUser,
+  getProfileContext,
+  readLocal,
+  writeLocal,
+  fileToDataUrl,
+} from "@/lib/admin-store";
 
 interface InspectionItem {
   id: string;
@@ -30,6 +40,19 @@ interface SavedInspection {
   actionItems: string[];
   notes: string;
   savedAt: string;
+  quarter: string;
+  reportFileName?: string;
+  reportDataUrl?: string;
+  rubricSource?: string;
+  rubricLink?: string;
+}
+
+const STORAGE_KEY = "btb-corporate-inspections";
+
+function quarterOf(dateStr: string): string {
+  const d = new Date(dateStr);
+  const q = Math.floor(d.getMonth() / 3) + 1;
+  return `Q${q} ${d.getFullYear()}`;
 }
 
 const defaultSections: InspectionSection[] = [
@@ -117,6 +140,67 @@ export default function CorporateInspectionPage() {
   const [notes, setNotes] = useState("");
   const [savedInspections, setSavedInspections] = useState<SavedInspection[]>([]);
   const [activeTab, setActiveTab] = useState<"form" | "history">("form");
+  const [reportFile, setReportFile] = useState<File | null>(null);
+  const [officialRubricUrl, setOfficialRubricUrl] = useState("");
+  const [itemNotesOpen, setItemNotesOpen] = useState<Record<string, boolean>>({});
+
+  function rowToSaved(row: Record<string, unknown>): SavedInspection {
+    return {
+      id: String(row.id),
+      date: String(row.inspection_date || ""),
+      inspector: String(row.inspector_name || ""),
+      inspectorRole: String(row.inspector_role || ""),
+      sections: (row.sections as InspectionSection[]) || [],
+      overallScore: Number(row.overall_score || 0),
+      maxScore: Number(row.max_score || 0),
+      rating: String(row.rating || "satisfactory"),
+      strengths: String(row.strengths || ""),
+      improvements: String(row.improvements || ""),
+      actionItems: Array.isArray(row.action_items)
+        ? (row.action_items as string[])
+        : [],
+      notes: String(row.notes || ""),
+      savedAt: String(row.created_at || ""),
+      quarter: String(row.quarter || quarterOf(String(row.inspection_date || ""))),
+      reportFileName: row.report_file_name ? String(row.report_file_name) : undefined,
+      reportDataUrl: row.report_data ? String(row.report_data) : undefined,
+      rubricSource: String(row.rubric_source || "placeholder"),
+      rubricLink: row.rubric_link ? String(row.rubric_link) : undefined,
+    };
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
+      void (async () => {
+        const user = await getSessionUser();
+        if (cancelled) return;
+        if (user) {
+          const { data, error } = await supabase
+            .from("corporate_inspections")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", { ascending: false });
+          if (!cancelled && !error && data) {
+            const mapped = data.map(rowToSaved);
+            setSavedInspections(mapped);
+            writeLocal(STORAGE_KEY, mapped);
+          } else if (!cancelled) {
+            setSavedInspections(readLocal<SavedInspection[]>(STORAGE_KEY, []));
+          }
+        } else if (!cancelled) {
+          setSavedInspections(readLocal<SavedInspection[]>(STORAGE_KEY, []));
+        }
+      })();
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  const currentQuarter = quarterOf(inspectionDate);
+  const completedThisQuarter = savedInspections.filter((i) => i.quarter === currentQuarter).length;
 
   const updateItemStatus = (sectionIdx: number, itemIdx: number, status: "pass" | "fail" | "na") => {
     setSections((prev) => {
@@ -130,10 +214,23 @@ export default function CorporateInspectionPage() {
         item.score = 0;
       } else {
         item.status = status;
-        item.score = status === "pass" ? item.maxScore : status === "fail" ? 0 : item.maxScore;
+        // N/A: score 0 but excluded from max denominator
+        item.score = status === "pass" ? item.maxScore : 0;
       }
 
       items[itemIdx] = item;
+      section.items = items;
+      updated[sectionIdx] = section;
+      return updated;
+    });
+  };
+
+  const updateItemNotes = (sectionIdx: number, itemIdx: number, notes: string) => {
+    setSections((prev) => {
+      const updated = [...prev];
+      const section = { ...updated[sectionIdx] };
+      const items = [...section.items];
+      items[itemIdx] = { ...items[itemIdx], notes };
       section.items = items;
       updated[sectionIdx] = section;
       return updated;
@@ -145,7 +242,11 @@ export default function CorporateInspectionPage() {
   };
 
   const getSectionMaxScore = (section: InspectionSection) => {
-    return section.items.reduce((sum, item) => sum + item.maxScore, 0);
+    // N/A items excluded from max
+    return section.items.reduce(
+      (sum, item) => sum + (item.status === "na" ? 0 : item.maxScore),
+      0
+    );
   };
 
   const getOverallScore = () => {
@@ -170,15 +271,27 @@ export default function CorporateInspectionPage() {
     setActionItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const saveInspection = () => {
+  const saveInspection = async () => {
     if (!inspectorName) {
       alert("Please enter inspector name");
       return;
     }
 
+    let reportUrl = "";
+    let reportName: string | undefined;
+    if (reportFile) {
+      if (reportFile.size > 5_000_000) {
+        alert("Report file too large (max 5 MB).");
+        return;
+      }
+      reportUrl = await fileToDataUrl(reportFile);
+      reportName = reportFile.name;
+    }
+
     const percentage = getScorePercentage();
+    const id = crypto.randomUUID();
     const newInspection: SavedInspection = {
-      id: Date.now().toString(),
+      id,
       date: inspectionDate,
       inspector: inspectorName,
       inspectorRole,
@@ -191,10 +304,64 @@ export default function CorporateInspectionPage() {
       actionItems: actionItems.filter((a) => a.trim()),
       notes,
       savedAt: new Date().toISOString(),
+      quarter: quarterOf(inspectionDate),
+      reportFileName: reportName,
+      reportDataUrl: reportUrl || undefined,
+      rubricSource: officialRubricUrl ? "official_link" : "placeholder",
+      rubricLink: officialRubricUrl || undefined,
     };
 
-    setSavedInspections((prev) => [newInspection, ...prev]);
+    const next = [newInspection, ...savedInspections];
+    setSavedInspections(next);
+    writeLocal(STORAGE_KEY, next);
+    setReportFile(null);
     setActiveTab("history");
+
+    const user = await getSessionUser();
+    if (user) {
+      const ctx = await getProfileContext();
+      const { error } = await supabase.from("corporate_inspections").insert({
+        id,
+        user_id: user.id,
+        restaurant_name: ctx.restaurantName,
+        inspection_date: inspectionDate,
+        inspector_name: inspectorName,
+        inspector_role: inspectorRole,
+        sections: newInspection.sections,
+        overall_score: newInspection.overallScore,
+        max_score: newInspection.maxScore,
+        rating: newInspection.rating,
+        strengths,
+        improvements,
+        action_items: newInspection.actionItems,
+        notes,
+        quarter: newInspection.quarter,
+        report_file_name: reportName || null,
+        report_data: reportUrl || null,
+        rubric_source: newInspection.rubricSource,
+        rubric_link: officialRubricUrl || null,
+      });
+      if (error) {
+        console.warn("corporate_inspections insert failed (kept local):", error.message);
+      }
+    }
+  };
+
+  const deleteInspection = (id: string) => {
+    if (!confirm("Delete this inspection?")) return;
+    const next = savedInspections.filter((i) => i.id !== id);
+    setSavedInspections(next);
+    writeLocal(STORAGE_KEY, next);
+    void (async () => {
+      const user = await getSessionUser();
+      if (user) {
+        await supabase
+          .from("corporate_inspections")
+          .delete()
+          .eq("id", id)
+          .eq("user_id", user.id);
+      }
+    })();
   };
 
   const loadInspection = (inspection: SavedInspection) => {
@@ -206,46 +373,42 @@ export default function CorporateInspectionPage() {
     setImprovements(inspection.improvements);
     setActionItems(inspection.actionItems.length > 0 ? inspection.actionItems : [""]);
     setNotes(inspection.notes);
+    setOfficialRubricUrl(inspection.rubricLink || "");
     setActiveTab("form");
-  };
-
-  const deleteInspection = (id: string) => {
-    if (!confirm("Delete this inspection?")) return;
-    setSavedInspections((prev) => prev.filter((i) => i.id !== id));
   };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Corporate Inspection</h1>
-          <p className="text-sm text-gray-500">
-            Official inspection with ratings and action items
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setActiveTab("form")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              activeTab === "form"
-                ? "bg-red-600 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            New Inspection
-          </button>
-          <button
-            onClick={() => setActiveTab("history")}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              activeTab === "history"
-                ? "bg-red-600 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            History ({savedInspections.length})
-          </button>
-        </div>
+      <PageHeader
+        title="Corporate inspection"
+        description="Quarterly scored inspection with ratings and action items. Attach the official scoring report when you have it — placeholder rubric below until your link is shared."
+        actions={
+          <>
+            <Button
+              variant={activeTab === "form" ? "secondary" : "ghost"}
+              onClick={() => setActiveTab("form")}
+            >
+              New inspection
+            </Button>
+            <Button variant={activeTab === "history" ? "primary" : "secondary"} onClick={() => setActiveTab("history")}>
+              History ({savedInspections.length})
+            </Button>
+          </>
+        }
+      />
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Badge tone={completedThisQuarter > 0 ? "green" : "amber"}>
+          <CalendarCheck2 className="mr-1 h-3 w-3" />
+          {currentQuarter}: {completedThisQuarter > 0 ? `${completedThisQuarter} filed` : "due"}
+        </Badge>
+        <Badge tone="gray">Quarterly cadence</Badge>
+        {savedInspections.length > 0 && (
+          <span className="text-[12px] text-gray-400">
+            Last: {savedInspections[0].date} · {savedInspections[0].quarter}
+          </span>
+        )}
       </div>
 
       {activeTab === "form" ? (
@@ -342,6 +505,23 @@ export default function CorporateInspectionPage() {
                   <div key={item.id} className="px-4 py-3">
                     <div className="flex items-center gap-3">
                       <span className="text-sm text-gray-900 flex-1">{item.text}</span>
+                      <button
+                        type="button"
+                        aria-label="Toggle item notes"
+                        onClick={() =>
+                          setItemNotesOpen((prev) => ({
+                            ...prev,
+                            [item.id]: !prev[item.id],
+                          }))
+                        }
+                        className={`text-[11px] px-2 py-1 rounded-md border transition-colors ${
+                          item.notes
+                            ? "border-blue-200 text-blue-700 bg-blue-50"
+                            : "border-gray-200 text-gray-500 hover:bg-gray-50"
+                        }`}
+                      >
+                        Notes
+                      </button>
                       <div className="flex gap-1">
                         <button
                           onClick={() => updateItemStatus(sectionIdx, itemIdx, "pass")}
@@ -375,6 +555,20 @@ export default function CorporateInspectionPage() {
                         </button>
                       </div>
                     </div>
+                    {itemNotesOpen[item.id] && (
+                      <textarea
+                        value={item.notes}
+                        onChange={(e) => updateItemNotes(sectionIdx, itemIdx, e.target.value)}
+                        placeholder="Observation / evidence for this item…"
+                        rows={2}
+                        className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-900 bg-gray-50/50 resize-none"
+                      />
+                    )}
+                    {item.status === "na" && (
+                      <p className="mt-1 text-[11px] text-gray-400">
+                        N/A — excluded from section max score.
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -457,15 +651,69 @@ export default function CorporateInspectionPage() {
             />
           </div>
 
+          {/* Official report + rubric link */}
+          <Card>
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-gray-900 flex items-center gap-1.5">
+                    <FileText className="h-4 w-4 text-gray-400" />
+                    Official scoring report (optional)
+                  </p>
+                  <p className="text-[12px] text-gray-500 mt-0.5">
+                    Attach the corporate PDF/ratings file — stored with this inspection in Supabase when signed in.
+                  </p>
+                  {reportFile && (
+                    <p className="text-[11px] text-emerald-600 mt-1 font-medium">
+                      Attached: {reportFile.name}
+                    </p>
+                  )}
+                </div>
+                <label className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer transition-colors">
+                  <Upload className="h-4 w-4" />
+                  Choose file
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg,.doc,.docx"
+                    className="sr-only"
+                    onChange={(e) => {
+                      setReportFile(e.target.files?.[0] || null);
+                    }}
+                  />
+                </label>
+              </div>
+              <Field label="Official ratings / scoring rubric link" hint="Paste the corporate rubric URL when you have it — placeholder rubric is used until then.">
+                <div className="relative">
+                  <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <input
+                    type="url"
+                    value={officialRubricUrl}
+                    onChange={(e) => setOfficialRubricUrl(e.target.value)}
+                    placeholder="https://…"
+                    className={`${inputClass} pl-9`}
+                  />
+                </div>
+              </Field>
+              {officialRubricUrl && (
+                <a
+                  href={officialRubricUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[12px] font-semibold text-blue-600 hover:text-blue-700"
+                >
+                  Open official rubric ↗
+                </a>
+              )}
+            </div>
+          </Card>
+
           {/* Save */}
           <div className="flex gap-3">
-            <button
-              onClick={saveInspection}
-              className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
-            >
-              Save & Submit Inspection
-            </button>
-            <button
+            <Button onClick={saveInspection}>
+              <Save className="h-4 w-4" /> Save & submit inspection
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => {
                 setSections(defaultSections);
                 setInspectorName("");
@@ -473,11 +721,11 @@ export default function CorporateInspectionPage() {
                 setImprovements("");
                 setActionItems([""]);
                 setNotes("");
+                setReportFile(null);
               }}
-              className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
             >
-              Reset
-            </button>
+              <RotateCcw className="h-4 w-4" /> Reset
+            </Button>
           </div>
         </>
       ) : (
@@ -506,10 +754,32 @@ export default function CorporateInspectionPage() {
                         </span>
                       </div>
                       <p className="text-xs text-gray-500">
-                        {inspection.overallScore}/{inspection.maxScore} ({percentage}%) · {inspection.inspectorRole}
+                        {inspection.overallScore}/{inspection.maxScore} ({percentage}%) ·{" "}
+                        {inspection.inspectorRole} · {inspection.quarter}
+                        {inspection.reportFileName && ` · ${inspection.reportFileName}`}
+                        {inspection.rubricSource === "official_link" && " · official rubric"}
                       </p>
                     </div>
                     <div className="flex gap-2">
+                      {inspection.reportDataUrl && (
+                        <a
+                          href={inspection.reportDataUrl}
+                          download={inspection.reportFileName}
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 px-2 py-1"
+                        >
+                          Report
+                        </a>
+                      )}
+                      {inspection.rubricLink && (
+                        <a
+                          href={inspection.rubricLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs font-semibold text-blue-600 hover:text-blue-700 px-2 py-1"
+                        >
+                          Rubric
+                        </a>
+                      )}
                       <button
                         onClick={() => loadInspection(inspection)}
                         className="text-sm text-red-600 hover:text-red-700 font-medium"
@@ -518,9 +788,10 @@ export default function CorporateInspectionPage() {
                       </button>
                       <button
                         onClick={() => deleteInspection(inspection.id)}
+                        aria-label="Delete inspection"
                         className="text-sm text-gray-400 hover:text-red-500"
                       >
-                        🗑️
+                        ✕
                       </button>
                     </div>
                   </div>

@@ -38,10 +38,6 @@ export default function DeliveriesPage() {
     items: [{ name: "", quantity: 1, unit: "kg" }] as DeliveryItem[],
   });
 
-  useEffect(() => {
-    fetchRecords();
-  }, []);
-
   const fetchRecords = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
@@ -53,9 +49,16 @@ export default function DeliveriesPage() {
       .order("delivery_date", { ascending: false })
       .limit(50);
 
-    setRecords(data || []);
+    setRecords((data as DeliveryRecord[]) || []);
     setLoading(false);
   };
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      fetchRecords();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const handleItemChange = (index: number, field: keyof DeliveryItem, value: string | number) => {
     const newItems = [...formData.items];

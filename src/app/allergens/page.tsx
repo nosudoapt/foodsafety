@@ -66,10 +66,6 @@ export default function AllergensPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [filterAllergen, setFilterAllergen] = useState<string>("");
 
-  useEffect(() => {
-    fetchRecords();
-  }, []);
-
   const fetchRecords = async () => {
     const {
       data: { session },
@@ -85,6 +81,13 @@ export default function AllergensPage() {
     setRecords(data || []);
     setLoading(false);
   };
+
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => {
+      fetchRecords();
+    });
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const toggleAllergen = (allergen: string) => {
     setFormData((prev) => ({
