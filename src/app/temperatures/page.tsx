@@ -10,27 +10,7 @@ const recordTypes = [
   { value: "hot_holding", label: "Hot Holding", minTemp: 60, maxTemp: 85 },
   { value: "reheating", label: "Reheating", minTemp: 74, maxTemp: 100 },
   { value: "probe_calibration", label: "Probe Calibration", minTemp: 0, maxTemp: 100 },
-] as const;
-
-type TemperatureRecordType =
-  (typeof recordTypes)[number]["value"];
-
-interface TemperatureRecord {
-  id: string;
-  user_id: string;
-  restaurant_name: string;
-  equipment_name: string;
-  record_type: TemperatureRecordType;
-  food_item: string;
-  temperature: number;
-  unit: string;
-  min_safe_temp: number;
-  max_safe_temp: number;
-  is_safe: boolean;
-  notes: string;
-  recorded_at: string;
-  created_at: string;
-}
+];
 
 const commonFoodItems: Record<string, string[]> = {
   cooking: ["Poultry (whole)", "Poultry (pieces)", "Ground meat", "Pork", "Fish", "Egg dishes", "Leftovers", "Beef (medium-rare)", "Beef (medium)", "Beef (well done)"],
@@ -42,7 +22,7 @@ const commonFoodItems: Record<string, string[]> = {
 };
 
 export default function TemperaturesPage() {
-  const [records, setRecords] = useState<TemperatureRecord[]>([]);
+  const [records, setRecords] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
@@ -53,31 +33,24 @@ export default function TemperaturesPage() {
     notes: "",
   });
 
+  useEffect(() => {
+    fetchRecords();
+  }, []);
+
   const fetchRecords = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
-
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
 
     const { data } = await supabase
       .from("temperature_records")
       .select("*")
       .eq("user_id", session.user.id)
-      .gte("recorded_at", cutoff.toISOString())
       .order("recorded_at", { ascending: false })
-      .limit(200);
+      .limit(50);
 
-    setRecords((data as TemperatureRecord[]) || []);
+    setRecords(data || []);
     setLoading(false);
   };
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      fetchRecords();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -92,7 +65,7 @@ export default function TemperaturesPage() {
       user_id: session.user.id,
       restaurant_name: "My Restaurant",
       equipment_name: formData.equipment_name,
-      record_type: formData.record_type as TemperatureRecordType,
+      record_type: formData.record_type as any,
       food_item: formData.food_item,
       temperature: temp,
       min_safe_temp: recordType?.minTemp || 0,
@@ -125,9 +98,7 @@ export default function TemperaturesPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Temperature Monitoring</h1>
-          <p className="text-gray-600 mt-1">
-            Daily temp sheet — records kept for 90 days
-          </p>
+          <p className="text-gray-600 mt-1">Record and track food temperatures</p>
         </div>
         <button
           onClick={() => setShowForm(!showForm)}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -26,7 +26,11 @@ export default function SettingsPage() {
     restaurant_name: "",
   });
 
-  const fetchProfile = useCallback(async () => {
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -49,14 +53,7 @@ export default function SettingsPage() {
       });
     }
     setLoading(false);
-  }, [router]);
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      fetchProfile();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, [fetchProfile]);
+  };
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();

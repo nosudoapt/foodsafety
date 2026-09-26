@@ -28,6 +28,7 @@ export default function PrepListPage() {
   const [prepData, setPrepData] = useState<PrepData>({});
   const [savedLists, setSavedLists] = useState<SavedPrepList[]>([]);
   const [activeTab, setActiveTab] = useState<"today" | "history">("today");
+  const [historyFilter, setHistoryFilter] = useState<string>("");
 
   const handleDateChange = (newDate: string) => {
     setDate(newDate);

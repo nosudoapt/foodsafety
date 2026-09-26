@@ -1,15 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Trash2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
-import {
-  getSessionUser,
-  getProfileContext,
-  readLocal,
-  writeLocal,
-  fileToDataUrl,
-} from "@/lib/admin-store";
+import { useState, useRef } from "react";
 
 interface StaffLicense {
   id: string;
@@ -17,14 +8,11 @@ interface StaffLicense {
   licenseType: string;
   fileName: string;
   fileSize: string;
-  fileUrl?: string;
   issueDate: string;
   expiryDate: string;
   uploadedAt: string;
   notes: string;
 }
-
-const STORAGE_KEY = "btb-staff-licenses";
 
 const licenseTypes = [
   { value: "food_handler", label: "Food Handler Certificate", icon: "🍽️" },
@@ -33,57 +21,6 @@ const licenseTypes = [
   { value: "other", label: "Other", icon: "📎" },
 ];
 
-const DEMO_LICENSES: StaffLicense[] = [
-  {
-    id: "1",
-    staffName: "Sarah Mitchell",
-    licenseType: "food_handler",
-    fileName: "Sarah_FoodHandler.pdf",
-    fileSize: "420 KB",
-    issueDate: "2025-06-15",
-    expiryDate: "2028-06-15",
-    uploadedAt: "2025-06-20",
-    notes: "Level 2",
-  },
-  {
-    id: "2",
-    staffName: "James Rodriguez",
-    licenseType: "first_aid",
-    fileName: "James_FirstAid.pdf",
-    fileSize: "380 KB",
-    issueDate: "2025-09-01",
-    expiryDate: "2027-09-01",
-    uploadedAt: "2025-09-05",
-    notes: "",
-  },
-  {
-    id: "3",
-    staffName: "Maria Chen",
-    licenseType: "food_handler",
-    fileName: "Maria_FoodHandler.pdf",
-    fileSize: "415 KB",
-    issueDate: "2024-03-10",
-    expiryDate: "2027-03-10",
-    uploadedAt: "2024-03-15",
-    notes: "Level 1",
-  },
-];
-
-function rowToLicense(row: Record<string, unknown>): StaffLicense {
-  return {
-    id: String(row.id),
-    staffName: String(row.staff_name || ""),
-    licenseType: String(row.license_type || "other"),
-    fileName: String(row.file_name || ""),
-    fileSize: String(row.file_size || ""),
-    fileUrl: row.file_url ? String(row.file_url) : undefined,
-    issueDate: String(row.issue_date || ""),
-    expiryDate: String(row.expiry_date || ""),
-    uploadedAt: String(row.created_at || "").slice(0, 10),
-    notes: String(row.notes || ""),
-  };
-}
-
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
@@ -91,7 +28,41 @@ function formatFileSize(bytes: number): string {
 }
 
 export default function StaffLicensesPage() {
-  const [licenses, setLicenses] = useState<StaffLicense[]>(DEMO_LICENSES);
+  const [licenses, setLicenses] = useState<StaffLicense[]>([
+    {
+      id: "1",
+      staffName: "Sarah Mitchell",
+      licenseType: "food_handler",
+      fileName: "Sarah_FoodHandler.pdf",
+      fileSize: "420 KB",
+      issueDate: "2025-06-15",
+      expiryDate: "2028-06-15",
+      uploadedAt: "2025-06-20",
+      notes: "Level 2",
+    },
+    {
+      id: "2",
+      staffName: "James Rodriguez",
+      licenseType: "first_aid",
+      fileName: "James_FirstAid.pdf",
+      fileSize: "380 KB",
+      issueDate: "2025-09-01",
+      expiryDate: "2027-09-01",
+      uploadedAt: "2025-09-05",
+      notes: "",
+    },
+    {
+      id: "3",
+      staffName: "Maria Chen",
+      licenseType: "food_handler",
+      fileName: "Maria_FoodHandler.pdf",
+      fileSize: "415 KB",
+      issueDate: "2024-03-10",
+      expiryDate: "2027-03-10",
+      uploadedAt: "2024-03-15",
+      notes: "Level 1",
+    },
+  ]);
 
   const [showUpload, setShowUpload] = useState(false);
   const [staffName, setStaffName] = useState("");
@@ -102,96 +73,33 @@ export default function StaffLicensesPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    const raf = requestAnimationFrame(() => {
-      void (async () => {
-        const user = await getSessionUser();
-        if (cancelled) return;
-        if (user) {
-          const { data, error } = await supabase
-            .from("staff_licenses")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
-          if (!cancelled && !error && data) {
-            const mapped = data.map(rowToLicense);
-            setLicenses(mapped);
-            writeLocal(STORAGE_KEY, mapped);
-            return;
-          }
-        }
-        if (!cancelled) {
-          const local = readLocal<StaffLicense[] | null>(STORAGE_KEY, null);
-          if (local) setLicenses(local);
-        }
-      })();
-    });
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-    };
-  }, []);
-
-  const handleUpload = async () => {
+  const handleUpload = () => {
     if (!selectedFile || !staffName) return;
 
-    const fileUrl = await fileToDataUrl(selectedFile);
-    const id = crypto.randomUUID();
     const newLicense: StaffLicense = {
-      id,
+      id: Date.now().toString(),
       staffName,
       licenseType,
       fileName: selectedFile.name,
       fileSize: formatFileSize(selectedFile.size),
-      fileUrl,
       issueDate,
       expiryDate,
       uploadedAt: new Date().toISOString().split("T")[0],
       notes: uploadNotes,
     };
 
-    const next = [newLicense, ...licenses];
-    setLicenses(next);
-    writeLocal(STORAGE_KEY, next);
+    setLicenses((prev) => [newLicense, ...prev]);
     setShowUpload(false);
     setStaffName("");
     setIssueDate("");
     setExpiryDate("");
     setUploadNotes("");
     setSelectedFile(null);
-
-    const user = await getSessionUser();
-    if (user) {
-      const ctx = await getProfileContext();
-      const { error } = await supabase.from("staff_licenses").insert({
-        id,
-        user_id: user.id,
-        restaurant_name: ctx.restaurantName,
-        staff_name: staffName,
-        license_type: licenseType,
-        file_name: newLicense.fileName,
-        file_url: fileUrl,
-        file_data: fileUrl,
-        issue_date: issueDate || null,
-        expiry_date: expiryDate || null,
-        notes: uploadNotes,
-      });
-      if (error) console.warn("staff_licenses insert failed:", error.message);
-    }
   };
 
   const deleteLicense = (id: string) => {
     if (!confirm("Delete this license?")) return;
-    const next = licenses.filter((l) => l.id !== id);
-    setLicenses(next);
-    writeLocal(STORAGE_KEY, next);
-    void (async () => {
-      const user = await getSessionUser();
-      if (user) {
-        await supabase.from("staff_licenses").delete().eq("id", id).eq("user_id", user.id);
-      }
-    })();
+    setLicenses((prev) => prev.filter((l) => l.id !== id));
   };
 
   const getLicenseTypeInfo = (type: string) => {
@@ -425,21 +333,14 @@ export default function StaffLicensesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2">
-                        {license.fileUrl && (
-                          <a
-                            href={license.fileUrl}
-                            download={license.fileName}
-                            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                          >
-                            View
-                          </a>
-                        )}
+                        <button className="text-xs text-blue-600 hover:text-blue-700 font-medium">
+                          View
+                        </button>
                         <button
                           onClick={() => deleteLicense(license.id)}
-                          aria-label={`Delete ${license.staffName} license`}
                           className="text-xs text-gray-400 hover:text-red-500"
                         >
-                          <Trash2 className="h-3.5 w-3.5" />
+                          🗑️
                         </button>
                       </div>
                     </td>

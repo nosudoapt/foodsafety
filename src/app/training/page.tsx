@@ -29,21 +29,8 @@ const topicColors: Record<string, string> = {
   "Alcohol Service (Smart Serve)": "bg-teal-100 text-teal-700",
 };
 
-interface TrainingRecord {
-  id: string;
-  user_id: string;
-  restaurant_name: string;
-  staff_name: string;
-  training_topic: string;
-  training_date: string;
-  expiry_date: string | null;
-  certificate_url: string;
-  notes: string;
-  created_at: string;
-}
-
 export default function TrainingPage() {
-  const [records, setRecords] = useState<TrainingRecord[]>([]);
+  const [records, setRecords] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"all" | "expiring">("all");
@@ -55,6 +42,10 @@ export default function TrainingPage() {
     certificate_url: "",
     notes: "",
   });
+
+  useEffect(() => {
+    fetchRecords();
+  }, []);
 
   const fetchRecords = async () => {
     const {
@@ -68,16 +59,9 @@ export default function TrainingPage() {
       .eq("user_id", session.user.id)
       .order("expiry_date", { ascending: true });
 
-    setRecords((data as TrainingRecord[]) || []);
+    setRecords(data || []);
     setLoading(false);
   };
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      fetchRecords();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -310,44 +294,19 @@ export default function TrainingPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Certificate file or URL (Optional)
+                  Certificate URL (Optional)
                 </label>
                 <input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.webp"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    if (file.size > 400_000) {
-                      alert("Certificate file max 400 KB for upload — use a URL for larger files.");
-                      return;
-                    }
-                    const dataUrl = await new Promise<string>((resolve, reject) => {
-                      const reader = new FileReader();
-                      reader.onload = () => resolve(reader.result as string);
-                      reader.onerror = () => reject(reader.error);
-                      reader.readAsDataURL(file);
-                    });
-                    setFormData({ ...formData, certificate_url: dataUrl });
-                  }}
-                  className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-green-50 file:px-3 file:py-2 file:text-[13px] file:font-semibold file:text-green-700 hover:file:bg-green-100 cursor-pointer"
-                />
-                <input
-                  type="text"
-                  value={
-                    formData.certificate_url.startsWith("data:")
-                      ? "Uploaded file (attached)"
-                      : formData.certificate_url
-                  }
-                  onChange={(e) => {
-                    const v = e.target.value;
+                  type="url"
+                  value={formData.certificate_url}
+                  onChange={(e) =>
                     setFormData({
                       ...formData,
-                      certificate_url: v === "Uploaded file (attached)" ? formData.certificate_url : v,
-                    });
-                  }}
-                  className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
-                  placeholder="…or paste a certificate URL"
+                      certificate_url: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                  placeholder="https://..."
                 />
               </div>
 
@@ -457,11 +416,8 @@ export default function TrainingPage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-sm text-blue-600 hover:underline mt-1 inline-block"
-                          download={record.certificate_url.startsWith("data:") ? `${record.staff_name}_certificate` : undefined}
                         >
-                          {record.certificate_url.startsWith("data:")
-                            ? "Download certificate"
-                            : "View Certificate"}
+                          View Certificate
                         </a>
                       )}
                     </div>

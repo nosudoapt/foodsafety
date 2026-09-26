@@ -10,21 +10,8 @@ const severityConfig = {
   critical: { label: "Critical", color: "bg-red-100 text-red-700", icon: "🚨" },
 };
 
-interface CorrectiveAction {
-  id: string;
-  user_id: string;
-  restaurant_name: string;
-  issue_description: string;
-  severity: "low" | "medium" | "high" | "critical";
-  action_taken: string;
-  resolved: boolean;
-  resolved_at: string | null;
-  notes: string | null;
-  created_at: string;
-}
-
 export default function CorrectiveActionsPage() {
-  const [actions, setActions] = useState<CorrectiveAction[]>([]);
+  const [actions, setActions] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "open" | "resolved">("all");
@@ -35,6 +22,10 @@ export default function CorrectiveActionsPage() {
     action_taken: "",
     notes: "",
   });
+
+  useEffect(() => {
+    fetchActions();
+  }, []);
 
   const fetchActions = async () => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -47,16 +38,9 @@ export default function CorrectiveActionsPage() {
       .order("created_at", { ascending: false })
       .limit(100);
 
-    setActions((data as CorrectiveAction[]) || []);
+    setActions(data || []);
     setLoading(false);
   };
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      fetchActions();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

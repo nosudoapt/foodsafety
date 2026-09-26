@@ -29,6 +29,10 @@ export default function PestControlPage() {
     notes: "",
   });
 
+  useEffect(() => {
+    fetchRecords();
+  }, []);
+
   const fetchRecords = async () => {
     const {
       data: { session },
@@ -42,16 +46,9 @@ export default function PestControlPage() {
       .order("inspection_date", { ascending: false })
       .limit(100);
 
-    setRecords((data as PestControlRecord[]) || []);
+    setRecords(data || []);
     setLoading(false);
   };
-
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => {
-      fetchRecords();
-    });
-    return () => cancelAnimationFrame(raf);
-  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

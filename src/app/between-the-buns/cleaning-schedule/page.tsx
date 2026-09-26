@@ -144,7 +144,7 @@ export default function CleaningSchedulePage() {
 
   const saveSchedule = () => {
     const newSchedule: SavedSchedule = {
-      id: crypto.randomUUID(),
+      id: Date.now().toString(),
       weekStart: weekDates[0],
       data: JSON.parse(JSON.stringify(taskData)),
       savedAt: new Date().toISOString(),
@@ -384,9 +384,7 @@ export default function CleaningSchedulePage() {
                 <h3 className="text-sm font-bold text-gray-700 mb-2">Uploaded Photos</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {Object.entries(taskData).map(([taskIdx, dates]) =>
-                    Object.entries(
-                      dates as Record<string, { initial: string; photos: PhotoEntry }>
-                    ).map(([date, data]) => {
+                    Object.entries(dates as TaskCompletion[number]).map(([date, data]) => {
                       const photos = data.photos;
                       if (!photos?.before && !photos?.after) return null;
                       return (
@@ -397,7 +395,6 @@ export default function CleaningSchedulePage() {
                           <div className="flex gap-1">
                             {photos.before && (
                               <div className="relative flex-1">
-                                {/* eslint-disable-next-line @next/next/no-img-element -- local base64 photo preview */}
                                 <img
                                   src={photos.before}
                                   alt="Before"
@@ -416,7 +413,6 @@ export default function CleaningSchedulePage() {
                             )}
                             {photos.after && (
                               <div className="relative flex-1">
-                                {/* eslint-disable-next-line @next/next/no-img-element -- local base64 photo preview */}
                                 <img
                                   src={photos.after}
                                   alt="After"
