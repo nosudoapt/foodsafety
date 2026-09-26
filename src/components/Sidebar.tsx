@@ -6,6 +6,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 
 const navigation = [
+  { name: "Home", href: "/", icon: "🏡" },
   { name: "Dashboard", href: "/dashboard", icon: "🏠" },
   { name: "Temperatures", href: "/temperatures", icon: "🌡️" },
   { name: "Daily Checks", href: "/checks", icon: "✅" },
@@ -16,6 +17,7 @@ const navigation = [
   { name: "Pest Control", href: "/pest-control", icon: "🐀" },
   { name: "Training", href: "/training", icon: "📚" },
   { name: "Reports", href: "/reports", icon: "📊" },
+  { name: "Between the Buns", href: "/between-the-buns", icon: "🍔" },
   { name: "Settings", href: "/settings", icon: "⚙️" },
 ];
 
@@ -95,6 +97,7 @@ export default function Sidebar() {
             <button
               onClick={async () => {
                 await supabase.auth.signOut();
+                // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload after sign-out clears all client auth state
                 window.location.href = "/";
               }}
               className="w-full flex items-center px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"

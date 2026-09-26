@@ -29,8 +29,19 @@ const topicColors: Record<string, string> = {
   "Alcohol Service (Smart Serve)": "bg-teal-100 text-teal-700",
 };
 
+interface TrainingRecord {
+  id: string;
+  staff_name: string;
+  training_topic: string;
+  training_date: string;
+  expiry_date: string | null;
+  certificate_url: string;
+  notes: string;
+  created_at: string;
+}
+
 export default function TrainingPage() {
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<TrainingRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"all" | "expiring">("all");
@@ -42,26 +53,26 @@ export default function TrainingPage() {
     certificate_url: "",
     notes: "",
   });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const fetchRecords = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data } = await supabase
+        .from("training_records")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("expiry_date", { ascending: true });
+
+      setRecords(data || []);
+      setLoading(false);
+    };
     fetchRecords();
-  }, []);
-
-  const fetchRecords = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase
-      .from("training_records")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("expiry_date", { ascending: true });
-
-    setRecords(data || []);
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -91,7 +102,7 @@ export default function TrainingPage() {
         certificate_url: "",
         notes: "",
       });
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -102,7 +113,7 @@ export default function TrainingPage() {
       .eq("id", id);
 
     if (!error) {
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 

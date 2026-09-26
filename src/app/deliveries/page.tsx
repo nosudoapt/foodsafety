@@ -37,25 +37,25 @@ export default function DeliveriesPage() {
     notes: "",
     items: [{ name: "", quantity: 1, unit: "kg" }] as DeliveryItem[],
   });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const fetchRecords = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data } = await supabase
+        .from("delivery_records")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("delivery_date", { ascending: false })
+        .limit(50);
+
+      setRecords(data || []);
+      setLoading(false);
+    };
     fetchRecords();
-  }, []);
-
-  const fetchRecords = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase
-      .from("delivery_records")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("delivery_date", { ascending: false })
-      .limit(50);
-
-    setRecords(data || []);
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
   const handleItemChange = (index: number, field: keyof DeliveryItem, value: string | number) => {
     const newItems = [...formData.items];
@@ -107,7 +107,7 @@ export default function DeliveriesPage() {
         notes: "",
         items: [{ name: "", quantity: 1, unit: "kg" }],
       });
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -120,7 +120,7 @@ export default function DeliveriesPage() {
     if (!error) {
       setRejectModal({ id: "", open: false });
       setRejectionReason("");
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -130,7 +130,7 @@ export default function DeliveriesPage() {
       .update({ is_accepted: true, rejection_reason: "" })
       .eq("id", id);
 
-    if (!error) fetchRecords();
+    if (!error) setRefreshKey((k) => k + 1);
   };
 
   const filteredRecords = records.filter((r) => {

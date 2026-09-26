@@ -2,6 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { PageHeader, Card, Button } from "@/components/ui";
+
+interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  section: string;
+}
+
+interface CheckRecord {
+  id: string;
+  check_type: "opening" | "closing";
+  checklist_items: ChecklistItem[];
+  completed: boolean;
+  completed_at: string | null;
+  notes: string;
+  created_at: string;
+}
 
 const defaultOpeningItems = [
   // Front Opening Duties
@@ -54,39 +72,37 @@ const defaultClosingItems = [
 ];
 
 export default function ChecksPage() {
-  const [history, setHistory] = useState<any[]>([]);
+  const [history, setHistory] = useState<CheckRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkType, setCheckType] = useState<"opening" | "closing">("opening");
   const [checklistItems, setChecklistItems] = useState(defaultOpeningItems);
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [activeCheckId, setActiveCheckId] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<"all" | "opening" | "closing">("all");
   const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const fetchHistory = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data } = await supabase
+        .from("daily_checks")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+
+      setHistory(data || []);
+      setLoading(false);
+    };
     fetchHistory();
-  }, []);
-
-  const fetchHistory = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase
-      .from("daily_checks")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-
-    setHistory(data || []);
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
   const handleCheckTypeChange = (type: "opening" | "closing") => {
     setCheckType(type);
     setChecklistItems(type === "opening" ? defaultOpeningItems : defaultClosingItems);
-    setActiveCheckId(null);
     setNotes("");
   };
 
@@ -123,8 +139,7 @@ export default function ChecksPage() {
     if (!error) {
       setChecklistItems(checkType === "opening" ? defaultOpeningItems : defaultClosingItems);
       setNotes("");
-      setActiveCheckId(null);
-      fetchHistory();
+      setRefreshKey((k) => k + 1);
     }
     setSaving(false);
   };
@@ -132,7 +147,7 @@ export default function ChecksPage() {
   const deleteCheck = async (id: string) => {
     if (!confirm("Delete this check record?")) return;
     await supabase.from("daily_checks").delete().eq("id", id);
-    fetchHistory();
+    setRefreshKey((k) => k + 1);
   };
 
   const filteredHistory = historyFilter === "all"
@@ -141,37 +156,30 @@ export default function ChecksPage() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Daily Kitchen Checks</h1>
-        <p className="text-gray-600 mt-1">Complete opening and closing checklists every shift</p>
-      </div>
+      <PageHeader title="Daily Kitchen Checks" subtitle="Complete opening and closing checklists every shift" />
 
       {/* Check Type Toggle */}
       <div className="flex gap-2 mb-6">
-        <button
+        <Button
+          accent="green"
+          variant={checkType === "opening" ? "solid" : "soft"}
           onClick={() => handleCheckTypeChange("opening")}
-          className={`flex-1 md:flex-none px-6 py-3 rounded-lg font-semibold transition-colors ${
-            checkType === "opening"
-              ? "bg-green-600 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
+          className="flex-1 md:flex-none"
         >
           ☀️ Opening Check
-        </button>
-        <button
+        </Button>
+        <Button
+          accent="green"
+          variant={checkType === "closing" ? "solid" : "soft"}
           onClick={() => handleCheckTypeChange("closing")}
-          className={`flex-1 md:flex-none px-6 py-3 rounded-lg font-semibold transition-colors ${
-            checkType === "closing"
-              ? "bg-green-600 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-          }`}
+          className="flex-1 md:flex-none"
         >
           🌙 Closing Check
-        </button>
+        </Button>
       </div>
 
       {/* Active Checklist */}
-      <div className="bg-white rounded-xl border border-gray-200 mb-8">
+      <Card className="mb-8">
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <div>
             <h2 className="font-semibold text-gray-900">
@@ -275,29 +283,24 @@ export default function ChecksPage() {
         </div>
 
         <div className="p-4 border-t border-gray-200">
-          <button
+          <Button
+            accent="green"
             onClick={saveCheck}
             disabled={saving || completedCount === 0}
-            className={`w-full px-6 py-3 rounded-lg font-semibold transition-colors ${
-              saving || completedCount === 0
-                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                : allCompleted
-                ? "bg-green-600 text-white hover:bg-green-700"
-                : "bg-green-500 text-white hover:bg-green-600"
-            }`}
+            className="w-full"
           >
             {saving ? "Saving..." : allCompleted ? "✓ Complete & Save" : "Save Partial Check"}
-          </button>
+          </Button>
           {!allCompleted && completedCount > 0 && (
             <p className="text-center text-sm text-amber-600 mt-2">
               ⚠ {totalCount - completedCount} items remaining
             </p>
           )}
         </div>
-      </div>
+      </Card>
 
       {/* History */}
-      <div className="bg-white rounded-xl border border-gray-200">
+      <Card>
         <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <h2 className="font-semibold text-gray-900">Check History</h2>
           <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
@@ -327,7 +330,7 @@ export default function ChecksPage() {
           <div className="divide-y divide-gray-200">
             {filteredHistory.map((check) => {
               const items = check.checklist_items || [];
-              const completedItems = items.filter((i: any) => i.completed).length;
+              const completedItems = items.filter((i: ChecklistItem) => i.completed).length;
               const expanded = expandedHistoryId === check.id;
 
               return (
@@ -396,7 +399,7 @@ export default function ChecksPage() {
                   {expanded && (
                     <div className="px-4 pb-4">
                       <div className="bg-gray-50 rounded-lg p-3 space-y-2">
-                        {items.map((item: any) => (
+                        {items.map((item: ChecklistItem) => (
                           <div
                             key={item.id}
                             className="flex items-center gap-2 text-sm"
@@ -429,7 +432,7 @@ export default function ChecksPage() {
             })}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

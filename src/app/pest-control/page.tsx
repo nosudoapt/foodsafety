@@ -28,27 +28,27 @@ export default function PestControlPage() {
     next_inspection_date: "",
     notes: "",
   });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const fetchRecords = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data } = await supabase
+        .from("pest_control")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("inspection_date", { ascending: false })
+        .limit(100);
+
+      setRecords(data || []);
+      setLoading(false);
+    };
     fetchRecords();
-  }, []);
-
-  const fetchRecords = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase
-      .from("pest_control")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("inspection_date", { ascending: false })
-      .limit(100);
-
-    setRecords(data || []);
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,14 +75,14 @@ export default function PestControlPage() {
 
       if (!error) {
         resetForm();
-        fetchRecords();
+        setRefreshKey((k) => k + 1);
       }
     } else {
       const { error } = await supabase.from("pest_control").insert(payload);
 
       if (!error) {
         resetForm();
-        fetchRecords();
+        setRefreshKey((k) => k + 1);
       }
     }
   };
@@ -103,7 +103,7 @@ export default function PestControlPage() {
   const handleDelete = async (id: string) => {
     const { error } = await supabase.from("pest_control").delete().eq("id", id);
     if (!error) {
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 

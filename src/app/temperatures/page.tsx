@@ -1,7 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { PageHeader, Card, Button, Input } from "@/components/ui";
+
+interface TempRecord {
+  id: string;
+  record_type: string;
+  equipment_name: string;
+  food_item: string;
+  temperature: number;
+  is_safe: boolean;
+  notes?: string;
+  recorded_at: string;
+}
 
 const recordTypes = [
   { value: "cooking", label: "Cooking", minTemp: 74, maxTemp: 100 },
@@ -22,9 +35,10 @@ const commonFoodItems: Record<string, string[]> = {
 };
 
 export default function TemperaturesPage() {
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<TempRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [formData, setFormData] = useState({
     record_type: "cold_storage",
     equipment_name: "",
@@ -34,23 +48,27 @@ export default function TemperaturesPage() {
   });
 
   useEffect(() => {
+    const fetchRecords = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      // 90-day rolling record (client requirement). Older rows are purged by
+      // purge_temperature_records() in supabase/schema-features.sql.
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 90);
+
+      const { data } = await supabase
+        .from("temperature_records")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .gte("recorded_at", cutoff.toISOString())
+        .order("recorded_at", { ascending: false });
+
+      setRecords(data || []);
+      setLoading(false);
+    };
     fetchRecords();
-  }, []);
-
-  const fetchRecords = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase
-      .from("temperature_records")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("recorded_at", { ascending: false })
-      .limit(50);
-
-    setRecords(data || []);
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,7 +83,7 @@ export default function TemperaturesPage() {
       user_id: session.user.id,
       restaurant_name: "My Restaurant",
       equipment_name: formData.equipment_name,
-      record_type: formData.record_type as any,
+      record_type: formData.record_type,
       food_item: formData.food_item,
       temperature: temp,
       min_safe_temp: recordType?.minTemp || 0,
@@ -77,7 +95,7 @@ export default function TemperaturesPage() {
     if (!error) {
       setShowForm(false);
       setFormData({ record_type: "cold_storage", equipment_name: "", food_item: "", temperature: "", notes: "" });
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -95,22 +113,19 @@ export default function TemperaturesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Temperature Monitoring</h1>
-          <p className="text-gray-600 mt-1">Record and track food temperatures</p>
-        </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="bg-green-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors flex items-center gap-2"
-        >
-          <span>+</span> Add Record
-        </button>
-      </div>
+      <PageHeader
+        title="Temperature Monitoring"
+        subtitle="Record and track food temperatures · 90-day record"
+        action={
+          <Button accent="green" onClick={() => setShowForm(!showForm)}>
+            <Plus className="w-4 h-4" /> Add Record
+          </Button>
+        }
+      />
 
       {/* Add Record Form */}
       {showForm && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 mb-8">
+        <Card className="p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">New Temperature Record</h2>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -131,11 +146,10 @@ export default function TemperaturesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Equipment</label>
-                <input
+                <Input
                   type="text"
                   value={formData.equipment_name}
                   onChange={(e) => setFormData({ ...formData, equipment_name: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                   placeholder="e.g. Fridge 1, Oven, Hot holding unit"
                   required
                 />
@@ -160,12 +174,11 @@ export default function TemperaturesPage() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Temperature (°C)</label>
-                <input
+                <Input
                   type="number"
                   step="0.1"
                   value={formData.temperature}
                   onChange={(e) => setFormData({ ...formData, temperature: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                   placeholder="e.g. 4.5"
                   required
                 />
@@ -178,38 +191,26 @@ export default function TemperaturesPage() {
 
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <input
+                <Input
                   type="text"
                   value={formData.notes}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
                   placeholder="Optional notes"
                 />
               </div>
             </div>
 
             <div className="flex gap-3">
-              <button
-                type="submit"
-                className="bg-green-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors"
-              >
-                Save Record
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
-              >
-                Cancel
-              </button>
+              <Button type="submit" accent="green">Save Record</Button>
+              <Button type="button" variant="soft" accent="slate" onClick={() => setShowForm(false)}>Cancel</Button>
             </div>
           </form>
-        </div>
+        </Card>
       )}
 
       {/* Records List */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="p-4 border-b border-gray-200">
+      <Card>
+        <div className="p-4 border-b border-slate-200">
           <h2 className="font-semibold text-gray-900">Recent Records</h2>
         </div>
 
@@ -220,9 +221,9 @@ export default function TemperaturesPage() {
             No temperature records yet. Tap &quot;Add Record&quot; to start.
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-slate-200">
             {records.map((record) => (
-              <div key={record.id} className="p-4 hover:bg-gray-50">
+              <div key={record.id} className="p-4 hover:bg-slate-50">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
@@ -254,7 +255,7 @@ export default function TemperaturesPage() {
             ))}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

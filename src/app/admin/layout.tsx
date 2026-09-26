@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { roleLabel, roleColor, ALL_ROLES, MGMT_ROLES, OWNER_TIER_ROLES } from "@/lib/roles";
 
 interface UserProfile {
   role: string;
@@ -12,65 +14,27 @@ interface UserProfile {
   email: string;
 }
 
-const roleLabels: Record<string, string> = {
-  corporate: "Corporate",
-  manager: "Manager",
-  supervisor: "Supervisor",
-  staff: "Staff",
-  designer: "Designer",
-};
-
-const roleColors: Record<string, string> = {
-  corporate: "bg-purple-100 text-purple-700",
-  manager: "bg-blue-100 text-blue-700",
-  supervisor: "bg-orange-100 text-orange-700",
-  staff: "bg-green-100 text-green-700",
-  designer: "bg-pink-100 text-pink-700",
-};
+// Nav tiers come from roles.ts (single source of truth). "supervisor" was
+// removed from the role set, so management-tier nav is just MGMT_ROLES.
+const ALL = ALL_ROLES as string[];
+const MGMT = MGMT_ROLES as string[];
+const OWNER = OWNER_TIER_ROLES as string[]; // vault / new-restaurant: owner-tier only
 
 const navItems = [
-  {
-    label: "Dashboard",
-    href: "/admin",
-    icon: "📊",
-    roles: ["corporate", "manager", "supervisor", "staff", "designer"],
-  },
-  {
-    label: "Documents",
-    href: "/admin/documents",
-    icon: "📄",
-    roles: ["corporate", "manager"],
-  },
-  {
-    label: "Staff Licenses",
-    href: "/admin/staff-licenses",
-    icon: "🪪",
-    roles: ["corporate", "manager", "supervisor"],
-  },
-  {
-    label: "Marketing",
-    href: "/admin/marketing",
-    icon: "📣",
-    roles: ["corporate", "manager", "designer"],
-  },
-  {
-    label: "In-House Inspection",
-    href: "/admin/inspections",
-    icon: "🔍",
-    roles: ["corporate", "manager", "supervisor"],
-  },
-  {
-    label: "Corporate Inspection",
-    href: "/admin/inspections/corporate",
-    icon: "🏢",
-    roles: ["corporate", "manager"],
-  },
-  {
-    label: "Print Manuals",
-    href: "/admin/manuals",
-    icon: "📑",
-    roles: ["corporate", "manager"],
-  },
+  { label: "Dashboard", href: "/admin", icon: "📊", roles: ALL },
+  { label: "Compliance & Renewals", href: "/admin/compliance", icon: "🛡️", roles: MGMT },
+  { label: "Documents", href: "/admin/documents", icon: "📄", roles: MGMT },
+  { label: "Staff Licenses", href: "/admin/staff-licenses", icon: "🪪", roles: MGMT },
+  { label: "Emergency Contacts", href: "/admin/emergency", icon: "🚨", roles: ALL },
+  { label: "Protocols", href: "/admin/protocols", icon: "⚠️", roles: ALL },
+  { label: "Handbook", href: "/admin/handbook", icon: "📖", roles: ALL },
+  { label: "Login Vault", href: "/admin/vault", icon: "🔐", roles: OWNER },
+  { label: "Marketing", href: "/admin/marketing", icon: "📣", roles: [...MGMT, "designer"] },
+  { label: "In-House Inspection", href: "/admin/inspections", icon: "🔍", roles: MGMT },
+  { label: "Corporate Inspection", href: "/admin/inspections/corporate", icon: "🏢", roles: MGMT },
+  { label: "Print Manuals", href: "/admin/manuals", icon: "📑", roles: MGMT },
+  { label: "Print Materials", href: "/admin/print-materials", icon: "🖨️", roles: ALL },
+  { label: "New Restaurant", href: "/admin/new-restaurant", icon: "🏗️", roles: OWNER },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -80,13 +44,26 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // For demo, use default role - in production fetch from Supabase
-    setProfile({
-      role: "corporate",
-      full_name: user?.email?.split("@")[0] || "Admin",
-      restaurant_name: "Between the Buns",
-      email: user?.email || "admin@btb.com",
-    });
+    let cancelled = false;
+    async function load() {
+      if (!user) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("role, full_name, restaurant_name, email")
+        .eq("id", user.id)
+        .single();
+      if (cancelled) return;
+      setProfile({
+        role: data?.role ?? "staff",
+        full_name: data?.full_name || user.email?.split("@")[0] || "User",
+        restaurant_name: data?.restaurant_name || "",
+        email: data?.email || user.email || "",
+      });
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const allowedNav = profile
@@ -110,8 +87,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <h1 className="font-bold text-gray-900">Admin Panel</h1>
           </div>
           {profile && (
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${roleColors[profile.role]}`}>
-              {roleLabels[profile.role]}
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${roleColor(profile.role)}`}>
+              {roleLabel(profile.role)}
             </span>
           )}
         </div>
@@ -134,7 +111,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <div>
                   <h2 className="font-bold text-gray-900">Admin Panel</h2>
                   {profile && (
-                    <p className="text-[10px] text-gray-500">{roleLabels[profile.role]}</p>
+                    <p className="text-[10px] text-gray-500">{roleLabel(profile.role)}</p>
                   )}
                 </div>
               </Link>
@@ -199,8 +176,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <div className="flex items-center justify-between px-6 py-4">
               <h1 className="text-xl font-bold text-gray-900">Admin Dashboard</h1>
               {profile && (
-                <span className={`text-xs px-3 py-1 rounded-full font-bold ${roleColors[profile.role]}`}>
-                  {roleLabels[profile.role]}
+                <span className={`text-xs px-3 py-1 rounded-full font-bold ${roleColor(profile.role)}`}>
+                  {roleLabel(profile.role)}
                 </span>
               )}
             </div>

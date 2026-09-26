@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
   title: "FoodSafe - Digital HACCP Food Safety Management",
@@ -32,7 +34,8 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
       <body>
-        {children}
+        <ServiceWorkerRegistrar />
+        <AuthProvider>{children}</AuthProvider>
       </body>
     </html>
   );

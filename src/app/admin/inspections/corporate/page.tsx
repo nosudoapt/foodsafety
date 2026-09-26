@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 
+// Link to the official grading rubric shown at the top of the inspection.
+// Swap for the brand's real rubric PDF / doc URL.
+const RUBRIC_URL = "https://www.fda.gov/media/117509/download";
+
 interface InspectionItem {
   id: string;
   text: string;
@@ -223,6 +227,14 @@ export default function CorporateInspectionPage() {
           <p className="text-sm text-gray-500">
             Official inspection with ratings and action items
           </p>
+          <a
+            href={RUBRIC_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 mt-2 text-sm font-semibold text-red-600 hover:text-red-700 hover:underline"
+          >
+            📊 View grading rubric ↗
+          </a>
         </div>
         <div className="flex gap-2">
           <button

@@ -19,9 +19,23 @@ export default function SignUp() {
     setLoading(true);
     setError("");
 
-    const { data, error: authError } = await supabase.auth.signUp({
+    // Profile row is created server-side by the handle_new_user trigger
+    // (supabase/schema-roles.sql) from this metadata — no client insert,
+    // so it can't fail RLS before email confirmation.
+    // trial=1 in the URL starts a 30-day trial window (set by the trigger).
+    const isTrial = typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("trial") === "1";
+    const { error: authError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          full_name: fullName,
+          restaurant_name: restaurantName,
+          role: "owner",
+          trial: isTrial ? "1" : "0",
+        },
+      },
     });
 
     if (authError) {
@@ -30,24 +44,10 @@ export default function SignUp() {
       return;
     }
 
-    if (data.user) {
-      const { error: profileError } = await supabase.from("profiles").insert({
-        id: data.user.id,
-        email: data.user.email!,
-        full_name: fullName,
-        restaurant_name: restaurantName,
-        role: "owner",
-      });
-
-      if (profileError) {
-        setError(profileError.message);
-        setLoading(false);
-        return;
-      }
-
-      router.push("/dashboard");
-    }
-
+    // Preserve any ?next= the auth guard appended; same-site paths only.
+    const next = new URLSearchParams(window.location.search).get("next");
+    const dest = next && next.startsWith("/") ? next : "/dashboard";
+    router.push(dest);
     setLoading(false);
   };
 
@@ -63,7 +63,7 @@ export default function SignUp() {
             </div>
           </Link>
           <h1 className="text-2xl font-bold text-gray-900">Create Account</h1>
-          <p className="text-gray-600 mt-1">Start your 14-day free trial</p>
+          <p className="text-gray-600 mt-1">Start your 30-day free trial</p>
         </div>
 
         <form onSubmit={handleSignUp} className="bg-white rounded-2xl shadow-lg p-8 space-y-4">

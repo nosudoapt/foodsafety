@@ -73,65 +73,90 @@ function getDateRangeFilter(range: DateRange): string | null {
   return null;
 }
 
+interface TemperatureRow {
+  is_safe: boolean;
+  record_type: string;
+  recorded_at: string;
+}
+
+interface DailyCheckRow {
+  completed: boolean;
+  check_type: string;
+  created_at: string;
+}
+
+interface CleaningRow {
+  completed: boolean;
+  frequency: string;
+  created_at: string;
+}
+
+interface CorrectiveRow {
+  resolved: boolean;
+  severity: string;
+  created_at: string;
+}
+
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState<DateRange>("week");
-  const [temperatureData, setTemperatureData] = useState<any[]>([]);
-  const [dailyChecksData, setDailyChecksData] = useState<any[]>([]);
-  const [cleaningData, setCleaningData] = useState<any[]>([]);
-  const [correctiveData, setCorrectiveData] = useState<any[]>([]);
+  const [temperatureData, setTemperatureData] = useState<TemperatureRow[]>([]);
+  const [dailyChecksData, setDailyChecksData] = useState<DailyCheckRow[]>([]);
+  const [cleaningData, setCleaningData] = useState<CleaningRow[]>([]);
+  const [correctiveData, setCorrectiveData] = useState<CorrectiveRow[]>([]);
 
   useEffect(() => {
+    const fetchAllData = async () => {
+      setLoading(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        setLoading(false);
+        return;
+      }
+
+      const userId = session.user.id;
+      const since = getDateRangeFilter(dateRange);
+
+      const [temps, checks, cleaning, actions] = await Promise.all([
+        supabase
+          .from("temperature_records")
+          .select("*")
+          .eq("user_id", userId)
+          .then((r) => r.data || []),
+        supabase
+          .from("daily_checks")
+          .select("*")
+          .eq("user_id", userId)
+          .then((r) => r.data || []),
+        supabase
+          .from("cleaning_records")
+          .select("*")
+          .eq("user_id", userId)
+          .then((r) => r.data || []),
+        supabase
+          .from("corrective_actions")
+          .select("*")
+          .eq("user_id", userId)
+          .then((r) => r.data || []),
+      ]);
+
+      const filterByDate = <T,>(items: T[], field: keyof T): T[] => {
+        if (!since) return items;
+        return items.filter(
+          (item) => new Date(item[field] as string) >= new Date(since)
+        );
+      };
+
+      setTemperatureData(filterByDate(temps as TemperatureRow[], "recorded_at"));
+      setDailyChecksData(filterByDate(checks as DailyCheckRow[], "created_at"));
+      setCleaningData(filterByDate(cleaning as CleaningRow[], "created_at"));
+      setCorrectiveData(filterByDate(actions as CorrectiveRow[], "created_at"));
+      setLoading(false);
+    };
     fetchAllData();
   }, [dateRange]);
-
-  const fetchAllData = async () => {
-    setLoading(true);
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) {
-      setLoading(false);
-      return;
-    }
-
-    const userId = session.user.id;
-    const since = getDateRangeFilter(dateRange);
-
-    const [temps, checks, cleaning, actions] = await Promise.all([
-      supabase
-        .from("temperature_records")
-        .select("*")
-        .eq("user_id", userId)
-        .then((r) => r.data || []),
-      supabase
-        .from("daily_checks")
-        .select("*")
-        .eq("user_id", userId)
-        .then((r) => r.data || []),
-      supabase
-        .from("cleaning_records")
-        .select("*")
-        .eq("user_id", userId)
-        .then((r) => r.data || []),
-      supabase
-        .from("corrective_actions")
-        .select("*")
-        .eq("user_id", userId)
-        .then((r) => r.data || []),
-    ]);
-
-    const filterByDate = (items: any[], field: string) => {
-      if (!since) return items;
-      return items.filter((item) => new Date(item[field]) >= new Date(since));
-    };
-
-    setTemperatureData(filterByDate(temps, "recorded_at"));
-    setDailyChecksData(filterByDate(checks, "created_at"));
-    setCleaningData(filterByDate(cleaning, "created_at"));
-    setCorrectiveData(filterByDate(actions, "created_at"));
-    setLoading(false);
-  };
 
   const temperatureSummary: TemperatureSummary = {
     total: temperatureData.length,

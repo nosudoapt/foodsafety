@@ -25,35 +25,35 @@ export default function SettingsPage() {
     full_name: "",
     restaurant_name: "",
   });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const fetchProfile = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        router.push("/auth/sign-in");
+        return;
+      }
+
+      const { data } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", session.user.id)
+        .single();
+
+      if (data) {
+        setProfile(data);
+        setEditForm({
+          full_name: data.full_name || "",
+          restaurant_name: data.restaurant_name || "",
+        });
+      }
+      setLoading(false);
+    };
     fetchProfile();
-  }, []);
-
-  const fetchProfile = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) {
-      router.push("/auth/sign-in");
-      return;
-    }
-
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", session.user.id)
-      .single();
-
-    if (data) {
-      setProfile(data);
-      setEditForm({
-        full_name: data.full_name || "",
-        restaurant_name: data.restaurant_name || "",
-      });
-    }
-    setLoading(false);
-  };
+  }, [refreshKey, router]);
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +78,7 @@ export default function SettingsPage() {
       setMessage({ type: "error", text: "Failed to update profile." });
     } else {
       setMessage({ type: "success", text: "Profile updated successfully." });
-      fetchProfile();
+      setRefreshKey((k) => k + 1);
     }
     setSaving(false);
   };

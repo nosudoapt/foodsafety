@@ -37,8 +37,19 @@ const frequencyIcons: Record<string, string> = {
   monthly: "🗓️",
 };
 
+interface CleaningRecord {
+  id: string;
+  task_name: string;
+  area: string;
+  frequency: "daily" | "weekly" | "monthly";
+  completed: boolean;
+  completed_at: string | null;
+  notes: string;
+  created_at: string;
+}
+
 export default function CleaningPage() {
-  const [records, setRecords] = useState<any[]>([]);
+  const [records, setRecords] = useState<CleaningRecord[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"tasks" | "history">("tasks");
@@ -48,25 +59,25 @@ export default function CleaningPage() {
     frequency: "daily" as "daily" | "weekly" | "monthly",
     notes: "",
   });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const fetchRecords = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data } = await supabase
+        .from("cleaning_records")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      setRecords(data || []);
+      setLoading(false);
+    };
     fetchRecords();
-  }, []);
-
-  const fetchRecords = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase
-      .from("cleaning_records")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    setRecords(data || []);
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +97,7 @@ export default function CleaningPage() {
     if (!error) {
       setShowForm(false);
       setFormData({ task_name: "", area: "", frequency: "daily", notes: "" });
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -100,7 +111,7 @@ export default function CleaningPage() {
       .eq("id", id);
 
     if (!error) {
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -114,7 +125,7 @@ export default function CleaningPage() {
       .eq("id", id);
 
     if (!error) {
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -125,7 +136,7 @@ export default function CleaningPage() {
       .eq("id", id);
 
     if (!error) {
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 

@@ -3,7 +3,9 @@
 
 -- Update profiles with RBAC roles
 ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
-ALTER TABLE profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('corporate', 'manager', 'supervisor', 'staff', 'designer'));
+-- Role set is the single source of truth in src/lib/roles.ts (mirrored here).
+-- "supervisor" was dropped; owner tiers added.
+ALTER TABLE profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('staff', 'manager', 'owner', 'multi_location_owner', 'corporate', 'designer'));
 
 -- Business documents table
 CREATE TABLE IF NOT EXISTS business_documents (
@@ -112,33 +114,33 @@ ALTER TABLE print_manuals ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Corporate and managers can view business_documents" ON business_documents
   FOR SELECT USING (
     user_id = auth.uid() OR
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 CREATE POLICY "Managers can insert business_documents" ON business_documents
   FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 CREATE POLICY "Managers can delete business_documents" ON business_documents
   FOR DELETE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
 CREATE POLICY "Managers can view staff_licenses" ON staff_licenses
   FOR SELECT USING (
     user_id = auth.uid() OR
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager', 'supervisor'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 CREATE POLICY "Staff can insert own licenses" ON staff_licenses
   FOR INSERT WITH CHECK (user_id = auth.uid());
 CREATE POLICY "Managers can delete staff_licenses" ON staff_licenses
   FOR DELETE USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
 CREATE POLICY "Managers can manage marketing_promotions" ON marketing_promotions
   FOR ALL USING (
     user_id = auth.uid() OR
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager', 'designer'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager', 'designer'))
   );
 
 CREATE POLICY "All staff can view inhouse_inspections" ON inhouse_inspections
@@ -148,22 +150,22 @@ CREATE POLICY "All staff can view inhouse_inspections" ON inhouse_inspections
   );
 CREATE POLICY "Supervisors can insert inhouse_inspections" ON inhouse_inspections
   FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager', 'supervisor'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
 CREATE POLICY "Corporate can manage corporate_inspections" ON corporate_inspections
   FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
 CREATE POLICY "All staff can view print_manuals" ON print_manuals
   FOR SELECT USING (
     user_id = auth.uid() OR
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 CREATE POLICY "Managers can manage print_manuals" ON print_manuals
   FOR ALL USING (
-    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('corporate', 'manager'))
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
 -- Indexes

@@ -10,8 +10,20 @@ const severityConfig = {
   critical: { label: "Critical", color: "bg-red-100 text-red-700", icon: "🚨" },
 };
 
+interface CorrectiveAction {
+  id: string;
+  restaurant_name: string;
+  issue_description: string;
+  severity: "low" | "medium" | "high" | "critical";
+  action_taken: string;
+  notes: string | null;
+  resolved: boolean;
+  resolved_at: string | null;
+  created_at: string;
+}
+
 export default function CorrectiveActionsPage() {
-  const [actions, setActions] = useState<any[]>([]);
+  const [actions, setActions] = useState<CorrectiveAction[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "open" | "resolved">("all");
@@ -22,25 +34,25 @@ export default function CorrectiveActionsPage() {
     action_taken: "",
     notes: "",
   });
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const fetchActions = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data } = await supabase
+        .from("corrective_actions")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      setActions(data || []);
+      setLoading(false);
+    };
     fetchActions();
-  }, []);
-
-  const fetchActions = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase
-      .from("corrective_actions")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("created_at", { ascending: false })
-      .limit(100);
-
-    setActions(data || []);
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +71,7 @@ export default function CorrectiveActionsPage() {
     if (!error) {
       setShowForm(false);
       setFormData({ restaurant_name: "", issue_description: "", severity: "medium", action_taken: "", notes: "" });
-      fetchActions();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -70,7 +82,7 @@ export default function CorrectiveActionsPage() {
       .eq("id", id);
 
     if (!error) {
-      fetchActions();
+      setRefreshKey((k) => k + 1);
     }
   };
 
@@ -81,7 +93,7 @@ export default function CorrectiveActionsPage() {
       .eq("id", id);
 
     if (!error) {
-      fetchActions();
+      setRefreshKey((k) => k + 1);
     }
   };
 

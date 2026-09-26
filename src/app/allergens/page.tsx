@@ -65,26 +65,26 @@ export default function AllergensPage() {
   const [search, setSearch] = useState("");
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [filterAllergen, setFilterAllergen] = useState<string>("");
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
+    const fetchRecords = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const { data } = await supabase
+        .from("allergen_records")
+        .select("*")
+        .eq("user_id", session.user.id)
+        .order("created_at", { ascending: false });
+
+      setRecords(data || []);
+      setLoading(false);
+    };
     fetchRecords();
-  }, []);
-
-  const fetchRecords = async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    if (!session) return;
-
-    const { data } = await supabase
-      .from("allergen_records")
-      .select("*")
-      .eq("user_id", session.user.id)
-      .order("created_at", { ascending: false });
-
-    setRecords(data || []);
-    setLoading(false);
-  };
+  }, [refreshKey]);
 
   const toggleAllergen = (allergen: string) => {
     setFormData((prev) => ({
@@ -125,7 +125,7 @@ export default function AllergensPage() {
       if (!error) resetForm();
     }
 
-    fetchRecords();
+    setRefreshKey((k) => k + 1);
   };
 
   const handleEdit = (record: AllergenRecord) => {
@@ -144,7 +144,7 @@ export default function AllergensPage() {
     const { error } = await supabase.from("allergen_records").delete().eq("id", id);
     if (!error) {
       setDeleteConfirm(null);
-      fetchRecords();
+      setRefreshKey((k) => k + 1);
     }
   };
 

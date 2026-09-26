@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect } from "react";
 
 const roleStats = [
   { label: "Total Staff", value: "12", icon: "👥", color: "bg-blue-500" },

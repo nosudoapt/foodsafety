@@ -143,11 +143,12 @@ export default function CleaningSchedulePage() {
   };
 
   const saveSchedule = () => {
+    const savedAt = new Date().toISOString();
     const newSchedule: SavedSchedule = {
-      id: Date.now().toString(),
+      id: savedAt,
       weekStart: weekDates[0],
       data: JSON.parse(JSON.stringify(taskData)),
-      savedAt: new Date().toISOString(),
+      savedAt,
     };
     setSavedSchedules((prev) => [newSchedule, ...prev].slice(0, 12));
     setActiveTab("history");
@@ -395,6 +396,7 @@ export default function CleaningSchedulePage() {
                           <div className="flex gap-1">
                             {photos.before && (
                               <div className="relative flex-1">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- data-URL upload preview, next/image can't optimize these */}
                                 <img
                                   src={photos.before}
                                   alt="Before"
@@ -413,6 +415,7 @@ export default function CleaningSchedulePage() {
                             )}
                             {photos.after && (
                               <div className="relative flex-1">
+                                {/* eslint-disable-next-line @next/next/no-img-element -- data-URL upload preview, next/image can't optimize these */}
                                 <img
                                   src={photos.after}
                                   alt="After"

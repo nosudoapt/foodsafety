@@ -25,6 +25,34 @@ const statusColors = {
   completed: "bg-gray-100 text-gray-700",
 };
 
+// Print + digital poster presets so staff export at the right dimensions.
+const posterSizes = [
+  { name: "A4 Poster", dims: "210 × 297 mm", px: "2480 × 3508 px", use: "In-store print", ratio: "aspect-[210/297]" },
+  { name: "A3 Poster", dims: "297 × 420 mm", px: "3508 × 4961 px", use: "Window / wall", ratio: "aspect-[297/420]" },
+  { name: "US Letter", dims: '8.5 × 11 in', px: "2550 × 3300 px", use: "Counter flyer", ratio: "aspect-[85/110]" },
+  { name: "Table Tent", dims: "4 × 6 in", px: "1200 × 1800 px", use: "Table card", ratio: "aspect-[4/6]" },
+  { name: "Instagram Post", dims: "1080 × 1080", px: "1:1 square", use: "Feed post", ratio: "aspect-square" },
+  { name: "Instagram Story", dims: "1080 × 1920", px: "9:16 vertical", use: "Story / Reel", ratio: "aspect-[9/16]" },
+  { name: "Facebook Post", dims: "1200 × 630", px: "1.91:1", use: "Link share", ratio: "aspect-[1200/630]" },
+  { name: "Menu Board", dims: "1920 × 1080", px: "16:9 screen", use: "Digital display", ratio: "aspect-video" },
+];
+
+const channelColors: Record<string, string> = {
+  Instagram: "bg-pink-100 text-pink-700",
+  Facebook: "bg-blue-100 text-blue-700",
+  "In-store": "bg-amber-100 text-amber-700",
+  TikTok: "bg-slate-200 text-slate-800",
+};
+
+const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+interface SocialPost {
+  id: string;
+  day: number; // 0 = Mon
+  channel: keyof typeof channelColors;
+  caption: string;
+}
+
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
@@ -67,6 +95,27 @@ export default function MarketingPage() {
   const [month, setMonth] = useState(currentMonth);
   const [year, setYear] = useState(currentYear);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const [posts, setPosts] = useState<SocialPost[]>([
+    { id: "p1", day: 0, channel: "Instagram", caption: "Motivation Monday — new burger drop 🍔" },
+    { id: "p2", day: 2, channel: "Facebook", caption: "Midweek deal: 2-for-1 sliders" },
+    { id: "p3", day: 4, channel: "Instagram", caption: "Weekend teaser reel 🎬" },
+    { id: "p4", day: 5, channel: "In-store", caption: "Table-tent promo live" },
+  ]);
+  const [newDay, setNewDay] = useState(0);
+  const [newChannel, setNewChannel] = useState<keyof typeof channelColors>("Instagram");
+  const [newCaption, setNewCaption] = useState("");
+
+  const addPost = () => {
+    if (!newCaption.trim()) return;
+    setPosts((prev) => [
+      ...prev,
+      { id: Date.now().toString(), day: newDay, channel: newChannel, caption: newCaption.trim() },
+    ]);
+    setNewCaption("");
+  };
+  const removePost = (id: string) =>
+    setPosts((prev) => prev.filter((p) => p.id !== id));
 
   const handleUpload = () => {
     if (!selectedFile || !title) return;
@@ -252,6 +301,111 @@ export default function MarketingPage() {
           </div>
         </div>
       )}
+
+      {/* Poster size presets */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="font-bold text-gray-900 mb-1">Poster & social sizes</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Export designs at these dimensions so print and social always look sharp.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {posterSizes.map((s) => (
+            <div key={s.name} className="border border-gray-200 rounded-lg p-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-10 shrink-0 ${s.ratio} bg-gradient-to-br from-red-400 to-orange-400 rounded`} />
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm truncate">{s.name}</p>
+                  <p className="text-xs text-gray-500">{s.dims}</p>
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
+                <span>{s.px}</span>
+                <span className="px-1.5 py-0.5 bg-gray-100 rounded">{s.use}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Social content calendar */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5">
+        <h2 className="font-bold text-gray-900 mb-1">Weekly social calendar</h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Plan posts across channels for the week. Keep a steady cadence.
+        </p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-7 gap-3 mb-5">
+          {dayNames.map((d, i) => (
+            <div key={d} className="border border-gray-200 rounded-lg p-2 min-h-[92px]">
+              <p className="text-xs font-semibold text-gray-500 mb-2">{d}</p>
+              <div className="space-y-1.5">
+                {posts
+                  .filter((p) => p.day === i)
+                  .map((p) => (
+                    <div key={p.id} className="group relative rounded-md bg-gray-50 border border-gray-100 p-1.5">
+                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold ${channelColors[p.channel]}`}>
+                        {p.channel}
+                      </span>
+                      <p className="text-[11px] text-gray-700 mt-1 leading-snug">{p.caption}</p>
+                      <button
+                        onClick={() => removePost(p.id)}
+                        className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 text-xs"
+                        aria-label="Remove post"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-end gap-2 border-t border-gray-100 pt-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Day</label>
+            <select
+              value={newDay}
+              onChange={(e) => setNewDay(Number(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+            >
+              {dayNames.map((d, i) => (
+                <option key={d} value={i}>{d}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Channel</label>
+            <select
+              value={newChannel}
+              onChange={(e) => setNewChannel(e.target.value as keyof typeof channelColors)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+            >
+              {Object.keys(channelColors).map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <label className="block text-xs font-medium text-gray-500 mb-1">Caption</label>
+            <input
+              type="text"
+              value={newCaption}
+              onChange={(e) => setNewCaption(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addPost()}
+              placeholder="What's the post?"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white"
+            />
+          </div>
+          <button
+            onClick={addPost}
+            disabled={!newCaption.trim()}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 disabled:opacity-50"
+          >
+            Add post
+          </button>
+        </div>
+      </div>
 
       {/* Promotions Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

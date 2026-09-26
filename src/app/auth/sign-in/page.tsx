@@ -28,7 +28,10 @@ export default function SignIn() {
       return;
     }
 
-    router.push("/dashboard");
+    // Honor the ?next= redirect the auth guard set; only allow same-site paths.
+    const next = new URLSearchParams(window.location.search).get("next");
+    const dest = next && next.startsWith("/") ? next : "/dashboard";
+    router.push(dest);
     setLoading(false);
   };
 

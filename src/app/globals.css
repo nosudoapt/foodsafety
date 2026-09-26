@@ -27,3 +27,107 @@ input::placeholder {
     padding-bottom: env(safe-area-inset-bottom);
   }
 }
+
+/* ---- Motion system (native, cheap, reduced-motion aware) ---- */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in { animation: fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-scale-in { animation: scale-in 0.3s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* Stagger children: add .stagger to a container, set --i per item. */
+.stagger > * { animation: fade-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.stagger > *:nth-child(1) { animation-delay: 0.03s; }
+.stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.stagger > *:nth-child(3) { animation-delay: 0.09s; }
+.stagger > *:nth-child(4) { animation-delay: 0.12s; }
+.stagger > *:nth-child(5) { animation-delay: 0.15s; }
+.stagger > *:nth-child(6) { animation-delay: 0.18s; }
+.stagger > *:nth-child(7) { animation-delay: 0.21s; }
+.stagger > *:nth-child(8) { animation-delay: 0.24s; }
+
+/* Card hover lift — reuse across every card surface. */
+.lift { transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease; }
+.lift:hover { transform: translateY(-3px); box-shadow: 0 12px 28px -12px rgba(0,0,0,0.18); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Smooth cross-route transitions where supported. */
+@view-transition { navigation: auto; }
+
+/* ---- Landing / demo motion vocabulary (no JS, GPU-cheap, iPad-smooth) ---- */
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+@keyframes gradient-pan {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to   { background-position: 200% 0; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes pop {
+  0%   { transform: scale(0.9); opacity: 0; }
+  60%  { transform: scale(1.02); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.float { animation: float 6s ease-in-out infinite; }
+
+/* Animated brand gradient text + surfaces. */
+.gradient-text {
+  background: linear-gradient(110deg, #ef4444, #f59e0b, #ef4444);
+  background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  animation: gradient-pan 6s linear infinite;
+}
+.gradient-surface {
+  background: linear-gradient(120deg, #0f172a, #1e1b4b, #7f1d1d, #0f172a);
+  background-size: 300% 300%;
+  animation: gradient-pan 18s ease infinite;
+}
+
+/* Scroll-reveal: elements rise into view as they enter the viewport.
+   Uses scroll-driven animations where supported; degrades to visible. */
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: rise linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+  }
+}
+.pop { animation: pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+
+/* Shine sweep for primary CTAs. */
+.shine {
+  background-image: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.35) 50%, transparent 80%);
+  background-size: 200% 100%;
+  animation: shimmer 3.5s linear infinite;
+}
+
+/* Soft glow ring for hero cards. */
+.glow { box-shadow: 0 0 0 1px rgba(255,255,255,0.06), 0 30px 80px -30px rgba(239,68,68,0.5); }
+
+@media (prefers-reduced-motion: reduce) {
+  .float, .gradient-text, .gradient-surface, .shine, .reveal, .pop { animation: none !important; }
+}
