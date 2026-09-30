@@ -62,9 +62,9 @@ test("corporate is view-only on operations but can edit inspections", () => {
   assert.equal(btbCanEdit("inspections", "corporate"), true);
 });
 
-test("the login vault is owner-only for both view and edit", () => {
+test("the login vault is management-tier (manager + corporate), view == edit", () => {
   for (const r of BTB_ROLES) {
-    const expected = r === "owner";
+    const expected = r === "manager" || r === "corporate";
     assert.equal(btbCanView("vault", r), expected, `vault view for ${r}`);
     assert.equal(btbCanEdit("vault", r), expected, `vault edit for ${r}`);
   }
@@ -77,19 +77,38 @@ test("reference pages are all-view, no-edit", () => {
   }
 });
 
-test("only owner can edit new-restaurant; corporate views it", () => {
-  assert.equal(btbCanEdit("new_restaurant", "owner"), true);
-  assert.equal(btbCanEdit("new_restaurant", "corporate"), false);
-  assert.equal(btbCanView("new_restaurant", "corporate"), true);
-  assert.equal(btbCanView("new_restaurant", "staff"), false);
+test("new-restaurant and the corporate report are HQ-only", () => {
+  for (const f of ["new_restaurant", "franchise_inspection"] as const) {
+    assert.equal(btbCanView(f, "corporate"), true, `corporate views ${f}`);
+    assert.equal(btbCanEdit(f, "corporate"), true, `corporate edits ${f}`);
+    assert.equal(btbCanView(f, "manager"), false, `manager must not view ${f}`);
+    assert.equal(btbCanView(f, "supervisor"), false, `supervisor must not view ${f}`);
+    assert.equal(btbCanView(f, "staff"), false, `staff must not view ${f}`);
+  }
 });
 
-test("managers and owners edit the shared compliance/admin surfaces", () => {
+test("the manager tier edits the shared compliance/admin surfaces; staff & supervisor cannot", () => {
   const surfaces = ["compliance", "documents", "staff_licenses", "emergency", "protocols", "handbook", "manuals"] as const;
   for (const f of surfaces) {
     assert.equal(btbCanEdit(f, "manager"), true, `manager edit ${f}`);
-    assert.equal(btbCanEdit(f, "owner"), true, `owner edit ${f}`);
     assert.equal(btbCanEdit(f, "staff"), false, `staff edit ${f}`);
+    assert.equal(btbCanEdit(f, "supervisor"), false, `supervisor edit ${f}`);
+  }
+});
+
+test("supervisor sits between staff and manager", () => {
+  // Sees the management operational surfaces (view), but cannot edit them…
+  for (const f of ["order_sheet", "compliance", "documents", "staff_licenses", "inspections"] as const) {
+    assert.equal(btbCanView(f, "supervisor"), true, `supervisor views ${f}`);
+    assert.equal(btbCanEdit(f, "supervisor"), false, `supervisor must not edit ${f}`);
+  }
+  // …and is walled from the owner/HQ-only surfaces entirely.
+  for (const f of ["vault", "marketing", "new_restaurant", "franchise_inspection"] as const) {
+    assert.equal(btbCanView(f, "supervisor"), false, `supervisor must not view ${f}`);
+  }
+  // Still does the shop-floor edits staff do.
+  for (const f of ["prep_count", "prep_list", "cleaning_schedule"] as const) {
+    assert.equal(btbCanEdit(f, "supervisor"), true, `supervisor edits ${f}`);
   }
 });
 

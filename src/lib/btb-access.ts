@@ -36,31 +36,36 @@ interface Access {
   edit: readonly BtbRole[];
 }
 
-const ALL: readonly BtbRole[] = BTB_ROLES;                       // staff, manager, owner, corporate
-const MGMT: readonly BtbRole[] = ["manager", "owner", "corporate"];
-const OPS_EDIT: readonly BtbRole[] = ["staff", "manager", "owner"]; // corporate is view-only on ops
-const MGR_OWNER: readonly BtbRole[] = ["manager", "owner"];
+const ALL: readonly BtbRole[] = BTB_ROLES;                            // staff, supervisor, manager, corporate
+const OPS_EDIT: readonly BtbRole[] = ["staff", "supervisor", "manager"]; // corporate is view-only on ops
+const SUP_UP: readonly BtbRole[] = ["supervisor", "manager", "corporate"]; // supervisor tier and above
+const MGR: readonly BtbRole[] = ["manager", "corporate"];             // management (owners are managers here)
+const MGR_ONLY: readonly BtbRole[] = ["manager"];                    // store-level edit; corporate is oversight-only
+const CORP: readonly BtbRole[] = ["corporate"];                      // franchise HQ only
 
 // view = who sees the card at all; edit = who can create/edit/delete.
 // edit is always a subset of view. Kept explicit so intent is auditable.
 export const BTB_MATRIX: Record<BtbFeature, Access> = {
-  prep_count:        { view: ALL,  edit: OPS_EDIT },
-  prep_list:         { view: ALL,  edit: OPS_EDIT },
-  order_sheet:       { view: MGMT, edit: MGR_OWNER },
-  cleaning_schedule: { view: ALL,  edit: OPS_EDIT },
-  reference:         { view: ALL,  edit: [] },
-  emergency:         { view: ALL,  edit: MGR_OWNER },
-  protocols:         { view: ALL,  edit: MGR_OWNER },
-  handbook:          { view: ALL,  edit: MGR_OWNER },
-  manuals:           { view: ALL,  edit: MGR_OWNER },
-  compliance:        { view: MGMT, edit: MGR_OWNER },
-  documents:         { view: MGMT, edit: MGR_OWNER },
-  staff_licenses:    { view: MGMT, edit: MGR_OWNER },
-  inspections:       { view: MGMT, edit: ["manager", "owner", "corporate"] },
-  franchise_inspection: { view: ["corporate", "owner"], edit: ["corporate", "owner"] },
-  marketing:         { view: ["owner", "corporate"], edit: ["owner", "corporate"] },
-  new_restaurant:    { view: ["owner", "corporate"], edit: ["owner"] },
-  vault:             { view: ["owner"], edit: ["owner"] },
+  prep_count:        { view: ALL,    edit: OPS_EDIT },
+  prep_list:         { view: ALL,    edit: OPS_EDIT },
+  order_sheet:       { view: SUP_UP, edit: MGR_ONLY }, // supervisor+corporate view; manager edits
+  cleaning_schedule: { view: ALL,    edit: OPS_EDIT },
+  reference:         { view: ALL,    edit: [] },
+  emergency:         { view: ALL,    edit: MGR_ONLY },
+  protocols:         { view: ALL,    edit: MGR_ONLY },
+  handbook:          { view: ALL,    edit: MGR_ONLY },
+  manuals:           { view: ALL,    edit: MGR_ONLY },
+  compliance:        { view: SUP_UP, edit: MGR_ONLY },
+  documents:         { view: SUP_UP, edit: MGR_ONLY },
+  staff_licenses:    { view: SUP_UP, edit: MGR_ONLY },
+  inspections:       { view: SUP_UP, edit: MGR },
+  // The corporate franchise report — HQ only (managers/owners are walled out).
+  franchise_inspection: { view: CORP, edit: CORP },
+  marketing:         { view: MGR, edit: MGR },
+  // Opening a new location is a corporate decision, not a store one.
+  new_restaurant:    { view: CORP, edit: CORP },
+  // Vendor/utility logins — store management tier and HQ.
+  vault:             { view: MGR, edit: MGR },
 };
 
 /** True if the role can at least see the feature. */

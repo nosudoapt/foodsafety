@@ -72,7 +72,7 @@ export default function BtbLogin() {
               onChange={(e) => setEmail(e.target.value)}
               autoComplete="username"
               className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-slate-900 bg-white"
-              placeholder="owner@foodsafe.demo"
+              placeholder="manager@foodsafe.demo"
               required
             />
           </div>

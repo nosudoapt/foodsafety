@@ -26,11 +26,13 @@ export interface BtbAccount {
   restaurant: string;
 }
 
+// One account per role. "manager" covers managers and owners (one tier);
+// "supervisor" sits between staff and manager.
 export const BTB_ACCOUNTS: readonly BtbAccount[] = [
-  { role: "owner", email: "owner@foodsafe.demo", name: "Avery Chen", restaurant: "The Grill House" },
-  { role: "manager", email: "manager@foodsafe.demo", name: "Jordan Patel", restaurant: "The Grill House" },
-  { role: "staff", email: "staff@foodsafe.demo", name: "Sam Rivera", restaurant: "The Grill House" },
   { role: "corporate", email: "corporate@foodsafe.demo", name: "Morgan Blake", restaurant: "Grill House Group" },
+  { role: "manager", email: "manager@foodsafe.demo", name: "Jordan Patel", restaurant: "The Grill House" },
+  { role: "supervisor", email: "supervisor@foodsafe.demo", name: "Riley Nguyen", restaurant: "The Grill House" },
+  { role: "staff", email: "staff@foodsafe.demo", name: "Sam Rivera", restaurant: "The Grill House" },
 ] as const;
 
 export function btbAccountFor(role: string): BtbAccount | undefined {

@@ -24,7 +24,7 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 // --- 1. BTB's own credential list -------------------------------------------
 
 test("BTB has four role accounts, one per role", () => {
-  assert.deepEqual([...BTB_ROLES], ["staff", "manager", "owner", "corporate"]);
+  assert.deepEqual([...BTB_ROLES], ["staff", "supervisor", "manager", "corporate"]);
   assert.deepEqual([...BTB_ACCOUNTS.map((a) => a.role)].sort(), [...BTB_ROLES].sort());
   for (const account of BTB_ACCOUNTS) {
     assert.ok(isBtbRole(account.role));
@@ -42,7 +42,7 @@ test("one shared password unlocks every BTB account", () => {
     // email matching is case/whitespace tolerant
     assert.equal(accountForCredentials(` ${account.email.toUpperCase()} `, btbPassword())?.role, account.role);
   }
-  assert.equal(accountForCredentials("owner@foodsafe.demo", "wrong"), null);
+  assert.equal(accountForCredentials("manager@foodsafe.demo", "wrong"), null);
   assert.equal(accountForCredentials("nobody@foodsafe.demo", btbPassword()), null);
   assert.equal(accountForCredentials("", ""), null);
 });
@@ -58,7 +58,7 @@ test("one password works on both sign-in pages, but each checks its own list", (
 
   // BTB still validates against BTB_ACCOUNTS only — an address it doesn't
   // know fails even with the correct shared password.
-  assert.ok(accountForCredentials("owner@foodsafe.demo", btbPassword()));
+  assert.ok(accountForCredentials("manager@foodsafe.demo", btbPassword()));
   assert.equal(accountForCredentials("nobody@foodsafe.demo", btbPassword()), null);
 });
 
@@ -72,7 +72,7 @@ test("session values round-trip to exactly one role", () => {
   // pinning these: renaming the cookie signs every tablet out, and embedding
   // the password in the cookie would hand it to anyone who can read their own.
   assert.equal(BTB_COOKIE, "btb_session");
-  assert.ok(!sessionValueFor("owner").includes(btbPassword()));
+  assert.ok(!sessionValueFor("manager").includes(btbPassword()));
 });
 
 test("tampered, legacy and role-less session values are rejected", () => {
@@ -83,32 +83,43 @@ test("tampered, legacy and role-less session values are rejected", () => {
   assert.equal(roleFromSession("owner."), null);
   assert.equal(roleFromSession(".btb-dev-session-token"), null);
   assert.equal(roleFromSession("wizard.btb-dev-session-token"), null);
-  assert.equal(roleFromSession("owner.wrong-token"), null);
-  assert.equal(tokenValid("owner.wrong-token"), false);
+  assert.equal(roleFromSession("manager.wrong-token"), null);
+  assert.equal(tokenValid("manager.wrong-token"), false);
   // the role half decides the role, the secret half decides validity
-  assert.equal(roleFromSession(sessionValueFor("owner").replace(/^owner/, "staff")), "staff");
+  assert.equal(roleFromSession(sessionValueFor("manager").replace(/^manager/, "staff")), "staff");
 });
 
 // --- 3. hub cards really differ per role ------------------------------------
 
 test("hub cards are role-gated by the access matrix", () => {
   const staff = cardsForRole("staff");
+  const supervisor = cardsForRole("supervisor");
   const management = cardsForRole("manager");
+  const corporate = cardsForRole("corporate");
 
   // Staff never see the Order Sheet or any management/compliance surface.
   assert.ok(!staff.some((c) => c.href.endsWith("/order-sheet")));
   assert.ok(!staff.some((c) => c.href.endsWith("/vault")));
   assert.ok(!staff.some((c) => c.href.endsWith("/compliance")));
+
+  // Supervisor sits above staff: sees the order sheet + compliance, but not the
+  // vault, marketing, new-restaurant or the corporate report.
+  assert.ok(supervisor.some((c) => c.href.endsWith("/order-sheet")));
+  assert.ok(supervisor.some((c) => c.href.endsWith("/compliance")));
+  assert.ok(!supervisor.some((c) => c.href.endsWith("/vault")));
+  assert.ok(!supervisor.some((c) => c.href.endsWith("/franchise-inspection")));
+
+  // Managers/owners see the order sheet and the vault (vendor logins).
   assert.ok(management.some((c) => c.href.endsWith("/order-sheet")));
+  assert.ok(management.some((c) => c.href.endsWith("/vault")));
 
-  // The Login Vault is owner-only; managers and corporate don't see it.
-  assert.ok(!management.some((c) => c.href.endsWith("/vault")));
-  assert.ok(!cardsForRole("corporate").some((c) => c.href.endsWith("/vault")));
-  assert.ok(cardsForRole("owner").some((c) => c.href.endsWith("/vault")));
+  // The corporate report and new-restaurant are HQ-only — hidden from managers.
+  assert.ok(!management.some((c) => c.href.endsWith("/franchise-inspection")));
+  assert.ok(!management.some((c) => c.href.endsWith("/new-restaurant")));
 
-  // Owner sees every card.
-  assert.equal(cardsForRole("owner").length, BTB_CARDS.length, "owner sees everything");
-  assert.deepEqual(hiddenCardsForRole("owner"), []);
+  // Corporate sees every card.
+  assert.equal(corporate.length, BTB_CARDS.length, "corporate sees everything");
+  assert.deepEqual(hiddenCardsForRole("corporate"), []);
 });
 
 test("every role sees most of the hub, and all cards belong to BTB", () => {

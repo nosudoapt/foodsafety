@@ -3,6 +3,8 @@ import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OWNER_TIER_ROLES } from "@/lib/roles";
 import { BTB_COOKIE, roleFromSession, btbAccountFor } from "@/lib/btb-auth";
+import { btbCanView } from "@/lib/btb-access";
+import { isBtbRole } from "@/lib/btb-roles";
 
 const OWNER = OWNER_TIER_ROLES as string[];
 
@@ -36,19 +38,20 @@ export async function requireVaultSession(): Promise<VaultAuthResult> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    // Between the Buns owner path: BTB is cookie-authed (no Supabase session).
-    // A valid BTB cookie whose role is "owner" is authorized for the vault; DB
-    // access uses the anon client (login_vault RLS is public on the BTB demo —
-    // see supabase/schema-btb-public.sql). Any other BTB role is refused.
+    // Between the Buns path: BTB is cookie-authed (no Supabase session). A valid
+    // BTB cookie whose role may view the vault (management tier + corporate, per
+    // btb-access) is authorized; DB access uses the anon client (login_vault RLS
+    // is public on the BTB demo — see supabase/schema-btb-public.sql). Any other
+    // BTB role is refused.
     const btbRole = roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
-    if (btbRole === "owner") {
+    if (btbRole && isBtbRole(btbRole) && btbCanView("vault", btbRole)) {
       return {
         ok: true,
         session: {
           supabase,
-          userId: "btb-owner",
-          role: "owner",
-          restaurantName: btbAccountFor("owner")?.restaurant || "Between the Buns",
+          userId: `btb-${btbRole}`,
+          role: btbRole,
+          restaurantName: btbAccountFor(btbRole)?.restaurant || "Between the Buns",
         },
       };
     }
