@@ -111,68 +111,119 @@ ALTER TABLE corporate_inspections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE print_manuals ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
+DROP POLICY IF EXISTS "Corporate and managers can view business_documents" ON business_documents;
 CREATE POLICY "Corporate and managers can view business_documents" ON business_documents
   FOR SELECT USING (
     user_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
+DROP POLICY IF EXISTS "Managers can insert business_documents" ON business_documents;
 CREATE POLICY "Managers can insert business_documents" ON business_documents
   FOR INSERT WITH CHECK (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
+DROP POLICY IF EXISTS "Managers can delete business_documents" ON business_documents;
 CREATE POLICY "Managers can delete business_documents" ON business_documents
   FOR DELETE USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
+DROP POLICY IF EXISTS "Managers can view staff_licenses" ON staff_licenses;
 CREATE POLICY "Managers can view staff_licenses" ON staff_licenses
   FOR SELECT USING (
     user_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
+DROP POLICY IF EXISTS "Staff can insert own licenses" ON staff_licenses;
 CREATE POLICY "Staff can insert own licenses" ON staff_licenses
   FOR INSERT WITH CHECK (user_id = auth.uid());
+DROP POLICY IF EXISTS "Managers can delete staff_licenses" ON staff_licenses;
 CREATE POLICY "Managers can delete staff_licenses" ON staff_licenses
   FOR DELETE USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
+DROP POLICY IF EXISTS "Managers can manage marketing_promotions" ON marketing_promotions;
 CREATE POLICY "Managers can manage marketing_promotions" ON marketing_promotions
   FOR ALL USING (
     user_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager', 'designer'))
   );
 
+DROP POLICY IF EXISTS "All staff can view inhouse_inspections" ON inhouse_inspections;
 CREATE POLICY "All staff can view inhouse_inspections" ON inhouse_inspections
   FOR SELECT USING (
     user_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND restaurant_name = (SELECT restaurant_name FROM profiles WHERE id = user_id))
   );
+DROP POLICY IF EXISTS "Supervisors can insert inhouse_inspections" ON inhouse_inspections;
 CREATE POLICY "Supervisors can insert inhouse_inspections" ON inhouse_inspections
   FOR INSERT WITH CHECK (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
+DROP POLICY IF EXISTS "Corporate can manage corporate_inspections" ON corporate_inspections;
 CREATE POLICY "Corporate can manage corporate_inspections" ON corporate_inspections
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
+DROP POLICY IF EXISTS "All staff can view print_manuals" ON print_manuals;
 CREATE POLICY "All staff can view print_manuals" ON print_manuals
   FOR SELECT USING (
     user_id = auth.uid() OR
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
+DROP POLICY IF EXISTS "Managers can manage print_manuals" ON print_manuals;
 CREATE POLICY "Managers can manage print_manuals" ON print_manuals
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))
   );
 
+
+-- UPDATE policies (status/notes edits from the admin screens).
+DROP POLICY IF EXISTS "Managers can update business_documents" ON business_documents;
+CREATE POLICY "Managers can update business_documents" ON business_documents
+  FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))) WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager')));
+DROP POLICY IF EXISTS "Managers can update staff_licenses" ON staff_licenses;
+CREATE POLICY "Managers can update staff_licenses" ON staff_licenses
+  FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))) WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager')));
+DROP POLICY IF EXISTS "Managers can update inhouse_inspections" ON inhouse_inspections;
+CREATE POLICY "Managers can update inhouse_inspections" ON inhouse_inspections
+  FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager'))) WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager')));
+DROP POLICY IF EXISTS "Managers can view inhouse_inspections" ON inhouse_inspections;
+CREATE POLICY "Managers can view inhouse_inspections" ON inhouse_inspections
+  FOR SELECT USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager')));
+
+-- Columns the admin screens persist but the original DDL omitted.
+ALTER TABLE business_documents ADD COLUMN IF NOT EXISTS name TEXT;
+ALTER TABLE staff_licenses     ADD COLUMN IF NOT EXISTS file_size INTEGER;
+ALTER TABLE marketing_promotions ADD COLUMN IF NOT EXISTS file_size INTEGER;
+ALTER TABLE print_manuals      ADD COLUMN IF NOT EXISTS file_size INTEGER;
+
+-- Weekly social calendar backing the marketing screen's post planner.
+CREATE TABLE IF NOT EXISTS social_media_calendar (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  restaurant_name TEXT NOT NULL,
+  day INTEGER NOT NULL CHECK (day BETWEEN 0 AND 6),
+  channel TEXT NOT NULL,
+  caption TEXT NOT NULL,
+  post_date DATE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE social_media_calendar ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Managers can manage social_media_calendar" ON social_media_calendar;
+CREATE POLICY "Managers can manage social_media_calendar" ON social_media_calendar
+  FOR ALL USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager')))
+  WITH CHECK (user_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager')));
+CREATE INDEX IF NOT EXISTS idx_social_media_calendar_user_id ON social_media_calendar(user_id);
+
 -- Indexes
-CREATE INDEX idx_business_documents_user_id ON business_documents(user_id);
-CREATE INDEX idx_business_documents_doc_type ON business_documents(doc_type);
-CREATE INDEX idx_staff_licenses_user_id ON staff_licenses(user_id);
-CREATE INDEX idx_marketing_promotions_user_id ON marketing_promotions(user_id);
-CREATE INDEX idx_inhouse_inspections_user_id ON inhouse_inspections(user_id);
-CREATE INDEX idx_corporate_inspections_user_id ON corporate_inspections(user_id);
-CREATE INDEX idx_print_manuals_user_id ON print_manuals(user_id);
+CREATE INDEX IF NOT EXISTS idx_business_documents_user_id ON business_documents(user_id);
+CREATE INDEX IF NOT EXISTS idx_business_documents_doc_type ON business_documents(doc_type);
+CREATE INDEX IF NOT EXISTS idx_staff_licenses_user_id ON staff_licenses(user_id);
+CREATE INDEX IF NOT EXISTS idx_marketing_promotions_user_id ON marketing_promotions(user_id);
+CREATE INDEX IF NOT EXISTS idx_inhouse_inspections_user_id ON inhouse_inspections(user_id);
+CREATE INDEX IF NOT EXISTS idx_corporate_inspections_user_id ON corporate_inspections(user_id);
+CREATE INDEX IF NOT EXISTS idx_print_manuals_user_id ON print_manuals(user_id);

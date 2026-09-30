@@ -10,7 +10,9 @@ previous one, so the order matters. All files are idempotent (safe to re-run).
 | 3 | `schema-roles.sql` | **Canonical** 6-role CHECK (supersedes #2's), 30-day trial column, `handle_new_user()` trigger. |
 | 4 | `schema-features.sql` | Operational BTB tables (prep counts, orders, cleaning schedule). |
 | 5 | `schema-compliance.sql` | Compliance register, login vault, emergency contacts, handbook, protocols, new-restaurant tasks + RLS. |
-| 6 | `fix-rls.sql` | Corrects the `profiles` select/update policies. Run last. |
+| 6 | `schema-documents.sql` | Widens `business_documents.doc_type` to cover every expiring document the vault tracks (licenses, insurance, hood/fire, pest, franchise, lease). |
+| 7 | `fix-rls.sql` | Corrects the `profiles` select/update policies. |
+| 8 | `schema-btb-public.sql` | **Demo-grade.** Opens the compliance/admin tables to public RLS so the cookie-authed Between the Buns surface (no Supabase session) can read/write them. NOT production row security — see the file header. Run last. |
 
 ## Role set — single source of truth
 
@@ -25,8 +27,28 @@ removed — do not reintroduce it.
 - **Read** on operational/compliance tables: any signed-in user.
 - **Write** on compliance/admin tables: management tier
   (`owner`, `multi_location_owner`, `corporate`, `manager`).
-- **Login vault**: management tier only (secrets — treat as sensitive; see the
-  `secret` column note in `schema-compliance.sql`).
+- **Login vault**: owner tier only (`owner`, `multi_location_owner`,
+  `corporate`) — mirrors `OWNER_TIER_ROLES` in `roles.ts`, the `/admin/vault`
+  nav tier and `proxy.ts`. Secrets are AES-256-GCM encrypted at rest by the
+  app before insert, and are only ever decrypted in a server route handler.
+
+## Login vault secrets
+
+`login_vault.secret` is written as ciphertext (`v1:<iv>:<tag>:<ct>`) by
+[`src/lib/vault-crypto.ts`](../src/lib/vault-crypto.ts). The browser never
+selects that column:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/vault` | List entries — returns `hasSecret`, never the value. |
+| `POST /api/vault` | Create; encrypts `secret` server-side. |
+| `POST /api/vault/reveal` | Decrypt one entry (owner-tier session required). |
+| `POST /api/vault/harden` | Encrypt any pre-existing plaintext rows. |
+
+Requires `VAULT_ENC_KEY` (base64 32-byte AES key) in `.env.local`. Generate
+with `openssl rand -base64 32`. Without it the vault endpoints return a clear
+500 rather than silently storing plaintext. Rows created before encryption
+still decrypt — `decryptSecret` passes legacy plaintext through unchanged.
 
 Server-side route enforcement for `/admin/*` lives in
 [`src/proxy.ts`](../src/proxy.ts) and mirrors these tiers.

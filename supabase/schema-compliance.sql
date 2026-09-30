@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS login_vault (
   service TEXT NOT NULL,
   category TEXT DEFAULT 'other' CHECK (category IN ('pos','banking','delivery','utility','supplier','other')),
   username TEXT,
-  secret TEXT,           -- store encrypted / masked; demo-grade here
+  secret TEXT,           -- AES-256-GCM ciphertext written by src/lib/vault-crypto.ts
   url TEXT,
   notes TEXT DEFAULT '',
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -112,13 +112,17 @@ BEGIN
   END LOOP;
 END $$;
 
--- Vault: restricted to owner-tier roles only.
+-- Vault: owner-tier only (mirrors src/lib/roles.ts OWNER_TIER_ROLES, the
+-- /admin/vault nav tier and the server-side gate in proxy.ts). Secrets are
+-- encrypted at rest by the app (src/lib/vault-crypto.ts); never select them
+-- from the browser.
 DROP POLICY IF EXISTS "login_vault_admin" ON login_vault;
-CREATE POLICY "login_vault_admin" ON login_vault FOR ALL
+DROP POLICY IF EXISTS "login_vault_owner" ON login_vault;
+CREATE POLICY "login_vault_owner" ON login_vault FOR ALL
   USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()
-                 AND role IN ('owner','multi_location_owner','corporate','manager')))
+                 AND role IN ('owner','multi_location_owner','corporate')))
   WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid()
-                 AND role IN ('owner','multi_location_owner','corporate','manager')));
+                 AND role IN ('owner','multi_location_owner','corporate')));
 
 CREATE INDEX IF NOT EXISTS idx_compliance_expiry ON compliance_documents(expiry_date);
 CREATE INDEX IF NOT EXISTS idx_emergency_rank ON emergency_contacts(rank);
