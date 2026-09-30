@@ -22,6 +22,9 @@ const OWNER = OWNER_TIER_ROLES as string[]; // vault / new-restaurant: owner-tie
 
 const navItems = [
   { label: "Dashboard", href: "/admin", icon: "📊", roles: ALL },
+  // Bridge back to the Between the Buns hub — prep count, order sheet and the
+  // rest live there (cookie-authed), so admin users aren't stranded in /admin.
+  { label: "Between the Buns", href: "/between-the-buns", icon: "🍔", roles: ALL },
   { label: "Compliance & Renewals", href: "/admin/compliance", icon: "🛡️", roles: MGMT },
   { label: "Documents", href: "/admin/documents", icon: "📄", roles: MGMT },
   { label: "Staff Licenses", href: "/admin/staff-licenses", icon: "🪪", roles: MGMT },
@@ -33,7 +36,8 @@ const navItems = [
   { label: "In-House Inspection", href: "/admin/inspections", icon: "🔍", roles: MGMT },
   { label: "Corporate Inspection", href: "/admin/inspections/corporate", icon: "🏢", roles: MGMT },
   { label: "Print Manuals", href: "/admin/manuals", icon: "📑", roles: MGMT },
-  { label: "Print Materials", href: "/admin/print-materials", icon: "🖨️", roles: ALL },
+  // Print Materials is a management surface — kept off lower-role sidebars (#19).
+  { label: "Print Materials", href: "/admin/print-materials", icon: "🖨️", roles: MGMT },
   { label: "New Restaurant", href: "/admin/new-restaurant", icon: "🏗️", roles: OWNER },
 ];
 
