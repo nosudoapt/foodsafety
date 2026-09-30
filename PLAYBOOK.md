@@ -26,6 +26,7 @@ Commands:
 ```bash
 npm run build
 npm run lint
+npm test      # node:test over src/lib — no new deps
 npm run dev   # port 5001
 ```
 
@@ -47,7 +48,10 @@ npm run dev   # port 5001
 - **Data moat (hard to copy):** per-location compliance timeline — expiry alerts + handbook e-signatures + quarterly rubric scores accumulate into an auditable history a competitor can't replicate by cloning a screen.
 - **Enterprise wedge:** multi-location corporate rollup + rubric scoring.
 - **Continuity layer:** steps-to-do + login vault + emergency contacts bundled — nobody else ships this.
-- **Secrets:** never inline keys; env vars only; vault passwords encrypted at rest (Supabase Vault / pgcrypto), never returned to non-owner roles.
+- **Secrets:** never inline keys; env vars only. Vault passwords encrypted at
+  rest with AES-256-GCM (`src/lib/vault-crypto.ts`, key = `VAULT_ENC_KEY`),
+  decrypted only inside `/api/vault/reveal`, and only for owner-tier roles —
+  the browser never selects `login_vault.secret`.
 
 ## 5. iPad + Web (one codebase)
 - **PWA** (native, no framework): `public/manifest.json` (`display: standalone`, icons 180/192/512, portrait), meta `apple-mobile-web-app-capable`, service worker for offline shell + last prep/temp data. → "Add to Home Screen" = installable iPad app.
@@ -60,6 +64,6 @@ npm run dev   # port 5001
 - [ ] Wired both directions (no orphan/dead-end)
 - [ ] RLS + role gate correct
 - [ ] iPad + desktop smoke passed
-- [ ] Runnable check for any formula/guard
+- [ ] `npm test` green (formula/guard coverage in `tests/`)
 
 _Ref: [ponytail skill](https://github.com/DietrichGebert/ponytail/blob/main/skills/ponytail/SKILL.md)_
