@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  ShieldCheck, Bell, Tablet, Lock, ArrowRight, Check, X,
+  ShieldCheck, Bell, Tablet, Lock, ArrowRight,
   Sparkles, ClipboardList, Thermometer, KeyRound, Star,
 } from "lucide-react";
 
@@ -12,17 +12,6 @@ const FEATURES = [
   { icon: Tablet, title: "Offline-first tablets", desc: "Prep counts, cleaning and temp logs keep working on the line when the wifi drops. Built for iPad, add to home screen.", accent: "from-blue-500 to-cyan-500" },
   { icon: Lock, title: "Six-role RBAC", desc: "Staff see today's prep. Owners see the vault. Corporate sees every location. Same app, six tailored experiences.", accent: "from-purple-500 to-fuchsia-500" },
   { icon: KeyRound, title: "Operations vault", desc: "POS, banking, delivery logins, emergency contacts and outage protocols — everything the shift lead needs, secured.", accent: "from-emerald-500 to-teal-500" },
-];
-
-const COMPARE = [
-  { feature: "Digital HACCP temp & checklist logs", us: true, check65: true, shifts: false },
-  { feature: "License / insurance expiry autopilot", us: true, check65: false, shifts: false },
-  { feature: "Lease & franchise renewal alerts", us: true, check65: false, shifts: false },
-  { feature: "Operations login vault", us: true, check65: false, shifts: false },
-  { feature: "Outage protocols (power/wifi/POS)", us: true, check65: false, shifts: false },
-  { feature: "Per-brand dedicated workspace", us: true, check65: false, shifts: false },
-  { feature: "Offline-first iPad mode", us: true, check65: "partial", shifts: false },
-  { feature: "Staff scheduling", us: "roadmap", check65: false, shifts: true },
 ];
 
 const STEPS = [
@@ -38,11 +27,6 @@ const PLANS = [
   { name: "Multi-location", price: "Let's talk", desc: "Corporate rollups, per-brand workspaces, priority onboarding.", cta: "Book a call", href: "/auth/sign-up?trial=1", accent: false },
 ];
 
-const Mark = ({ v }: { v: boolean | string }) =>
-  v === true ? <Check className="w-5 h-5 text-emerald-500 mx-auto" />
-  : v === false ? <X className="w-5 h-5 text-slate-300 mx-auto" />
-  : <span className="text-[11px] font-semibold text-amber-500">{v}</span>;
-
 export default function Landing() {
   return (
     <div className="min-h-screen bg-white text-slate-900 overflow-x-hidden">
@@ -55,7 +39,6 @@ export default function Landing() {
           </div>
           <nav className="hidden sm:flex items-center gap-7 text-sm font-medium text-slate-600">
             <a href="#features" className="hover:text-slate-900 transition">Features</a>
-            <a href="#compare" className="hover:text-slate-900 transition">Compare</a>
             <a href="#pricing" className="hover:text-slate-900 transition">Pricing</a>
           </nav>
           <div className="flex items-center gap-3">
@@ -129,7 +112,7 @@ export default function Landing() {
       <section id="features" className="max-w-6xl mx-auto px-5 py-24">
         <div className="text-center max-w-2xl mx-auto reveal">
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">Everything the back office forgets</h2>
-          <p className="mt-4 text-slate-500 text-lg">Check65 logs your temps. 7shifts books your staff. We run the whole operation — and catch the renewals that cost you your license.</p>
+          <p className="mt-4 text-slate-500 text-lg">Temp logs, cleaning, compliance and renewals — one platform for the whole operation.</p>
         </div>
         <div className="mt-14 grid md:grid-cols-2 gap-6">
           {FEATURES.map((f) => (
@@ -141,32 +124,6 @@ export default function Landing() {
               <p className="mt-2 text-slate-500 leading-relaxed">{f.desc}</p>
             </div>
           ))}
-        </div>
-      </section>
-
-      {/* COMPARE */}
-      <section id="compare" className="bg-slate-50 border-y border-slate-100">
-        <div className="max-w-4xl mx-auto px-5 py-24">
-          <div className="text-center reveal">
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight">How we compare</h2>
-            <p className="mt-4 text-slate-500 text-lg">One platform instead of three subscriptions.</p>
-          </div>
-          <div className="mt-12 overflow-hidden rounded-3xl border border-slate-200 bg-white reveal">
-            <div className="grid grid-cols-[1fr_auto_auto_auto] text-sm">
-              <div className="p-4 font-bold text-slate-400 uppercase text-[11px] tracking-wide">Capability</div>
-              <div className="p-4 w-24 text-center font-extrabold text-red-600">FoodSafe</div>
-              <div className="p-4 w-24 text-center font-semibold text-slate-500">Check65</div>
-              <div className="p-4 w-24 text-center font-semibold text-slate-500">7shifts</div>
-              {COMPARE.map((row, i) => (
-                <div key={row.feature} className="contents">
-                  <div className={`p-4 border-t border-slate-100 ${i % 2 ? "bg-slate-50/50" : ""}`}>{row.feature}</div>
-                  <div className={`p-4 border-t border-slate-100 text-center bg-red-50/40 ${i % 2 ? "bg-red-50/60" : ""}`}><Mark v={row.us} /></div>
-                  <div className={`p-4 border-t border-slate-100 text-center ${i % 2 ? "bg-slate-50/50" : ""}`}><Mark v={row.check65} /></div>
-                  <div className={`p-4 border-t border-slate-100 text-center ${i % 2 ? "bg-slate-50/50" : ""}`}><Mark v={row.shifts} /></div>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </section>
 

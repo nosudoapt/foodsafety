@@ -4,8 +4,8 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 export const metadata: Metadata = {
-  title: "FoodSafe - Digital HACCP Food Safety Management",
-  description: "Digital HACCP food safety management app for cafés, restaurants, takeaways, pubs and catering businesses.",
+  title: "FoodSafe - Restaurant Operations Platform",
+  description: "The operations platform for cafés, restaurants, takeaways, pubs and catering businesses.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

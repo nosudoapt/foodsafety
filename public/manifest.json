@@ -1,7 +1,7 @@
 {
-  "name": "FoodSafe - Digital HACCP Food Safety Management",
+  "name": "FoodSafe - Restaurant Operations Platform",
   "short_name": "FoodSafe",
-  "description": "Digital HACCP food safety management app for cafés, restaurants, takeaways, pubs and catering businesses.",
+  "description": "The operations platform for cafés, restaurants, takeaways, pubs and catering businesses.",
   "start_url": "/dashboard",
   "display": "standalone",
   "background_color": "#f0fdf4",
@@ -21,7 +21,11 @@
       "purpose": "any maskable"
     }
   ],
-  "categories": ["business", "food", "health"],
+  "categories": [
+    "business",
+    "food",
+    "health"
+  ],
   "scope": "/",
   "lang": "en",
   "dir": "ltr"
