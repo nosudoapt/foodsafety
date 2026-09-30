@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import DemoRoleBadge from "@/components/DemoRoleBadge";
 
 const navigation = [
   { name: "Home", href: "/", icon: "🏡" },
@@ -17,7 +18,6 @@ const navigation = [
   { name: "Pest Control", href: "/pest-control", icon: "🐀" },
   { name: "Training", href: "/training", icon: "📚" },
   { name: "Reports", href: "/reports", icon: "📊" },
-  { name: "Between the Buns", href: "/between-the-buns", icon: "🍔" },
   { name: "Settings", href: "/settings", icon: "⚙️" },
 ];
 
@@ -44,6 +44,9 @@ export default function Sidebar() {
             </svg>
           </div>
           <span className="ml-2 font-bold text-gray-900">FoodSafe</span>
+          <div className="ml-auto">
+            <DemoRoleBadge compact />
+          </div>
         </div>
       </div>
 
@@ -66,6 +69,11 @@ export default function Sidebar() {
               </svg>
             </div>
             <span className="ml-3 font-bold text-gray-900">FoodSafe</span>
+          </div>
+
+          {/* Demo perspective switcher (demo sessions only) */}
+          <div className="px-3 py-3 border-b border-gray-100">
+            <DemoRoleBadge />
           </div>
 
           {/* Navigation */}

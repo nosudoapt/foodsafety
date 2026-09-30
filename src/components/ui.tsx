@@ -5,7 +5,7 @@
 import Link from "next/link";
 import type { LucideIcon } from "lucide-react";
 
-type Accent = "green" | "red" | "blue" | "amber" | "purple" | "teal" | "pink" | "slate";
+export type Accent = "green" | "red" | "blue" | "amber" | "purple" | "teal" | "pink" | "slate";
 
 const ACCENT: Record<Accent, { solid: string; soft: string; text: string; ring: string }> = {
   green:  { solid: "bg-green-600",  soft: "bg-green-100",  text: "text-green-700",  ring: "focus:ring-green-500" },
