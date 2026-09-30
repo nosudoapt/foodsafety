@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { prepGroups } from "@/lib/btb-prep-list";
+import BtbFeatureGate from "@/components/BtbFeatureGate";
 
 interface PrepEntry {
   par: string;
@@ -20,7 +21,17 @@ interface SavedPrepList {
   savedAt: string;
 }
 
+// Staff/manager/owner fill it daily; corporate can read the sheet but not
+// type into it (btb-access.ts) — hence `readOnly` on the boxes and Save.
 export default function PrepListPage() {
+  return (
+    <BtbFeatureGate feature="prep_list" wide>
+      {(readOnly) => <PrepList readOnly={readOnly} />}
+    </BtbFeatureGate>
+  );
+}
+
+function PrepList({ readOnly }: { readOnly: boolean }) {
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [day, setDay] = useState(() =>
     new Date().toLocaleDateString("en-US", { weekday: "long" })
@@ -210,13 +221,15 @@ export default function PrepListPage() {
                             type="text"
                             value={prepData[item.name]?.par || ""}
                             onChange={(e) => updateEntry(item.name, "par", e.target.value)}
-                            className="w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 bg-white focus:ring-1 focus:ring-red-500 text-center"
+                            readOnly={readOnly}
+                            className={`w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 text-center focus:ring-1 focus:ring-red-500 ${readOnly ? "bg-gray-50" : "bg-white"}`}
                           />
                           <input
                             type="text"
                             value={prepData[item.name]?.oh || ""}
                             onChange={(e) => updateEntry(item.name, "oh", e.target.value)}
-                            className="w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 bg-white focus:ring-1 focus:ring-red-500 text-center"
+                            readOnly={readOnly}
+                            className={`w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 text-center focus:ring-1 focus:ring-red-500 ${readOnly ? "bg-gray-50" : "bg-white"}`}
                           />
                           <input
                             type="text"
@@ -229,7 +242,8 @@ export default function PrepListPage() {
                             type="text"
                             value={prepData[item.name]?.initial || ""}
                             onChange={(e) => updateEntry(item.name, "initial", e.target.value)}
-                            className="w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 bg-white focus:ring-1 focus:ring-red-500 text-center"
+                            readOnly={readOnly}
+                            className={`w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 text-center focus:ring-1 focus:ring-red-500 ${readOnly ? "bg-gray-50" : "bg-white"}`}
                           />
                         </div>
                       ))}
@@ -240,20 +254,22 @@ export default function PrepListPage() {
             </div>
 
             {/* Save Button */}
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={savePrepList}
-                className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
-              >
-                Save Prep List
-              </button>
-              <button
-                onClick={() => setPrepData({})}
-                className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
-              >
-                Clear All
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={savePrepList}
+                  className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                >
+                  Save Prep List
+                </button>
+                <button
+                  onClick={() => setPrepData({})}
+                  className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+                >
+                  Clear All
+                </button>
+              </div>
+            )}
           </>
         ) : (
           /* History Tab */
@@ -287,12 +303,14 @@ export default function PrepListPage() {
                       >
                         Load
                       </button>
-                      <button
-                        onClick={() => deletePrepList(list.id)}
-                        className="text-sm text-gray-400 hover:text-red-500"
-                      >
-                        🗑️
-                      </button>
+                      {!readOnly && (
+                        <button
+                          onClick={() => deletePrepList(list.id)}
+                          className="text-sm text-gray-400 hover:text-red-500"
+                        >
+                          🗑️
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="text-xs text-gray-600">

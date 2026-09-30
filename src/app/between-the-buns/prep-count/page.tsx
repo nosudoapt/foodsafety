@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, PageHeader, Button, Input, Badge } from "@/components/ui";
 import { Plus, Trash2, ChefHat } from "lucide-react";
+import BtbFeatureGate from "@/components/BtbFeatureGate";
 
 interface Row {
   id: string;
@@ -16,7 +17,17 @@ interface Row {
 const make = (r: Row) => Math.max(0, r.par - r.on_hand);
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function PrepCount() {
+// Everyone can view (staff/manager/owner edit; corporate is view-only — see
+// btb-access.ts), so the gate blocks nobody here but computes `readOnly`.
+export default function PrepCountPage() {
+  return (
+    <BtbFeatureGate feature="prep_count">
+      {(readOnly) => <PrepCount readOnly={readOnly} />}
+    </BtbFeatureGate>
+  );
+}
+
+function PrepCount({ readOnly }: { readOnly: boolean }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [name, setName] = useState("");
   const [par, setPar] = useState("");
@@ -34,7 +45,7 @@ export default function PrepCount() {
 
   async function add(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (readOnly || !name.trim()) return;
     setSaving(true);
     const payload = { item_name: name.trim(), par: Number(par) || 0, on_hand: Number(oh) || 0, count_date: today() };
     const { data } = await supabase.from("prep_counts").insert(payload).select("id, item_name, par, on_hand").single();
@@ -44,6 +55,7 @@ export default function PrepCount() {
   }
 
   async function remove(id: string) {
+    if (readOnly) return;
     setRows((r) => r.filter((x) => x.id !== id));
     await supabase.from("prep_counts").delete().eq("id", id);
   }
@@ -58,23 +70,25 @@ export default function PrepCount() {
         action={<Badge accent="red">{rows.length} items · make {totalMake}</Badge>}
       />
 
-      <Card className="p-5 mb-5 animate-scale-in">
-        <form onSubmit={add} className="grid grid-cols-2 sm:grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
-          <div className="col-span-2 sm:col-span-1">
-            <label className="text-xs font-medium text-slate-500">Item</label>
-            <Input accent="red" value={name} onChange={(e) => setName(e.target.value)} placeholder="Beef patties" />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">PAR</label>
-            <Input accent="red" type="number" inputMode="numeric" value={par} onChange={(e) => setPar(e.target.value)} placeholder="0" />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-slate-500">On hand</label>
-            <Input accent="red" type="number" inputMode="numeric" value={oh} onChange={(e) => setOh(e.target.value)} placeholder="0" />
-          </div>
-          <Button type="submit" accent="red" disabled={saving} className="h-[46px]"><Plus className="w-4 h-4" /> Add</Button>
-        </form>
-      </Card>
+      {!readOnly && (
+        <Card className="p-5 mb-5 animate-scale-in">
+          <form onSubmit={add} className="grid grid-cols-2 sm:grid-cols-[1fr_auto_auto_auto] gap-3 items-end">
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-xs font-medium text-slate-500">Item</label>
+              <Input accent="red" value={name} onChange={(e) => setName(e.target.value)} placeholder="Beef patties" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500">PAR</label>
+              <Input accent="red" type="number" inputMode="numeric" value={par} onChange={(e) => setPar(e.target.value)} placeholder="0" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-500">On hand</label>
+              <Input accent="red" type="number" inputMode="numeric" value={oh} onChange={(e) => setOh(e.target.value)} placeholder="0" />
+            </div>
+            <Button type="submit" accent="red" disabled={saving} className="h-[46px]"><Plus className="w-4 h-4" /> Add</Button>
+          </form>
+        </Card>
+      )}
 
       <div className="space-y-2 stagger">
         {rows.length === 0 && (
@@ -93,9 +107,13 @@ export default function PrepCount() {
               <p className="text-2xl font-bold text-red-600 leading-none tabular-nums">{make(r)}</p>
               <p className="text-[10px] uppercase tracking-wide text-slate-400">make</p>
             </div>
-            <button onClick={() => remove(r.id)} className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition">
-              <Trash2 className="w-4 h-4" />
-            </button>
+            {readOnly ? (
+              <span className="w-9" />
+            ) : (
+              <button onClick={() => remove(r.id)} className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
           </Card>
         ))}
       </div>

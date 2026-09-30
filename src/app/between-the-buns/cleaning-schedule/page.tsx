@@ -2,6 +2,7 @@
 
 import { useState, useRef } from "react";
 import { cleaningTasks, generateWeekDates, getWeekLabel } from "@/lib/btb-cleaning";
+import BtbFeatureGate from "@/components/BtbFeatureGate";
 
 interface PhotoEntry {
   before: string | null;
@@ -41,7 +42,17 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+// View: everyone. Edit: staff/manager/owner — corporate signs the sheet off
+// but doesn't fill it (btb-access.ts), hence `readOnly` hides the write UI.
 export default function CleaningSchedulePage() {
+  return (
+    <BtbFeatureGate feature="cleaning_schedule" wide>
+      {(readOnly) => <CleaningSchedule readOnly={readOnly} />}
+    </BtbFeatureGate>
+  );
+}
+
+function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
   const [taskData, setTaskData] = useState<TaskCompletion>({});
   const [savedSchedules, setSavedSchedules] = useState<SavedSchedule[]>([]);
@@ -331,16 +342,19 @@ export default function CleaningSchedulePage() {
                           onChange={(e) =>
                             updateInitial(taskIdx, date, e.target.value.toUpperCase())
                           }
+                          readOnly={readOnly}
                           maxLength={3}
                           className={`w-12 h-8 text-center text-xs font-bold border-0 rounded ${
                             isDone
                               ? "bg-green-100 text-green-700"
-                              : "bg-transparent text-gray-900 focus:ring-2 focus:ring-red-500"
+                              : readOnly
+                                ? "bg-transparent text-gray-900"
+                                : "bg-transparent text-gray-900 focus:ring-2 focus:ring-red-500"
                           }`}
                           placeholder="—"
                         />
                         {/* Photo buttons */}
-                        {isDone && (
+                        {isDone && !readOnly && (
                           <div className="flex gap-0.5">
                             <button
                               onClick={() => {
@@ -405,12 +419,14 @@ export default function CleaningSchedulePage() {
                                 <span className="absolute bottom-0.5 left-0.5 bg-blue-600 text-white text-[7px] px-1 rounded">
                                   Before
                                 </span>
-                                <button
-                                  onClick={() => removePhoto(Number(taskIdx), date, "before")}
-                                  className="absolute top-0.5 right-0.5 bg-red-500 text-white w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center"
-                                >
-                                  ✕
-                                </button>
+                                {!readOnly && (
+                                  <button
+                                    onClick={() => removePhoto(Number(taskIdx), date, "before")}
+                                    className="absolute top-0.5 right-0.5 bg-red-500 text-white w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
                             )}
                             {photos.after && (
@@ -424,12 +440,14 @@ export default function CleaningSchedulePage() {
                                 <span className="absolute bottom-0.5 left-0.5 bg-green-600 text-white text-[7px] px-1 rounded">
                                   After
                                 </span>
-                                <button
-                                  onClick={() => removePhoto(Number(taskIdx), date, "after")}
-                                  className="absolute top-0.5 right-0.5 bg-red-500 text-white w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center"
-                                >
-                                  ✕
-                                </button>
+                                {!readOnly && (
+                                  <button
+                                    onClick={() => removePhoto(Number(taskIdx), date, "after")}
+                                    className="absolute top-0.5 right-0.5 bg-red-500 text-white w-3.5 h-3.5 rounded-full text-[8px] flex items-center justify-center"
+                                  >
+                                    ✕
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -442,20 +460,22 @@ export default function CleaningSchedulePage() {
             )}
 
             {/* Save Button */}
-            <div className="mt-6 flex gap-3">
-              <button
-                onClick={saveSchedule}
-                className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
-              >
-                Save Week
-              </button>
-              <button
-                onClick={() => setTaskData({})}
-                className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
-              >
-                Clear All
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="mt-6 flex gap-3">
+                <button
+                  onClick={saveSchedule}
+                  className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition-colors"
+                >
+                  Save Week
+                </button>
+                <button
+                  onClick={() => setTaskData({})}
+                  className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+                >
+                  Clear All
+                </button>
+              </div>
+            )}
           </>
         ) : (
           /* History Tab */
@@ -513,12 +533,14 @@ export default function CleaningSchedulePage() {
                         >
                           Load
                         </button>
-                        <button
-                          onClick={() => deleteSchedule(schedule.id)}
-                          className="text-sm text-gray-400 hover:text-red-500"
-                        >
-                          🗑️
-                        </button>
+                        {!readOnly && (
+                          <button
+                            onClick={() => deleteSchedule(schedule.id)}
+                            className="text-sm text-gray-400 hover:text-red-500"
+                          >
+                            🗑️
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

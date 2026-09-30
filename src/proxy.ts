@@ -1,46 +1,28 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import { MGMT_ROLES, OWNER_TIER_ROLES } from "@/lib/roles";
-
-// Server-side RBAC for /admin subroutes (mirrors the nav tiers in
-// src/app/admin/layout.tsx — client nav hides these, this enforces them).
-// Anything not listed here is admin-shell content open to all signed-in staff.
-const MGMT = MGMT_ROLES as string[];
-const OWNER = OWNER_TIER_ROLES as string[];
-const ADMIN_ROUTE_ROLES: { prefix: string; roles: string[] }[] = [
-  { prefix: "/admin/vault", roles: OWNER },
-  { prefix: "/admin/new-restaurant", roles: OWNER },
-  { prefix: "/admin/compliance", roles: MGMT },
-  { prefix: "/admin/documents", roles: MGMT },
-  { prefix: "/admin/staff-licenses", roles: MGMT },
-  { prefix: "/admin/marketing", roles: [...MGMT, "designer"] },
-  { prefix: "/admin/inspections", roles: MGMT },
-  { prefix: "/admin/manuals", roles: MGMT },
-];
-
-// Routes that require an authenticated session. BTB staff pages
-// (/between-the-buns/*) are intentionally public for shared tablets.
-const PROTECTED_PREFIXES = [
-  "/dashboard",
-  "/admin",
-  "/checks",
-  "/cleaning",
-  "/temperatures",
-  "/allergens",
-  "/deliveries",
-  "/corrective-actions",
-  "/pest-control",
-  "/training",
-  "/reports",
-  "/settings",
-];
+import { DEFAULT_ROLE } from "@/lib/roles";
+import { isProtectedPath, requiredRolesFor } from "@/lib/route-guards";
+import { BTB_COOKIE, tokenValid } from "@/lib/btb-auth";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const needsAuth = PROTECTED_PREFIXES.some(
-    (p) => pathname === p || pathname.startsWith(p + "/")
-  );
-  if (!needsAuth) return NextResponse.next();
+
+  // Between the Buns is a separate, cookie-gated surface — independent of the
+  // green demo's Supabase auth. Its own /login and the /api/btb/* routes stay open.
+  if (pathname === "/between-the-buns/login" || pathname.startsWith("/api/btb/")) {
+    return NextResponse.next();
+  }
+  if (pathname === "/between-the-buns" || pathname.startsWith("/between-the-buns/")) {
+    if (tokenValid(request.cookies.get(BTB_COOKIE)?.value)) {
+      return NextResponse.next();
+    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/between-the-buns/login";
+    url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
+  }
+
+  if (!isProtectedPath(pathname)) return NextResponse.next();
 
   const response = NextResponse.next({ request });
 
@@ -68,23 +50,36 @@ export async function proxy(request: NextRequest) {
   }
 
   // Trial gate: if the profile carries a trial_ends_at in the past, block.
-  const { data: profile } = await supabase
+  // trial_ends_at is added by supabase/schema-roles.sql. Databases that predate
+  // that migration 400 the whole select, which would silently knock every user
+  // down to the least-privileged role — so retry with a role-only projection
+  // rather than lose RBAC to an optional column. Guards are unchanged either
+  // way: an unreadable profile still resolves to DEFAULT_ROLE.
+  let profile: { role?: string; trial_ends_at?: string | null } | null = null;
+  const full = await supabase
     .from("profiles")
-    .select("trial_ends_at, role")
+    .select("role, trial_ends_at")
     .eq("id", data.user.id)
-    .single();
+    .maybeSingle();
+  if (full.error) {
+    const roleOnly = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    profile = roleOnly.data;
+  } else {
+    profile = full.data;
+  }
   if (profile?.trial_ends_at && new Date(profile.trial_ends_at) < new Date()) {
     const url = request.nextUrl.clone();
     url.pathname = "/trial-expired";
     return NextResponse.redirect(url);
   }
 
-  // Enforce admin subroute RBAC server-side (client nav only hides links).
-  const role = profile?.role ?? "staff";
-  const gated = ADMIN_ROUTE_ROLES.find(
-    (r) => pathname === r.prefix || pathname.startsWith(r.prefix + "/")
-  );
-  if (gated && !gated.roles.includes(role)) {
+  const role = profile?.role ?? DEFAULT_ROLE;
+  const gated = requiredRolesFor(pathname);
+  if (gated && !gated.includes(role)) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin";
     url.search = "";
@@ -107,5 +102,6 @@ export const config = {
     "/training/:path*",
     "/reports/:path*",
     "/settings/:path*",
+    "/between-the-buns/:path*",
   ],
 };
