@@ -57,3 +57,43 @@ export function expiryLabel(date: string | null | undefined): string {
   if (d === 0) return "Expires today";
   return `${d}d left`;
 }
+
+// --- shared list helpers (used by the compliance page and DocumentVault) ---
+
+// Lower rank = more urgent, so an ascending sort surfaces expired items first.
+export const URGENCY_RANK: Record<ExpiryLevel, number> = {
+  expired: 0, critical: 1, warning: 2, ok: 3, none: 4,
+};
+
+/** A level that should raise an alert (expired or inside its notify window). */
+export function isAlertLevel(level: ExpiryLevel): boolean {
+  return level === "expired" || level === "critical" || level === "warning";
+}
+
+/**
+ * Sort rows by expiry urgency (expired → critical → warning → ok → none),
+ * breaking ties by soonest expiry. Generic over any row shape via accessors.
+ */
+export function sortByUrgency<T>(
+  rows: readonly T[],
+  docType: (row: T) => string,
+  expiry: (row: T) => string | null | undefined
+): T[] {
+  return [...rows].sort((a, b) => {
+    const la = expiryLevel(expiry(a), complianceType(docType(a)).notifyDays);
+    const lb = expiryLevel(expiry(b), complianceType(docType(b)).notifyDays);
+    if (URGENCY_RANK[la] !== URGENCY_RANK[lb]) return URGENCY_RANK[la] - URGENCY_RANK[lb];
+    return (daysUntil(expiry(a)) ?? 1e9) - (daysUntil(expiry(b)) ?? 1e9);
+  });
+}
+
+/** Rows whose expiry currently warrants attention, most urgent first. */
+export function alertsFrom<T>(
+  rows: readonly T[],
+  docType: (row: T) => string,
+  expiry: (row: T) => string | null | undefined
+): T[] {
+  return sortByUrgency(rows, docType, expiry).filter((r) =>
+    isAlertLevel(expiryLevel(expiry(r), complianceType(docType(r)).notifyDays))
+  );
+}
