@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import type { Role } from "@/lib/roles";
 import Link from "next/link";
 
 interface Profile {
@@ -10,7 +11,7 @@ interface Profile {
   email: string;
   full_name: string;
   restaurant_name: string;
-  role: "owner" | "manager" | "staff";
+  role: Role;
   created_at: string;
   updated_at: string;
 }

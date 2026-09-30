@@ -14,13 +14,13 @@ const products = [
     cta: "Enter demo",
   },
   {
-    href: "/between-the-buns",
+    href: "/between-the-buns/login",
     tag: "Client",
     title: "Between the Buns",
     desc: "Dedicated staff hub — prep counts, cleaning schedules, recipes and store operations.",
     icon: UtensilsCrossed,
     accent: "red",
-    cta: "Open staff hub",
+    cta: "Staff sign-in",
   },
 ];
 

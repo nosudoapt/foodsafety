@@ -4,6 +4,7 @@ import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { DemoRoleButtons } from "@/components/DemoRolePicker";
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
@@ -102,6 +103,29 @@ export default function SignIn() {
             </Link>
           </p>
         </form>
+
+        <div className="mt-5 bg-white rounded-2xl shadow-lg p-6 animate-fade-in">
+          <div className="flex items-center justify-between gap-3 mb-1">
+            <h2 className="font-bold text-gray-900">Try a demo role</h2>
+            <Link href="/demo" className="text-sm font-semibold text-green-600 hover:underline">
+              Details
+            </Link>
+          </div>
+          <p className="mb-4 text-sm text-gray-500">
+            See exactly what each role can do — no signup needed.
+          </p>
+          <DemoRoleButtons />
+        </div>
+
+        <p className="mt-5 text-center text-sm text-gray-500">
+          Signing in for{" "}
+          <Link
+            href="/between-the-buns/login"
+            className="font-semibold text-red-600 hover:underline"
+          >
+            Between the Buns?
+          </Link>
+        </p>
       </div>
     </div>
   );
