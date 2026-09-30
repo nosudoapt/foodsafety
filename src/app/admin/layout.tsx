@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { roleLabel, roleColor, ALL_ROLES, MGMT_ROLES, OWNER_TIER_ROLES } from "@/lib/roles";
+import { roleLabel, roleColor, ALL_ROLES, MGMT_ROLES, OWNER_TIER_ROLES, DEFAULT_ROLE } from "@/lib/roles";
 
 interface UserProfile {
   role: string;
@@ -54,7 +54,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .single();
       if (cancelled) return;
       setProfile({
-        role: data?.role ?? "staff",
+        role: data?.role ?? DEFAULT_ROLE,
         full_name: data?.full_name || user.email?.split("@")[0] || "User",
         restaurant_name: data?.restaurant_name || "",
         email: data?.email || user.email || "",
