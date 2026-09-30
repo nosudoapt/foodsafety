@@ -32,7 +32,7 @@ export const menuItems: MenuItem[] = [
     ingredients: [
       "Lamb patty",
       "Feta cheese",
-      "Mint chipotle",
+      "Chipotle Mint",
       "Red onions",
       "Cucumber",
     ],
@@ -44,7 +44,7 @@ export const menuItems: MenuItem[] = [
     section: "Signature",
     ingredients: [
       "Boar patty",
-      "BBQ",
+      "BBQ Sauce",
       "Spicy cranberry",
       "Coleslaw",
     ],
@@ -100,7 +100,7 @@ export const menuItems: MenuItem[] = [
     ingredients: [
       "Turkey patty",
       "Ham slices x2",
-      "Swiss",
+      "Swiss cheese",
       "Smoky mayo",
       "Spicy cranberry",
       "Lettuce",
@@ -177,7 +177,7 @@ export const menuItems: MenuItem[] = [
     ingredients: [
       "5oz beef patty",
       "Cheddar",
-      "Mozza",
+      "Mozzarella",
       "Smoky mayo",
       "Lettuce",
       "Tomato",
@@ -190,7 +190,7 @@ export const menuItems: MenuItem[] = [
     section: "Classic",
     ingredients: [
       "Fried chicken",
-      "Parmesan",
+      "Parmesan cheese",
       "Bacon x2",
       "Caesar dressing",
       "Lettuce",
@@ -260,8 +260,9 @@ export const menuItems: MenuItem[] = [
     category: "Handhelds",
     section: "Wraps",
     ingredients: [
-      "Romaine",
+      "Grilled Chicken",
       "Greek Dressing",
+      "Romaine",
       "Cucumber",
       "Tomato",
       "Red Onions",
@@ -270,6 +271,7 @@ export const menuItems: MenuItem[] = [
       "Feta",
       "Oregano",
     ],
+    station: "hot-plate",
   },
   {
     name: "Chipotle Chicken Wrap",
@@ -277,9 +279,9 @@ export const menuItems: MenuItem[] = [
     section: "Wraps",
     ingredients: [
       "Breaded Chicken Fingers x2",
+      "Chipotle Mayo",
       "Romaine",
       "Cheddar",
-      "Chipotle",
       "Tomato",
       "Onion",
     ],
@@ -290,10 +292,10 @@ export const menuItems: MenuItem[] = [
     section: "Wraps",
     ingredients: [
       "Breaded Chicken Fingers x2",
+      "Bacon x2",
+      "Caesar Dressing",
       "Romaine",
       "Parmesan",
-      "Bacon",
-      "Caesar Dressing",
     ],
   },
 
@@ -304,7 +306,6 @@ export const menuItems: MenuItem[] = [
     section: "Salads",
     ingredients: [
       "Romaine",
-      "Greek Dressing",
       "Cucumber",
       "Tomato",
       "Red Onions",
@@ -312,7 +313,8 @@ export const menuItems: MenuItem[] = [
       "Black Olives",
       "Feta",
       "Oregano",
-      "Garlic Toast",
+      "Garlic Toast x1",
+      "Greek Dressing (dip)",
     ],
   },
   {
@@ -321,11 +323,12 @@ export const menuItems: MenuItem[] = [
     section: "Salads",
     ingredients: [
       "Romaine",
-      "Caesar Dressing",
       "Parmesan",
-      "Bacon x2",
       "Croutons",
-      "Garlic Toast",
+      "Lemon wedge x1",
+      "Bacon x2 chopped",
+      "Garlic Toast x1",
+      "Caesar Dressing (dip)",
     ],
   },
 
