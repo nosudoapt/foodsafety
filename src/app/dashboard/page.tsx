@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { PageHeader, StatTile, NavCard, type Accent } from "@/components/ui";
+import LocationSwitcher from "@/components/LocationSwitcher";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { DEFAULT_ROLE, isRole, roleLabel, ROLE_COLORS, type Role } from "@/lib/roles";
@@ -203,27 +204,80 @@ function viewFor(role: string): DashboardView {
   return VIEWS[isRole(role) ? VIEW_FOR_ROLE[role] : VIEW_FOR_ROLE[DEFAULT_ROLE]];
 }
 
-export default function Dashboard() {
-  const { user, loading } = useAuth();
-  const [role, setRole] = useState<string | null>(null);
+// Real numbers behind the tiles below, scoped to the active location: the
+// site count comes straight from the context's visible sites, the other three
+// are counted per table (expiry, temperature alerts, open actions).
+interface LiveCounts {
+  locations: number;
+  expiring: number;
+  alerts: number;
+  openActions: number;
+}
 
+// Which tile each count feeds, keyed by label — the views word the same stat
+// differently ("Locations", "My Locations", "Locations Served").
+const LIVE_STAT: Record<string, keyof LiveCounts> = {
+  Locations: "locations",
+  "My Locations": "locations",
+  "Locations Served": "locations",
+  "Expiring Documents": "expiring",
+  "Temperature Alerts": "alerts",
+  "Open Actions": "openActions",
+};
+
+const DAY = 86_400_000;
+
+export default function Dashboard() {
+  const { user, loading, role, profileLoading, locations, locationId } = useAuth();
+  const [live, setLive] = useState<LiveCounts | null>(null);
+
+  // One round-trip for every counter; switching site in the header changes
+  // locationId, which re-runs exactly these three queries.
   useEffect(() => {
+    if (!user || profileLoading) return;
     let cancelled = false;
-    if (!user) return;
-    supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single()
-      .then(({ data }) => {
-        if (!cancelled) setRole(data?.role ?? DEFAULT_ROLE);
-      });
+    const now = Date.now();
+    const in30 = new Date(now + 30 * DAY).toISOString().slice(0, 10);
+    const weekAgo = new Date(now - 7 * DAY).toISOString();
+
+    const expiringQ = supabase
+      .from("compliance_documents")
+      .select("id", { count: "exact", head: true })
+      .lte("expiry_date", in30);
+    const alertsQ = supabase
+      .from("temperature_records")
+      .select("id", { count: "exact", head: true })
+      .eq("is_safe", false)
+      .gte("recorded_at", weekAgo);
+    const openQ = supabase
+      .from("corrective_actions")
+      .select("id", { count: "exact", head: true })
+      .eq("resolved", false);
+
+    (async () => {
+      const counts: LiveCounts = { locations: locations.length, expiring: 0, alerts: 0, openActions: 0 };
+      try {
+        const [expiring, alerts, open] = await Promise.all([
+          locationId ? expiringQ.eq("location_id", locationId) : expiringQ,
+          locationId ? alertsQ.eq("location_id", locationId) : alertsQ,
+          locationId ? openQ.eq("location_id", locationId) : openQ,
+        ]);
+        if (cancelled) return;
+        counts.expiring = expiring.count ?? 0;
+        counts.alerts = alerts.count ?? 0;
+        counts.openActions = open.count ?? 0;
+      } catch {
+        // A database without schema-locations.sql shows 0, never a blank page.
+      }
+      if (!cancelled) setLive(counts);
+    })();
+
     return () => {
       cancelled = true;
     };
-  }, [user]);
+  }, [user, profileLoading, locationId, locations.length]);
 
-  if (loading || (user && role === null)) {
+  if (loading || (user && (profileLoading || live === null))) {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-600" />
@@ -232,6 +286,13 @@ export default function Dashboard() {
   }
 
   const view = viewFor(role ?? DEFAULT_ROLE);
+  const typedRole = isRole(role ?? "") ? (role as Role) : DEFAULT_ROLE;
+  // Real value for the location tiles; the rest keep their view defaults
+  // until they have a live count.
+  const statValue = (label: string, fallback: string) => {
+    const key = LIVE_STAT[label];
+    return live && key ? String(live[key]) : fallback;
+  };
 
   return (
     <div>
@@ -239,11 +300,14 @@ export default function Dashboard() {
         title={view.title}
         subtitle={view.subtitle}
         action={
-          role && (
-            <span className={`text-xs px-3 py-1 rounded-full font-bold whitespace-nowrap ${ROLE_COLORS[isRole(role) ? role : DEFAULT_ROLE]}`}>
-              {roleLabel(role)}
-            </span>
-          )
+          <div className="flex items-center gap-2">
+            <LocationSwitcher />
+            {role && (
+              <span className={`text-xs px-3 py-1 rounded-full font-bold whitespace-nowrap ${ROLE_COLORS[typedRole]}`}>
+                {roleLabel(role)}
+              </span>
+            )}
+          </div>
         }
       />
 
@@ -255,7 +319,13 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {view.stats.map((s) => (
-          <StatTile key={s.label} label={s.label} value={s.value} icon={s.icon} accent={s.accent} />
+          <StatTile
+            key={s.label}
+            label={s.label}
+            value={statValue(s.label, s.value)}
+            icon={s.icon}
+            accent={s.accent}
+          />
         ))}
       </div>
 

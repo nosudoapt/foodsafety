@@ -3,13 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, PageHeader, Button, Input, Badge } from "@/components/ui";
-import { Search, Save, ClipboardList, Check } from "lucide-react";
+import { Search, Save, ClipboardList, Check, Flame } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { BROOKS_ORDER_GUIDE, ORDER_GUIDE_ITEM_COUNT } from "@/lib/brooks-order-guide";
+import { locationScope, activeLocationId } from "@/lib/locations";
+import { buildParMaps, parFor } from "@/lib/par-prefill";
 
 interface Entry {
   par: number;
   on_hand: number;
+  urgent: boolean;
+  /** Prefilled from history, not yet touched — excluded from the live totals. */
+  seeded?: boolean;
 }
 
 interface HistoryRow {
@@ -18,7 +23,10 @@ interface HistoryRow {
   par: number;
   on_hand: number;
   order_date: string;
+  urgent?: boolean | null;
 }
+
+const EMPTY: Entry = { par: 0, on_hand: 0, urgent: false };
 
 // ORDER = PAR - ON_HAND (never negative) — same rule as the prep sheet's MAKE.
 const orderQty = (e: Entry) => Math.max(0, (e.par || 0) - (e.on_hand || 0));
@@ -44,31 +52,56 @@ function OrderSheet({ readOnly }: { readOnly: boolean }) {
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
   // Pull the 3-month rolling record once: today's rows prefill the sheet, the
-  // rest become the history list below.
+  // rest become the history list below and the PAR-prefill source. Catalog
+  // items with no count yet today are seeded from the most recent same-weekday
+  // PAR (flagged `seeded` so untouched prefill never hits the totals).
   useEffect(() => {
-    supabase
+    const scope = locationScope();
+    let q = supabase
       .from("order_sheets")
-      .select("id, item_name, par, on_hand, order_date")
+      .select("id, item_name, par, on_hand, urgent, order_date, created_at")
       .order("order_date", { ascending: false })
-      .then(({ data }) => {
-        if (!data) return;
-        const rows = data as HistoryRow[];
-        const t = today();
-        const seed: Record<string, Entry> = {};
-        for (const r of rows) {
-          if (r.order_date === t) seed[r.item_name] = { par: Number(r.par), on_hand: Number(r.on_hand) };
+      .order("created_at", { ascending: false });
+    if (scope) q = q.or(scope);
+    q.then(({ data }) => {
+      if (!data) return;
+      const rows = data as HistoryRow[];
+      const t = today();
+      const todayRows = rows.filter((r) => r.order_date === t);
+      const past = rows.filter((r) => r.order_date !== t);
+      const seed: Record<string, Entry> = {};
+      for (const r of todayRows) {
+        seed[r.item_name] = { par: Number(r.par), on_hand: Number(r.on_hand), urgent: !!r.urgent };
+      }
+      const maps = buildParMaps(
+        past.map((r) => ({ item_name: r.item_name, date: r.order_date, par: r.par, urgent: r.urgent })),
+        t,
+      );
+      for (const cat of BROOKS_ORDER_GUIDE) {
+        for (const it of cat.items) {
+          if (seed[it.name]) continue;
+          const snap = parFor(maps, it.name);
+          if (snap && snap.par > 0) {
+            seed[it.name] = { par: snap.par, on_hand: 0, urgent: snap.urgent, seeded: true };
+          }
         }
-        setEntries(seed);
-        setHistory(rows.filter((r) => r.order_date !== t));
-      });
+      }
+      setEntries(seed);
+      setHistory(past);
+    });
   }, []);
 
-  function update(name: string, field: keyof Entry, value: string) {
+  function update(name: string, field: keyof Entry, value: string | boolean) {
     if (readOnly) return;
     setSavedAt(null);
     setEntries((prev) => {
-      const cur = prev[name] ?? { par: 0, on_hand: 0 };
-      return { ...prev, [name]: { ...cur, [field]: Number(value) || 0 } };
+      const cur = prev[name] ?? EMPTY;
+      const next: Entry = {
+        ...cur,
+        [field]: typeof value === "boolean" ? value : Number(value) || 0,
+        seeded: false,
+      };
+      return { ...prev, [name]: next };
     });
   }
 
@@ -84,11 +117,16 @@ function OrderSheet({ readOnly }: { readOnly: boolean }) {
           item_name: name,
           par: e!.par,
           on_hand: e!.on_hand,
+          urgent: e!.urgent ?? false,
           order_date: today(),
+          location_id: activeLocationId(),
         })),
     );
-    // Idempotent: replace today's sheet wholesale.
-    await supabase.from("order_sheets").delete().eq("order_date", today());
+    // Idempotent: replace today's sheet for this location only.
+    const scope = locationScope();
+    let del = supabase.from("order_sheets").delete().eq("order_date", today());
+    if (scope) del = del.or(scope);
+    await del;
     if (rows.length) await supabase.from("order_sheets").insert(rows);
     setSaving(false);
     setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
@@ -112,14 +150,16 @@ function OrderSheet({ readOnly }: { readOnly: boolean }) {
     [q, category],
   );
 
-  // Live totals across the whole guide (not just the filtered view).
+  // Live totals across the whole guide (not just the filtered view) —
+  // untouched prefilled rows don't count until the manager engages with them.
+  const counted = useMemo(() => Object.values(entries).filter((e) => !e.seeded), [entries]);
   const linesToOrder = useMemo(
-    () => Object.values(entries).filter((e) => orderQty(e) > 0).length,
-    [entries],
+    () => counted.filter((e) => orderQty(e) > 0).length,
+    [counted],
   );
   const totalUnits = useMemo(
-    () => Object.values(entries).reduce((s, e) => s + orderQty(e), 0),
-    [entries],
+    () => counted.reduce((s, e) => s + orderQty(e), 0),
+    [counted],
   );
 
   const byDate = history.reduce<Record<string, HistoryRow[]>>((acc, r) => {
@@ -168,7 +208,7 @@ function OrderSheet({ readOnly }: { readOnly: boolean }) {
       <div className="space-y-6">
         {filtered.map((cat) => {
           const catOrder = cat.items.reduce(
-            (s, it) => s + (entries[it.name] ? orderQty(entries[it.name]) : 0),
+            (s, it) => s + (entries[it.name] && !entries[it.name].seeded ? orderQty(entries[it.name]) : 0),
             0,
           );
           return (
@@ -182,19 +222,20 @@ function OrderSheet({ readOnly }: { readOnly: boolean }) {
                 </span>
               </div>
               <Card className="overflow-hidden">
-                <div className="grid grid-cols-[1fr_4.5rem_4.5rem_3.5rem] gap-2 px-4 py-2 bg-slate-50 text-[11px] font-bold text-slate-400 uppercase">
+                <div className="grid grid-cols-[1fr_4.5rem_4.5rem_2.5rem_3.5rem] gap-2 px-4 py-2 bg-slate-50 text-[11px] font-bold text-slate-400 uppercase">
                   <span>Item</span>
                   <span className="text-center">PAR</span>
                   <span className="text-center">On hand</span>
+                  <span className="text-center">Urg</span>
                   <span className="text-right">Order</span>
                 </div>
                 <div className="divide-y divide-slate-100">
                   {cat.items.map((it) => {
-                    const e = entries[it.name] ?? { par: 0, on_hand: 0 };
+                    const e = entries[it.name] ?? EMPTY;
                     return (
                       <div
                         key={it.name}
-                        className="grid grid-cols-[1fr_4.5rem_4.5rem_3.5rem] gap-2 px-4 py-2.5 items-center"
+                        className="grid grid-cols-[1fr_4.5rem_4.5rem_2.5rem_3.5rem] gap-2 px-4 py-2.5 items-center"
                       >
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-900 truncate">{it.name}</p>
@@ -224,6 +265,23 @@ function OrderSheet({ readOnly }: { readOnly: boolean }) {
                             onChange={(ev) => update(it.name, "on_hand", ev.target.value)}
                             placeholder="0"
                             className="text-center px-1 h-9"
+                          />
+                        )}
+                        {readOnly ? (
+                          e.urgent ? (
+                            <span className="flex justify-center" title="Urgent">
+                              <Flame className="w-4 h-4 text-red-500" />
+                            </span>
+                          ) : (
+                            <span className="text-center text-slate-300">—</span>
+                          )
+                        ) : (
+                          <input
+                            type="checkbox"
+                            aria-label={`Urgent: ${it.name}`}
+                            checked={e.urgent}
+                            onChange={(ev) => update(it.name, "urgent", ev.target.checked)}
+                            className="w-4 h-4 accent-red-600 justify-self-center"
                           />
                         )}
                         <span className="text-right tabular-nums font-bold text-red-600">

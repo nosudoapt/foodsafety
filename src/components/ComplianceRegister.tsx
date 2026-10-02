@@ -7,6 +7,7 @@
 // carries the generic 60-day reminder window in lib/expiry.ts.
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { activeLocationId, locationScope } from "@/lib/locations";
 import { Card, PageHeader, Button, Input, Badge } from "@/components/ui";
 import {
   DOC_ROUTING_HINT, complianceType, expiryLevel, expiryLabel,
@@ -31,12 +32,16 @@ export default function ComplianceRegister({ readOnly = false }: { readOnly?: bo
   const [saving, setSaving] = useState(false);
 
   // Only expiring items — everything without a date lives in Business Documents.
+  // Scoped to the active site so the dashboard's Expiring Documents tile counts
+  // exactly what this list shows.
   useEffect(() => {
-    supabase
+    const scope = locationScope();
+    let q = supabase
       .from("compliance_documents")
       .select("id, doc_type, name, file_name, expiry_date, notes")
-      .not("expiry_date", "is", null)
-      .then(({ data }) => data && setRows(data as Doc[]));
+      .not("expiry_date", "is", null);
+    if (scope) q = q.or(scope);
+    q.then(({ data }) => data && setRows(data as Doc[]));
   }, []);
 
   async function add(e: React.FormEvent) {
@@ -45,7 +50,7 @@ export default function ComplianceRegister({ readOnly = false }: { readOnly?: bo
     if (!name.trim() || !expiry) return;
     setSaving(true);
     const payload = { doc_type: "other", name: name.trim(), expiry_date: expiry, notes: notes.trim() };
-    const { data } = await supabase.from("compliance_documents").insert(payload)
+    const { data } = await supabase.from("compliance_documents").insert({ ...payload, location_id: activeLocationId() })
       .select("id, doc_type, name, file_name, expiry_date, notes").single();
     setRows((r) => [(data as Doc) ?? { id: crypto.randomUUID(), file_name: null, ...payload } as Doc, ...r]);
     setName(""); setExpiry(""); setNotes("");

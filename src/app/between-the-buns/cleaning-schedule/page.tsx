@@ -11,6 +11,7 @@ import {
   removePhotos,
   uploadToSupabase,
 } from "@/lib/photos";
+import { locationScope, activeLocationId } from "@/lib/locations";
 
 // One cleaning_logs row per task per week: who did it, when, and JSON arrays of
 // object paths for each photo side (multiple angles). Photos are compressed
@@ -144,12 +145,14 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
         let id = log.id;
         if (!id) {
           // Idempotent first save: reuse an existing row for this task/week.
-          const { data: existing, error: err } = await supabase
+          let find = supabase
             .from("cleaning_logs")
             .select("id")
             .eq("week_start", key)
-            .eq("task_name", taskName)
-            .limit(1);
+            .eq("task_name", taskName);
+          const findScope = locationScope();
+          if (findScope) find = find.or(findScope);
+          const { data: existing, error: err } = await find.limit(1);
           if (err) throw new Error(err.message);
           id = existing?.[0]?.id;
         }
@@ -162,6 +165,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
           done_time: log.time || null,
           before_photo: JSON.stringify(log.before),
           after_photo: JSON.stringify(log.after),
+          location_id: activeLocationId(),
         };
         if (id) {
           const { error: err } = await supabase.from("cleaning_logs").update(payload).eq("id", id);
@@ -222,12 +226,14 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
     let cancelled = false;
     (async () => {
       try {
-        const { data, error: err } = await supabase
+        let load = supabase
           .from("cleaning_logs")
           .select(
             "id, task_name, done_by, done_date, done_time, before_photo, after_photo, week_start",
-          )
-          .order("created_at", { ascending: false });
+          );
+        const loadScope = locationScope();
+        if (loadScope) load = load.or(loadScope);
+        const { data, error: err } = await load.order("created_at", { ascending: false });
         if (err) throw new Error(err.message);
         if (cancelled) return;
         const loaded: Store = {};

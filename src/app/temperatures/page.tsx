@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { activeLocationId, locationScope } from "@/lib/locations";
 import { PageHeader, Card, Button, Input } from "@/components/ui";
 
 interface TempRecord {
@@ -57,12 +58,17 @@ export default function TemperaturesPage() {
       const cutoff = new Date();
       cutoff.setDate(cutoff.getDate() - 90);
 
-      const { data } = await supabase
+      // Scoped to the active site so the dashboard's Temperature Alerts tile
+      // counts exactly what this page shows.
+      const scope = locationScope();
+      let q = supabase
         .from("temperature_records")
         .select("*")
         .eq("user_id", session.user.id)
-        .gte("recorded_at", cutoff.toISOString())
-        .order("recorded_at", { ascending: false });
+        .gte("recorded_at", cutoff.toISOString());
+      if (scope) q = q.or(scope);
+
+      const { data } = await q.order("recorded_at", { ascending: false });
 
       setRecords(data || []);
       setLoading(false);
@@ -82,6 +88,7 @@ export default function TemperaturesPage() {
     const { error } = await supabase.from("temperature_records").insert({
       user_id: session.user.id,
       restaurant_name: "My Restaurant",
+      location_id: activeLocationId(),
       equipment_name: formData.equipment_name,
       record_type: formData.record_type,
       food_item: formData.food_item,

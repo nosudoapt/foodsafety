@@ -20,7 +20,9 @@ export default function BtbFeatureGate({
   /** Full-width sheets (cleaning schedule, prep sheet) own their own layout —
    *  skip the default centred container so wide grids aren't squeezed. */
   wide?: boolean;
-  children: (readOnly: boolean) => React.ReactNode;
+  /** readOnly first (existing pages), role second (pages that gate fields
+   *  more tightly than the feature matrix, e.g. manager-only PAR). */
+  children: (readOnly: boolean, role: BtbRole) => React.ReactNode;
 }) {
   const [role, setRole] = useState<BtbRole | null>(null);
   const [ready, setReady] = useState(false);
@@ -59,7 +61,7 @@ export default function BtbFeatureGate({
 
   return (
     <div className={wide ? "" : "max-w-4xl mx-auto px-4 py-8"}>
-      {children(!btbCanEdit(feature, role))}
+      {children(!btbCanEdit(feature, role), role)}
     </div>
   );
 }

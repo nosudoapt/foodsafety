@@ -14,7 +14,8 @@ previous one, so the order matters. All files are idempotent (safe to re-run).
 | 7 | `fix-rls.sql` | Corrects the `profiles` select/update policies. |
 | 8 | `schema-btb-public.sql` | **Demo-grade.** Opens the compliance/admin tables to public RLS so the cookie-authed Between the Buns surface (no Supabase session) can read/write them. NOT production row security — see the file header. |
 | 9 | `schema-cleaning-photos.sql` | `cleaning_logs.done_time` + `cleaning_logs.week_start` + the public `ops-photos` Storage bucket and its policies (multi-angle cleaning photos). |
-| 10 | `schema-emergency-contacts.sql` | `emergency_contacts.category` + `phone_2`/`phone_3`/`contact_name`/`email` — the category directory (Electrician, Plumber, Grease Trap…) with 3 preferences per entry. Run last. |
+| 10 | `schema-emergency-contacts.sql` | `emergency_contacts.category` + `phone_2`/`phone_3`/`contact_name`/`email` — the category directory (Electrician, Plumber, Grease Trap…) with 3 preferences per entry. |
+| 11 | `schema-locations.sql` | `locations` + `location_members`, `profiles.location_id`, `location_id` on prep/order/cleaning + the 3 dashboard-counter tables, `urgent` flag on PAR sheets, fixed-id seed + membership backfill. Run last. |
 
 ## Role set — single source of truth
 

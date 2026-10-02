@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { activeLocationId, locationScope } from "@/lib/locations";
 
 const severityConfig = {
   low: { label: "Low", color: "bg-blue-100 text-blue-700", icon: "ℹ" },
@@ -41,10 +42,16 @@ export default function CorrectiveActionsPage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const { data } = await supabase
+      // Scoped to the active site so the dashboard's Open Actions tile counts
+      // exactly what this page lists.
+      const scope = locationScope();
+      let q = supabase
         .from("corrective_actions")
         .select("*")
-        .eq("user_id", session.user.id)
+        .eq("user_id", session.user.id);
+      if (scope) q = q.or(scope);
+
+      const { data } = await q
         .order("created_at", { ascending: false })
         .limit(100);
 
@@ -62,6 +69,7 @@ export default function CorrectiveActionsPage() {
     const { error } = await supabase.from("corrective_actions").insert({
       user_id: session.user.id,
       restaurant_name: formData.restaurant_name,
+      location_id: activeLocationId(),
       issue_description: formData.issue_description,
       severity: formData.severity,
       action_taken: formData.action_taken,
