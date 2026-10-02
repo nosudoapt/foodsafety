@@ -43,6 +43,12 @@ export const ALL_ROLES: Role[] = [...ROLES];
 export const MGMT_ROLES: Role[] = ["owner", "multi_location_owner", "corporate", "manager"];
 export const OWNER_TIER_ROLES: Role[] = ["owner", "multi_location_owner", "corporate"];
 
+// The designer is a marketing-only role: it never inherits an operational
+// sheet, a compliance screen or an admin route — only MARKETING_ROLES below.
+// route-guards.ts builds its tables from these two tiers.
+export const OPERATIONAL_ROLES: Role[] = ALL_ROLES.filter((r) => r !== "designer");
+export const MARKETING_ROLES: Role[] = [...MGMT_ROLES, "designer"];
+
 export function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ROLES as readonly string[]).includes(value);
 }
@@ -62,4 +68,6 @@ if (process.env.NODE_ENV !== "production") {
     ROLES.every((r) => ROLE_LABELS[r] && ROLE_COLORS[r]),
     "every role needs a label and color"
   );
+  console.assert(!OPERATIONAL_ROLES.includes("designer"), "designer is never operational");
+  console.assert(MARKETING_ROLES.includes("designer"), "designer needs the marketing portal");
 }

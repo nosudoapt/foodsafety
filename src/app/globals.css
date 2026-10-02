@@ -131,3 +131,12 @@ input::placeholder {
 @media (prefers-reduced-motion: reduce) {
   .float, .gradient-text, .gradient-surface, .shine, .reveal, .pop { animation: none !important; }
 }
+
+/* Patch 7 — printed sheets (charts, signs, logs) keep their brand colours even
+   when the browser's "Background graphics" option is off. */
+@media print {
+  html {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

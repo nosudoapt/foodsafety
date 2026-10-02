@@ -15,6 +15,10 @@ interface Promotion {
   year: number;
   status: "planned" | "active" | "completed";
   uploadedAt: string;
+  category: string | null;
+  size: string | null;
+  personName: string | null;
+  locationId: string | null;
 }
 
 const monthNames = [
@@ -29,16 +33,32 @@ const statusColors = {
 };
 
 // Print + digital poster presets so staff export at the right dimensions.
+// `cat` ties every preset to the category picker on the promotion form.
 const posterSizes = [
-  { name: "A4 Poster", dims: "210 × 297 mm", px: "2480 × 3508 px", use: "In-store print", ratio: "aspect-[210/297]" },
-  { name: "A3 Poster", dims: "297 × 420 mm", px: "3508 × 4961 px", use: "Window / wall", ratio: "aspect-[297/420]" },
-  { name: "US Letter", dims: '8.5 × 11 in', px: "2550 × 3300 px", use: "Counter flyer", ratio: "aspect-[85/110]" },
-  { name: "Table Tent", dims: "4 × 6 in", px: "1200 × 1800 px", use: "Table card", ratio: "aspect-[4/6]" },
-  { name: "Instagram Post", dims: "1080 × 1080", px: "1:1 square", use: "Feed post", ratio: "aspect-square" },
-  { name: "Instagram Story", dims: "1080 × 1920", px: "9:16 vertical", use: "Story / Reel", ratio: "aspect-[9/16]" },
-  { name: "Facebook Post", dims: "1200 × 630", px: "1.91:1", use: "Link share", ratio: "aspect-[1200/630]" },
-  { name: "Menu Board", dims: "1920 × 1080", px: "16:9 screen", use: "Digital display", ratio: "aspect-video" },
+  { name: "A4 Poster", dims: "210 × 297 mm", px: "2480 × 3508 px", use: "In-store print", ratio: "aspect-[210/297]", cat: "Poster" },
+  { name: "A3 Poster", dims: "297 × 420 mm", px: "3508 × 4961 px", use: "Window / wall", ratio: "aspect-[297/420]", cat: "Poster" },
+  { name: "US Letter", dims: '8.5 × 11 in', px: "2550 × 3300 px", use: "Counter flyer", ratio: "aspect-[85/110]", cat: "Flyer" },
+  { name: "Table Tent", dims: "4 × 6 in", px: "1200 × 1800 px", use: "Table card", ratio: "aspect-[4/6]", cat: "Signage" },
+  { name: "Instagram Post", dims: "1080 × 1080", px: "1:1 square", use: "Feed post", ratio: "aspect-square", cat: "Social" },
+  { name: "Instagram Story", dims: "1080 × 1920", px: "9:16 vertical", use: "Story / Reel", ratio: "aspect-[9/16]", cat: "Story" },
+  { name: "Facebook Post", dims: "1200 × 630", px: "1.91:1", use: "Link share", ratio: "aspect-[1200/630]", cat: "Social" },
+  { name: "Menu Board", dims: "1920 × 1080", px: "16:9 screen", use: "Digital display", ratio: "aspect-video", cat: "Menu Board" },
 ];
+
+// What a promotion is for. Stored on marketing_promotions.category — see
+// supabase/schema-marketing-fields.sql.
+const CATEGORIES = [
+  { value: "poster", label: "Poster" },
+  { value: "flyer", label: "Flyer / Handout" },
+  { value: "social", label: "Social Post" },
+  { value: "story", label: "Story / Reel" },
+  { value: "menu_board", label: "Menu Board" },
+  { value: "signage", label: "In-store Signage" },
+];
+
+function categoryLabel(value: string | null | undefined): string {
+  return CATEGORIES.find((c) => c.value === value)?.label ?? "";
+}
 
 const channelColors: Record<string, string> = {
   Instagram: "bg-pink-100 text-pink-700",
@@ -66,6 +86,10 @@ type PromotionRow = {
   year: number;
   status: "planned" | "active" | "completed";
   created_at: string;
+  category?: string | null;
+  size?: string | null;
+  person_name?: string | null;
+  location_id?: string | null;
 };
 
 function toPromotion(row: PromotionRow): Promotion {
@@ -79,6 +103,10 @@ function toPromotion(row: PromotionRow): Promotion {
     year: row.year,
     status: row.status,
     uploadedAt: (row.created_at || "").split("T")[0],
+    category: row.category ?? null,
+    size: row.size ?? null,
+    personName: row.person_name ?? null,
+    locationId: row.location_id ?? null,
   };
 }
 
@@ -99,7 +127,13 @@ function toPost(row: SocialPostRow): SocialPost {
   };
 }
 
+// Patch 8 adds category / size / person / location (supabase/schema-marketing-
+// fields.sql). A database that predates the migration rejects the wider
+// projection, so reads fall back to the legacy columns and the form hides the
+// fields it cannot persist.
 const PROMO_COLUMNS =
+  "id, title, description, file_name, file_size, month, year, status, category, size, person_name, location_id, created_at";
+const PROMO_COLUMNS_LEGACY =
   "id, title, description, file_name, file_size, month, year, status, created_at";
 const POST_COLUMNS = "id, day, channel, caption";
 
@@ -121,6 +155,14 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Patch 8 form fields — location comes straight from the locations table.
+  const [category, setCategory] = useState(CATEGORIES[0].value);
+  const [size, setSize] = useState(posterSizes[0].name);
+  const [personName, setPersonName] = useState("");
+  const [locationId, setLocationId] = useState("");
+  const [locations, setLocations] = useState<{ id: string; name: string }[]>([]);
+  const [legacySchema, setLegacySchema] = useState(false);
+
   const [posts, setPosts] = useState<SocialPost[]>([]);
   const [newDay, setNewDay] = useState(0);
   const [newChannel, setNewChannel] = useState<keyof typeof channelColors>("Instagram");
@@ -129,17 +171,36 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const [promos, calendar] = await Promise.all([
+      const [promos, calendar, sites] = await Promise.all([
         supabase.from("marketing_promotions").select(PROMO_COLUMNS).order("created_at", { ascending: false }),
         supabase.from("social_media_calendar").select(POST_COLUMNS).order("day", { ascending: true }),
+        supabase.from("locations").select("id, name").order("name"),
       ]);
       if (cancelled) return;
-      if (promos.error || calendar.error) {
-        setError(promos.error?.message ?? calendar.error?.message ?? "");
-      } else {
-        setPromotions((promos.data ?? []).map(toPromotion));
-        setPosts((calendar.data ?? []).map(toPost));
+
+      let promoData: PromotionRow[] | null = promos.data;
+      if (promos.error) {
+        // Most likely the Patch 8 columns aren't migrated yet — re-read the
+        // shape this database actually has instead of blanking the board.
+        const retry = await supabase
+          .from("marketing_promotions")
+          .select(PROMO_COLUMNS_LEGACY)
+          .order("created_at", { ascending: false });
+        if (cancelled) return;
+        if (retry.error) {
+          setError(promos.error.message);
+          setLoading(false);
+          return;
+        }
+        promoData = retry.data;
+        setLegacySchema(true);
       }
+
+      if (calendar.error) setError(calendar.error.message);
+      else setPosts((calendar.data ?? []).map(toPost));
+
+      setPromotions((promoData ?? []).map(toPromotion));
+      if (!sites.error) setLocations((sites.data ?? []) as { id: string; name: string }[]);
       setLoading(false);
     };
     load();
@@ -213,8 +274,16 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
         month,
         year,
         status: "planned",
+        ...(legacySchema
+          ? {}
+          : {
+              category,
+              size,
+              person_name: personName.trim() || null,
+              location_id: locationId || null,
+            }),
       })
-      .select(PROMO_COLUMNS)
+      .select(legacySchema ? PROMO_COLUMNS_LEGACY : PROMO_COLUMNS)
       .single();
 
     if (error) {
@@ -223,12 +292,18 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
       return;
     }
 
-    setPromotions((prev) => [toPromotion(data), ...prev]);
+    // The select projection is chosen at runtime, so the generated type can't
+    // parse it — the row shape is pinned by PROMO_COLUMNS / _LEGACY above.
+    setPromotions((prev) => [toPromotion(data as unknown as PromotionRow), ...prev]);
     setSaving(false);
     setShowUpload(false);
     setTitle("");
     setDescription("");
     setSelectedFile(null);
+    setCategory(CATEGORIES[0].value);
+    setSize(posterSizes[0].name);
+    setPersonName("");
+    setLocationId("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -334,7 +409,7 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
       {/* Upload Modal */}
       {!readOnly && showUpload && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
             <h3 className="font-bold text-gray-900 text-lg mb-4">Add Promotion</h3>
 
             <div className="space-y-4">
@@ -363,6 +438,83 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white resize-none"
                 />
               </div>
+
+              {legacySchema ? (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  Location, person, category and size appear once
+                  supabase/schema-marketing-fields.sql has been run against the
+                  database.
+                </p>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Location
+                      </label>
+                      <select
+                        value={locationId}
+                        onChange={(e) => setLocationId(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white"
+                      >
+                        <option value="">All locations</option>
+                        {locations.map((site) => (
+                          <option key={site.id} value={site.id}>
+                            {site.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Person Name
+                      </label>
+                      <input
+                        type="text"
+                        value={personName}
+                        onChange={(e) => setPersonName(e.target.value)}
+                        placeholder="Who this is for"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Category
+                      </label>
+                      <select
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white"
+                      >
+                        {CATEGORIES.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Size
+                      </label>
+                      <select
+                        value={size}
+                        onChange={(e) => setSize(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-gray-900 bg-white"
+                      >
+                        {posterSizes.map((s) => (
+                          <option key={s.name} value={s.name}>
+                            {s.name} — {s.dims}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -447,7 +599,7 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
               </div>
               <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500">
                 <span>{s.px}</span>
-                <span className="px-1.5 py-0.5 bg-gray-100 rounded">{s.use}</span>
+                <span className="px-1.5 py-0.5 bg-gray-100 rounded">{s.cat} · {s.use}</span>
               </div>
             </div>
           ))}
@@ -574,6 +726,29 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
                   <p className="text-xs text-gray-500">
                     {monthNames[promo.month - 1]} {promo.year}
                   </p>
+                  {(promo.category || promo.size) && (
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                      {promo.category && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-red-100 text-red-700">
+                          {categoryLabel(promo.category)}
+                        </span>
+                      )}
+                      {promo.size && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-gray-100 text-gray-700">
+                          {promo.size}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                  {(promo.personName || promo.locationId) && (
+                    <p className="text-xs text-gray-500 mt-1 truncate">
+                      {promo.personName ? `👤 ${promo.personName}` : ""}
+                      {promo.personName && promo.locationId ? " · " : ""}
+                      {promo.locationId
+                        ? `📍 ${locations.find((l) => l.id === promo.locationId)?.name ?? "Removed location"}`
+                        : ""}
+                    </p>
+                  )}
                 </div>
                 {readOnly ? (
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${statusColors[promo.status]}`}>

@@ -4,6 +4,8 @@ import {
   ROLES,
   MGMT_ROLES,
   OWNER_TIER_ROLES,
+  OPERATIONAL_ROLES,
+  MARKETING_ROLES,
   DEFAULT_ROLE,
   isRole,
   roleLabel,
@@ -48,4 +50,14 @@ test("labels and colors cover every role, unknown falls back", () => {
   }
   assert.equal(roleLabel("nonsense"), "nonsense");
   assert.equal(roleColor("nonsense"), "bg-gray-100 text-gray-700");
+});
+
+test("designer is marketing-only — never an operational or admin tier", () => {
+  assert.equal(OPERATIONAL_ROLES.includes("designer"), false);
+  assert.equal(OPERATIONAL_ROLES.length, ROLES.length - 1);
+  assert.deepEqual([...OPERATIONAL_ROLES], ["staff", "manager", "owner", "multi_location_owner", "corporate"]);
+
+  assert.ok(MARKETING_ROLES.includes("designer"));
+  assert.equal(MARKETING_ROLES.length, MGMT_ROLES.length + 1);
+  for (const role of MGMT_ROLES) assert.ok(MARKETING_ROLES.includes(role));
 });

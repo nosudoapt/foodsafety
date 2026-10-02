@@ -18,7 +18,7 @@ export default function DemoPickerPage() {
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Try a demo role</h1>
           <p className="mt-2 text-slate-600">
-            The same food safety system, seen through four different jobs.
+            The same food safety system, seen through five different jobs.
           </p>
           <p className="mt-1 text-sm text-slate-500">
             No signup, no typing — pick a perspective and you&apos;re in.

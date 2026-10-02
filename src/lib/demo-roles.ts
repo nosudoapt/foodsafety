@@ -1,9 +1,9 @@
 // Demo role accounts for the green FoodSafe surface.
 //
 // One pre-seeded account per interesting RBAC role so a prospect can see the
-// product as an owner, a manager, line staff and corporate without signing up.
-// Roles are validated against roles.ts (the single source of truth) — this file
-// must never invent a role.
+// product as an owner, a manager, line staff, corporate and the designer
+// without signing up. Roles are validated against roles.ts (the single source
+// of truth) — this file must never invent a role.
 //
 // The password is deliberately NOT here: it lives server-side only and is read
 // from the DEMO_PASSWORD env var by src/lib/demo-server.ts, so a curious
@@ -68,6 +68,17 @@ export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
     label: "Corporate",
     headline: "Read-only multi-location rollup",
     desc: "Compliance, documents and inspection results across every site — no operational write access.",
+    accent: "purple",
+  },
+  {
+    // Patch 11 — the designer finally has a login, and only one screen to land on.
+    role: "designer",
+    email: "designer@foodsafe.demo",
+    fullName: "Riley Okafor",
+    restaurantName: "The Grill House",
+    label: "Designer",
+    headline: "The marketing studio",
+    desc: "Marketing Portal only — posters, social graphics and the calendar, with no operational or compliance data.",
     accent: "purple",
   },
 ] as const;

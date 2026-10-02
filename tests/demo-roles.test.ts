@@ -13,8 +13,11 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
 // --- 1. the roster stays inside roles.ts -------------------------------------
 
-test("demo accounts cover the four selling perspectives", () => {
-  assert.deepEqual([...DEMO_ROLES].sort(), ["corporate", "manager", "owner", "staff"]);
+test("demo accounts cover the five selling perspectives", () => {
+  assert.deepEqual(
+    [...DEMO_ROLES].sort(),
+    ["corporate", "designer", "manager", "owner", "staff"]
+  );
 });
 
 test("every demo role is a real role from roles.ts", () => {
@@ -23,7 +26,7 @@ test("every demo role is a real role from roles.ts", () => {
     assert.ok(isDemoRole(role));
   }
   assert.equal(isDemoRole("superuser"), false);
-  assert.equal(isDemoRole("designer"), false); // real role, but not a demo account
+  assert.equal(isDemoRole("designer"), true); // Patch 11: real role, now seeded too
   assert.equal(isDemoRole(undefined), false);
 });
 
@@ -59,7 +62,8 @@ test("demo credentials resolve per role and reject anything else", () => {
     assert.equal(demoAccountFor(role)?.email, creds.email);
   }
 
-  assert.equal(demoCredentialsFor("designer"), null);
+  // Patch 11 — the designer logs in like every other perspective.
+  assert.equal(demoCredentialsFor("designer")?.email, "designer@foodsafe.demo");
   assert.equal(demoCredentialsFor("nonsense"), null);
   assert.equal(demoCredentialsFor(undefined), null);
 });

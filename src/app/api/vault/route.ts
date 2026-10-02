@@ -78,7 +78,15 @@ export async function POST(request: NextRequest) {
     .select("id, service, category, username, url, notes")
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) {
+    // 23514 = the category CHECK predates this file (see
+    // supabase/schema-vault-categories.sql) and rejected the new label.
+    const message =
+      error.code === "23514"
+        ? "That category needs supabase/schema-vault-categories.sql run against the database."
+        : error.message;
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 
   const entry = data as {
     id: string;

@@ -31,3 +31,23 @@ export function downloadDataUrl(url: string, filename: string): void {
   a.click();
   a.remove();
 }
+
+/**
+ * Hand a stored (data-URL) PDF to the browser's print dialog — the Print
+ * button on each manual (Patch 7). The file renders into a hidden iframe and
+ * prints once loaded; the frame outlives the call so the job isn't cancelled
+ * the moment the dialog opens.
+ */
+export function printDataUrl(url: string): void {
+  const frame = document.createElement("iframe");
+  frame.setAttribute("aria-hidden", "true");
+  frame.style.cssText =
+    "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+  frame.src = url;
+  frame.onload = () => {
+    frame.contentWindow?.focus();
+    frame.contentWindow?.print();
+  };
+  document.body.appendChild(frame);
+  setTimeout(() => frame.remove(), 60_000);
+}

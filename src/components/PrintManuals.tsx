@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getProfileContext } from "@/lib/profile";
-import { downloadDataUrl, fileToDataUrl, formatFileSize } from "@/lib/files";
+import { downloadDataUrl, fileToDataUrl, formatFileSize, printDataUrl } from "@/lib/files";
 
 interface Manual {
   id: string;
@@ -142,6 +142,27 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
       return;
     }
     downloadDataUrl(data.file_url, manual.fileName);
+  };
+
+  // Patch 7 — the card's Print button opens the stored file in the browser's
+  // print dialog (Save as PDF lives there).
+  const printManual = async (manual: Manual) => {
+    setError("");
+    const { data, error } = await supabase
+      .from("print_manuals")
+      .select("file_url")
+      .eq("id", manual.id)
+      .single();
+    if (error || !data?.file_url) {
+      setError(error?.message ?? "File not found.");
+      return;
+    }
+    // Only the browser can print a PDF; anything else exports as a download.
+    if (!manual.fileName.toLowerCase().endsWith(".pdf")) {
+      downloadDataUrl(data.file_url, manual.fileName);
+      return;
+    }
+    printDataUrl(data.file_url);
   };
 
   const getCategoryInfo = (cat: string) => {
@@ -331,7 +352,10 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
                 </div>
 
                 <div className="flex gap-2">
-                  <button className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors">
+                  <button
+                    onClick={() => printManual(manual)}
+                    className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors"
+                  >
                     🖨️ Print
                   </button>
                   <button

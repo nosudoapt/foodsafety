@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { roleLabel, roleColor, ALL_ROLES, MGMT_ROLES, OWNER_TIER_ROLES, DEFAULT_ROLE } from "@/lib/roles";
+import { roleLabel, roleColor, MGMT_ROLES, MARKETING_ROLES, OPERATIONAL_ROLES, OWNER_TIER_ROLES, DEFAULT_ROLE } from "@/lib/roles";
 
 interface UserProfile {
   role: string;
@@ -16,23 +16,23 @@ interface UserProfile {
 
 // Nav tiers come from roles.ts (single source of truth). "supervisor" was
 // removed from the role set, so management-tier nav is just MGMT_ROLES.
-const ALL = ALL_ROLES as string[];
+const OPS = OPERATIONAL_ROLES as string[]; // every role but the designer
 const MGMT = MGMT_ROLES as string[];
 const OWNER = OWNER_TIER_ROLES as string[]; // vault / new-restaurant: owner-tier only
 
 const navItems = [
-  { label: "Dashboard", href: "/admin", icon: "📊", roles: ALL },
+  { label: "Dashboard", href: "/admin", icon: "📊", roles: OPS },
   // Bridge back to the Between the Buns hub — prep count, order sheet and the
   // rest live there (cookie-authed), so admin users aren't stranded in /admin.
-  { label: "Between the Buns", href: "/between-the-buns", icon: "🍔", roles: ALL },
+  { label: "Between the Buns", href: "/between-the-buns", icon: "🍔", roles: OPS },
   { label: "Compliance & Renewals", href: "/admin/compliance", icon: "🛡️", roles: MGMT },
   { label: "Documents", href: "/admin/documents", icon: "📄", roles: MGMT },
   { label: "Staff Licenses", href: "/admin/staff-licenses", icon: "🪪", roles: MGMT },
-  { label: "Emergency Contacts", href: "/admin/emergency", icon: "🚨", roles: ALL },
-  { label: "Protocols", href: "/admin/protocols", icon: "⚠️", roles: ALL },
-  { label: "Handbook", href: "/admin/handbook", icon: "📖", roles: ALL },
+  { label: "Emergency Contacts", href: "/admin/emergency", icon: "🚨", roles: OPS },
+  { label: "Protocols", href: "/admin/protocols", icon: "⚠️", roles: OPS },
+  { label: "Handbook", href: "/admin/handbook", icon: "📖", roles: OPS },
   { label: "Login Vault", href: "/admin/vault", icon: "🔐", roles: OWNER },
-  { label: "Marketing", href: "/admin/marketing", icon: "📣", roles: [...MGMT, "designer"] },
+  { label: "Marketing", href: "/admin/marketing", icon: "📣", roles: [...MARKETING_ROLES] },
   { label: "In-House Inspection", href: "/admin/inspections", icon: "🔍", roles: MGMT },
   { label: "Corporate Inspection", href: "/admin/inspections/corporate", icon: "🏢", roles: MGMT },
   { label: "Print Manuals", href: "/admin/manuals", icon: "📑", roles: MGMT },
@@ -44,6 +44,7 @@ const navItems = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -69,6 +70,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       cancelled = true;
     };
   }, [user]);
+
+  // The designer is walled into the Marketing Portal. /admin itself carries no
+  // role list — it is proxy.ts's redirect sink — so the landing page is pushed
+  // on to the one screen that role may open (Patch 11).
+  useEffect(() => {
+    if (!profile || profile.role !== "designer" || pathname !== "/admin") return;
+    const t = setTimeout(() => router.replace("/admin/marketing"), 0);
+    return () => clearTimeout(t);
+  }, [profile, pathname, router]);
 
   const allowedNav = profile
     ? navItems.filter((item) => item.roles.includes(profile.role))

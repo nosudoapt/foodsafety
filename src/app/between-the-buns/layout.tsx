@@ -42,7 +42,7 @@ export default function BetweenTheBunsLayout({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50">
-      <header className="sticky top-0 z-30 bg-red-600 text-white shadow-sm">
+      <header className="sticky top-0 z-30 bg-red-600 text-white shadow-sm print:hidden">
         <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
           {isHub ? (
             <span className="w-24" aria-hidden />

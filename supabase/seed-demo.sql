@@ -12,6 +12,7 @@
 --   manager@foodsafe.demo   manager             Jordan Patel    The Grill House
 --   staff@foodsafe.demo     staff               Sam Rivera      The Grill House
 --   corporate@foodsafe.demo corporate           Morgan Blake    Grill House Group
+--   designer@foodsafe.demo  designer            Riley Okafor    The Grill House
 --
 -- Shared password: admin1234   (one password for BOTH surfaces)
 --   The green demo reads it from DEMO_PASSWORD (src/lib/demo-server.ts) and
@@ -83,7 +84,8 @@ BEGIN
       ('owner@foodsafe.demo',     'Avery Chen',   'The Grill House',   'owner'),
       ('manager@foodsafe.demo',   'Jordan Patel', 'The Grill House',   'manager'),
       ('staff@foodsafe.demo',     'Sam Rivera',   'The Grill House',   'staff'),
-      ('corporate@foodsafe.demo', 'Morgan Blake', 'Grill House Group', 'corporate')
+      ('corporate@foodsafe.demo', 'Morgan Blake', 'Grill House Group', 'corporate'),
+      ('designer@foodsafe.demo',  'Riley Okafor', 'The Grill House',   'designer')
     ) AS t(email, full_name, restaurant_name, role)
   LOOP
     -- NEVER assume a UUID: resolve the account by email (unique index on

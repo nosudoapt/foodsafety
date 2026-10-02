@@ -16,7 +16,10 @@ previous one, so the order matters. All files are idempotent (safe to re-run).
 | 9 | `schema-cleaning-photos.sql` | `cleaning_logs.done_time` + `cleaning_logs.week_start` + the public `ops-photos` Storage bucket and its policies (multi-angle cleaning photos). |
 | 10 | `schema-emergency-contacts.sql` | `emergency_contacts.category` + `phone_2`/`phone_3`/`contact_name`/`email` — the category directory (Electrician, Plumber, Grease Trap…) with 3 preferences per entry. |
 | 11 | `schema-locations.sql` | `locations` + `location_members`, `profiles.location_id`, `location_id` on prep/order/cleaning + the 3 dashboard-counter tables, `urgent` flag on PAR sheets, fixed-id seed + membership backfill. |
-| 12 | `schema-inspection-consolidation.sql` | `corporate_inspections.inspection_type` (corporate / in-house / franchisee share one table), backfills legacy `inhouse_inspections` rows, opens the table to the BTB tablet. Run last. |
+| 12 | `schema-inspection-consolidation.sql` | `corporate_inspections.inspection_type` (corporate / in-house / franchisee share one table), backfills legacy `inhouse_inspections` rows, opens the table to the BTB tablet. |
+| 13 | `schema-prep-sheet.sql` | `prep_counts.pull` — the Freezer pull & Dairy column of the new Daily Prep Sheet. Run last: until it's run the sheet still reads, but Save refuses with a message naming this file. |
+| 14 | `schema-marketing-fields.sql` | `marketing_promotions.category` / `size` / `person_name` / `location_id` — the promotion form's category, size, person and target site. Needs `locations` from #11; until it's run the marketing board hides those four inputs. |
+| 15 | `schema-vault-categories.sql` | Widens `login_vault.category` to the Login Vault's flat category list (Debit machine, Internet, MYR POS, Bank login, Uber …) while keeping every legacy bucket readable. Keep in sync with [`src/lib/vault-categories.ts`](../src/lib/vault-categories.ts). |
 
 ## Role set — single source of truth
 

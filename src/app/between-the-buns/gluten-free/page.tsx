@@ -1,6 +1,7 @@
 "use client";
 
 import BtbWordmark from "@/components/BtbWordmark";
+import PrintButton from "@/components/PrintButton";
 
 export default function GlutenFreeMenuPage() {
   return (
@@ -10,6 +11,10 @@ export default function GlutenFreeMenuPage() {
         <BtbWordmark className="text-3xl sm:text-4xl justify-center" />
         <h1 className="text-2xl font-bold text-gray-900 mt-3">Gluten Free Menu</h1>
         <div className="mx-auto mt-2 h-1 w-20 rounded-full bg-[#b65a2e]" />
+        {/* The whole sheet is the printable content — only the control drops out. */}
+        <div className="mt-3 flex justify-center">
+          <PrintButton />
+        </div>
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pb-8 space-y-6">

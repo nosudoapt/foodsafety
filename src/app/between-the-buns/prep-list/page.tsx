@@ -1,7 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { prepGroups } from "@/lib/btb-prep-list";
+import {
+  itemKey,
+  parKeys,
+  prepCatalog,
+  prepColumns,
+  type PrepColumn as PrepColumnModel,
+  type PrepItem,
+} from "@/lib/btb-prep-list";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
@@ -18,6 +25,10 @@ interface PrepEntry {
   oh: string;
   make: string;
   initial: string;
+  /** Freezer/Dairy column only (prep_counts.pull). */
+  pull: string;
+  /** Carried through untouched: the new sheet prints no Urg column, so the
+   *  flag round-trips instead of being wiped on every save. */
   urgent: boolean;
 }
 
@@ -33,13 +44,11 @@ interface SavedPrepList {
 
 type CheckType = "opening" | "closing";
 
-const EMPTY: PrepEntry = { par: "", oh: "", make: "", initial: "", urgent: false };
+const EMPTY: PrepEntry = { par: "", oh: "", make: "", initial: "", pull: "", urgent: false };
 
-// Flat catalog so load / save / prefill iterate exactly the items the grid
-// renders, in the same order.
-const CATALOG: string[] = prepGroups.flatMap((g) =>
-  g.sections.flatMap((s) => s.items.map((i) => i.name)),
-);
+// Only the left/middle columns carry a Par — prefill and the manager-only gate
+// skip the freezer/Dairy rows.
+const PAR_KEY_SET = new Set(parKeys);
 
 // MAKE = PAR - OH, blank until both are numbers.
 const makeOf = (par: string, oh: string): string => {
@@ -96,6 +105,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pullMissing, setPullMissing] = useState(false);
 
   const handleDateChange = (newDate: string) => {
     setDate(newDate);
@@ -104,9 +114,9 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
     setDay(d.toLocaleDateString("en-US", { weekday: "long" }));
   };
 
-  // The sheet for this count_date (plus legacy rows with no location), and the
-  // history that seeds PAR for anything not saved yet — same-weekday first,
-  // most recent otherwise (see src/lib/par-prefill.ts).
+  // The sheet for this count_date (plus legacy rows with no location), the Pull
+  // column, and the history that seeds PAR for anything not saved yet —
+  // same-weekday first, most recent otherwise (see src/lib/par-prefill.ts).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -117,6 +127,13 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         .eq("count_date", date)
         .order("created_at");
       if (scope) sheetQ = sheetQ.or(scope);
+      // Pull lives in its own column (supabase/schema-prep-sheet.sql). Fetched
+      // separately so a tablet one migration behind still reads the rest.
+      let pullQ = supabase
+        .from("prep_counts")
+        .select("item_name, pull")
+        .eq("count_date", date);
+      if (scope) pullQ = pullQ.or(scope);
       let histQ = supabase
         .from("prep_counts")
         .select("item_name, par, urgent, count_date, created_at")
@@ -126,17 +143,27 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         .limit(200);
       if (scope) histQ = histQ.or(scope);
 
-      const [{ data: sheet, error: sheetErr }, { data: hist }] = await Promise.all([sheetQ, histQ]);
+      const [
+        { data: sheet, error: sheetErr },
+        { data: pullRows, error: pullErr },
+        { data: hist },
+      ] = await Promise.all([sheetQ, pullQ, histQ]);
       if (cancelled) return;
       if (sheetErr) {
         setError("Couldn't load this day's prep sheet — run supabase/schema-locations.sql, then reload.");
         setLoading(false);
         return;
       }
+      setPullMissing(!!pullErr);
 
       const saved = new Map(
         ((sheet ?? []) as { item_name: string; par: number; on_hand: number; urgent?: boolean | null }[]).map(
           (r) => [r.item_name, r] as const,
+        ),
+      );
+      const pulls = new Map(
+        ((pullErr ? [] : pullRows ?? []) as { item_name: string; pull: number }[]).map(
+          (r) => [r.item_name, r.pull] as const,
         ),
       );
       const histRows = ((hist ?? []) as { item_name: string; par: number; urgent?: boolean | null; count_date: string }[]).map(
@@ -145,20 +172,19 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
       const maps = buildParMaps(histRows, date);
 
       const next: PrepData = {};
-      for (const name of CATALOG) {
-        const row = saved.get(name);
+      for (const key of prepCatalog) {
+        const row = saved.get(key);
         if (row) {
           const par = String(Number(row.par) || 0);
           const oh = String(Number(row.on_hand) || 0);
-          next[name] = { par, oh, make: makeOf(par, oh), initial: "", urgent: !!row.urgent };
+          const pull = pulls.has(key) ? String(Number(pulls.get(key)) || 0) : "";
+          next[key] = { par, oh, make: makeOf(par, oh), initial: "", pull, urgent: !!row.urgent };
           continue;
         }
         // Nothing saved for this date yet — seed PAR so a manager doesn't
         // retype it every day. On Hand stays blank: staff still counts it.
-        const snap = parFor(maps, name);
-        next[name] = snap && snap.par > 0
-          ? { ...EMPTY, par: String(snap.par) }
-          : { ...EMPTY };
+        const snap = PAR_KEY_SET.has(key) ? parFor(maps, key) : undefined;
+        next[key] = snap && snap.par > 0 ? { ...EMPTY, par: String(snap.par) } : { ...EMPTY };
       }
       setPrepData(next);
       setError(null);
@@ -170,10 +196,10 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
     };
   }, [date]);
 
-  const updateEntry = (itemName: string, field: keyof PrepEntry, value: string | boolean) => {
+  const updateEntry = (key: string, field: keyof PrepEntry, value: string | boolean) => {
     setSavedAt(null);
     setPrepData((prev) => {
-      const current = prev[itemName] || { ...EMPTY };
+      const current = prev[key] || { ...EMPTY };
       const updated: PrepEntry = {
         ...current,
         [field]: typeof value === "boolean" ? value : value,
@@ -184,7 +210,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         updated.make = makeOf(updated.par, updated.oh);
       }
 
-      return { ...prev, [itemName]: updated };
+      return { ...prev, [key]: updated };
     });
   };
 
@@ -195,11 +221,18 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
     setSaving(true);
     setError(null);
     const rows = Object.entries(prepData)
-      .filter(([, e]) => (Number(e.par) || 0) > 0 || (Number(e.oh) || 0) > 0 || e.urgent)
-      .map(([name, e]) => ({
-        item_name: name,
+      .filter(
+        ([, e]) =>
+          (Number(e.par) || 0) > 0 ||
+          (Number(e.oh) || 0) > 0 ||
+          (Number(e.pull) || 0) > 0 ||
+          e.urgent,
+      )
+      .map(([key, e]) => ({
+        item_name: key,
         par: Number(e.par) || 0,
         on_hand: Number(e.oh) || 0,
+        pull: Number(e.pull) || 0,
         urgent: e.urgent,
         count_date: date,
         location_id: activeLocationId(),
@@ -212,12 +245,16 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
     if (!delErr && rows.length) {
       const { error: insErr } = await supabase.from("prep_counts").insert(rows);
       if (insErr) {
-        setError("Couldn't save — run supabase/schema-locations.sql if you haven't, then retry.");
+        setError(
+          "Couldn't save — run supabase/schema-locations.sql and supabase/schema-prep-sheet.sql (adds the Pull column), then retry.",
+        );
         setSaving(false);
         return;
       }
     } else if (delErr) {
-      setError("Couldn't save — run supabase/schema-locations.sql if you haven't, then retry.");
+      setError(
+        "Couldn't save — run supabase/schema-locations.sql and supabase/schema-prep-sheet.sql (adds the Pull column), then retry.",
+      );
       setSaving(false);
       return;
     }
@@ -251,27 +288,13 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
     setSavedLists((prev) => prev.filter((l) => l.id !== id));
   };
 
-  const getTotalItems = () => {
-    let total = 0;
-    prepGroups.forEach((group) =>
-      group.sections.forEach((section) => {
-        total += section.items.length;
-      }),
-    );
-    return total;
-  };
-
-  const getFilledCount = () => {
-    let filled = 0;
-    prepGroups.forEach((group) =>
-      group.sections.forEach((section) => {
-        section.items.forEach((item) => {
-          if (prepData[item.name]?.make) filled++;
-        });
-      }),
-    );
-    return filled;
-  };
+  // A row counts once it can produce an answer: Make for the Par columns
+  // (both ends present), an OH or a Pull for the freezer column.
+  const filledItems = prepCatalog.filter((key) => {
+    const e = prepData[key];
+    if (!e) return false;
+    return PAR_KEY_SET.has(key) ? e.make !== "" : e.oh !== "" || e.pull !== "";
+  }).length;
 
   const tabClass = (tab: typeof activeTab) =>
     `px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
@@ -283,7 +306,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
       {/* Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">BTB</span>
             </div>
@@ -300,8 +323,30 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
             )}
           </div>
 
+          {/* Date & Day — top centre, as on the printed sheet */}
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="prep-date" className="text-sm font-medium text-gray-700">
+                Date:
+              </label>
+              <input
+                id="prep-date"
+                type="date"
+                value={date}
+                onChange={(e) => handleDateChange(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-red-500"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-gray-700">Day:</label>
+              <span className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-medium text-gray-900 min-w-[7rem] text-center">
+                {day}
+              </span>
+            </div>
+          </div>
+
           {/* Tabs */}
-          <div className="flex gap-2">
+          <div className="mt-3 flex justify-center gap-2">
             <button onClick={() => setActiveTab("today")} className={tabClass("today")}>
               Today&apos;s Prep
             </button>
@@ -322,128 +367,31 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
           </div>
         )}
 
+        {pullMissing && !error && (
+          <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+            The Pull column isn&apos;t in the database yet — run{" "}
+            <code className="font-mono">supabase/schema-prep-sheet.sql</code> in the Supabase SQL
+            editor. Pull values can&apos;t load or save until then.
+          </div>
+        )}
+
         {activeTab === "today" ? (
           <>
-            {/* Date & Day + Stats */}
-            <div className="flex flex-wrap items-center gap-4 mb-4">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">Date:</label>
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => handleDateChange(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-red-500"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700">Day:</label>
-                <span className="px-3 py-2 bg-gray-100 rounded-lg text-sm font-medium text-gray-900">
-                  {day}
-                </span>
-              </div>
-              <div className="ml-auto text-sm text-gray-600">
-                {loading ? "Loading…" : `${getFilledCount()} of ${getTotalItems()} items filled`}
-              </div>
+            <div className="mb-4 text-right text-sm text-gray-600">
+              {loading ? "Loading…" : `${filledItems} of ${prepCatalog.length} items filled`}
             </div>
 
-            {/* Three Column Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              {prepGroups.map((group, groupIdx) => (
-                <div key={groupIdx} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                    <h2 className="font-bold text-gray-900 text-sm">{group.label}</h2>
-                  </div>
-
-                  {group.sections.map((section, sectionIdx) => (
-                    <div key={sectionIdx}>
-                      {/* Section Header */}
-                      <div className="px-4 py-1.5 bg-red-50 border-b border-gray-100">
-                        <h3 className="text-xs font-bold text-red-700 uppercase tracking-wide">
-                          {section.title}
-                        </h3>
-                      </div>
-
-                      {/* Column Headers */}
-                      <div className="grid grid-cols-[1fr_44px_36px_34px_36px_28px_34px] gap-1 px-3 py-1 bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase">
-                        <span>Item</span>
-                        <span>Unit</span>
-                        <span title="Par level">Par</span>
-                        <span title="On hand">OH</span>
-                        <span>Make</span>
-                        <span title="Urgent">Urg</span>
-                        <span>Init</span>
-                      </div>
-
-                      {/* Items */}
-                      {section.items.map((item, itemIdx) => {
-                        const e = prepData[item.name] || EMPTY;
-                        return (
-                          <div
-                            key={itemIdx}
-                            className={`grid grid-cols-[1fr_44px_36px_34px_36px_28px_34px] gap-1 px-3 py-1.5 items-center ${
-                              itemIdx % 2 === 0 ? "bg-white" : "bg-gray-50"
-                            } border-b border-gray-50`}
-                          >
-                            <span className="text-xs font-medium text-gray-900 truncate">
-                              {item.name}
-                            </span>
-                            <span className="text-[10px] text-gray-500 truncate">{item.unit}</span>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={e.par}
-                              onChange={(ev) => updateEntry(item.name, "par", ev.target.value)}
-                              readOnly={!canEditPar}
-                              title={canEditPar ? undefined : "PAR is set by a manager"}
-                              className={`w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 text-center focus:ring-1 focus:ring-red-500 ${
-                                canEditPar && !readOnly ? "bg-white" : "bg-gray-50"
-                              }`}
-                            />
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={e.oh}
-                              onChange={(ev) => updateEntry(item.name, "oh", ev.target.value)}
-                              readOnly={readOnly}
-                              className={`w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 text-center focus:ring-1 focus:ring-red-500 ${readOnly ? "bg-gray-50" : "bg-white"}`}
-                            />
-                            <input
-                              type="text"
-                              value={e.make}
-                              readOnly
-                              className="w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 bg-gray-50 text-center font-bold"
-                              title="Auto-calculated: Par - OH"
-                            />
-                            {readOnly ? (
-                              e.urgent ? (
-                                <span className="flex justify-center" title="Urgent">
-                                  <span aria-label="Urgent">🔥</span>
-                                </span>
-                              ) : (
-                                <span className="text-center text-gray-300">—</span>
-                              )
-                            ) : (
-                              <input
-                                type="checkbox"
-                                aria-label={`Urgent: ${item.name}`}
-                                checked={e.urgent}
-                                onChange={(ev) => updateEntry(item.name, "urgent", ev.target.checked)}
-                                className="w-4 h-4 accent-red-600 justify-self-center"
-                              />
-                            )}
-                            <input
-                              type="text"
-                              value={e.initial}
-                              onChange={(ev) => updateEntry(item.name, "initial", ev.target.value)}
-                              readOnly={readOnly}
-                              className={`w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 text-center focus:ring-1 focus:ring-red-500 ${readOnly ? "bg-gray-50" : "bg-white"}`}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ))}
-                </div>
+            {/* Left / Middle / Right — the printed sheet's three columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+              {prepColumns.map((column) => (
+                <SheetColumn
+                  key={column.label}
+                  column={column}
+                  prepData={prepData}
+                  readOnly={readOnly}
+                  canEditPar={canEditPar}
+                  updateEntry={updateEntry}
+                />
               ))}
             </div>
 
@@ -506,7 +454,12 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <h3 className="font-semibold text-gray-900">
-                        {list.day}, {new Date(list.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                        {list.day},{" "}
+                        {new Date(list.date + "T12:00:00").toLocaleDateString("en-US", {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
                       </h3>
                       <p className="text-xs text-gray-500">
                         Saved {new Date(list.savedAt).toLocaleTimeString()}
@@ -530,7 +483,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
                     </div>
                   </div>
                   <div className="text-xs text-gray-600">
-                    {Object.values(list.data).filter((d) => d.make).length} items filled
+                    {Object.values(list.data).filter((d) => d.make || d.pull).length} items filled
                   </div>
                 </div>
               ))
@@ -538,6 +491,169 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// --- the three sheet columns ----------------------------------------------
+// Left/middle columns print Item · Unit · Par · OH · Make · Initial.
+// The right column (Freezer pull & Dairy) prints Item · OH · Pull · Initial —
+// no Unit, Par or Make — so Dairy's unit rides inside the item cell.
+function SheetColumn({
+  column,
+  prepData,
+  readOnly,
+  canEditPar,
+  updateEntry,
+}: {
+  column: PrepColumnModel;
+  prepData: PrepData;
+  readOnly: boolean;
+  canEditPar: boolean;
+  updateEntry: (key: string, field: keyof PrepEntry, value: string | boolean) => void;
+}) {
+  const pullMode = column.mode === "pull";
+  const rowClass = pullMode
+    ? "grid grid-cols-[1fr_42px_42px_34px] gap-1"
+    : "grid grid-cols-[1fr_44px_36px_32px_36px_34px] gap-1";
+  const cellClass =
+    "w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 text-center focus:ring-1 focus:ring-red-500";
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
+        <h2 className="font-bold text-gray-900 text-sm">{column.label}</h2>
+      </div>
+
+      {column.sections.map((section) => (
+        <div key={section.title}>
+          <div className="px-4 py-1.5 bg-red-50 border-b border-gray-100">
+            <h3 className="text-xs font-bold text-red-700 uppercase tracking-wide">
+              {section.title}
+            </h3>
+          </div>
+
+          <div
+            className={`${rowClass} px-3 py-1 bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase`}
+          >
+            <span>Item</span>
+            {!pullMode && <span>Unit</span>}
+            {!pullMode && <span title="Par level">Par</span>}
+            <span title="On hand">OH</span>
+            {!pullMode && <span>Make</span>}
+            {pullMode && <span title="Pull from freezer">Pull</span>}
+            <span>Init</span>
+          </div>
+
+          {section.items.map((item, itemIdx) => (
+            <Row
+              key={itemKey(item)}
+              item={item}
+              index={itemIdx}
+              pullMode={pullMode}
+              rowClass={rowClass}
+              cellClass={cellClass}
+              prepData={prepData}
+              readOnly={readOnly}
+              canEditPar={canEditPar}
+              updateEntry={updateEntry}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Row({
+  item,
+  index,
+  pullMode,
+  rowClass,
+  cellClass,
+  prepData,
+  readOnly,
+  canEditPar,
+  updateEntry,
+}: {
+  item: PrepItem;
+  index: number;
+  pullMode: boolean;
+  rowClass: string;
+  cellClass: string;
+  prepData: PrepData;
+  readOnly: boolean;
+  canEditPar: boolean;
+  updateEntry: (key: string, field: keyof PrepEntry, value: string | boolean) => void;
+}) {
+  const key = itemKey(item);
+  const e = prepData[key] || { ...EMPTY };
+
+  return (
+    <div
+      className={`${rowClass} px-3 py-1.5 items-center ${
+        index % 2 === 0 ? "bg-white" : "bg-gray-50"
+      } border-b border-gray-50`}
+    >
+      <span className="text-xs font-medium text-gray-900 truncate" title={item.name}>
+        {item.name}
+        {pullMode && item.unit && (
+          <span className="ml-1 text-[10px] font-normal text-gray-400">{item.unit}</span>
+        )}
+      </span>
+
+      {!pullMode && (
+        <span className="text-[10px] text-gray-500 truncate">{item.unit}</span>
+      )}
+
+      {!pullMode && (
+        <input
+          type="text"
+          inputMode="numeric"
+          value={e.par}
+          onChange={(ev) => updateEntry(key, "par", ev.target.value)}
+          readOnly={!canEditPar || readOnly}
+          title={canEditPar ? undefined : "PAR is set by a manager"}
+          className={`${cellClass} ${canEditPar && !readOnly ? "bg-white" : "bg-gray-50"}`}
+        />
+      )}
+
+      <input
+        type="text"
+        inputMode="numeric"
+        value={e.oh}
+        onChange={(ev) => updateEntry(key, "oh", ev.target.value)}
+        readOnly={readOnly}
+        className={`${cellClass} ${readOnly ? "bg-gray-50" : "bg-white"}`}
+      />
+
+      {pullMode ? (
+        <input
+          type="text"
+          inputMode="numeric"
+          value={e.pull}
+          onChange={(ev) => updateEntry(key, "pull", ev.target.value)}
+          readOnly={readOnly}
+          title="Pull from the freezer"
+          className={`${cellClass} ${readOnly ? "bg-gray-50" : "bg-white"}`}
+        />
+      ) : (
+        <input
+          type="text"
+          value={e.make}
+          readOnly
+          className={`${cellClass} bg-gray-50 font-bold`}
+          title="Auto-calculated: Par - OH"
+        />
+      )}
+
+      <input
+        type="text"
+        value={e.initial}
+        onChange={(ev) => updateEntry(key, "initial", ev.target.value)}
+        readOnly={readOnly}
+        className={`${cellClass} ${readOnly ? "bg-gray-50" : "bg-white"}`}
+      />
     </div>
   );
 }

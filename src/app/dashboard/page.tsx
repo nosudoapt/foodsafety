@@ -193,9 +193,7 @@ const VIEWS: Record<ViewKey, DashboardView> = {
       { label: "Locations Served", value: "4", icon: MapPin, accent: "teal" },
     ],
     operations: [
-      { href: "/admin/marketing", title: "Marketing Material", desc: "Upload posters, social graphics and the content calendar.", icon: Images, accent: "purple" },
-      { href: "/admin/marketing/calendar", title: "Content Calendar", desc: "Plan and schedule social posts across sites.", icon: CalendarDays, accent: "blue" },
-      { href: "/admin/marketing/requests", title: "Promotion Requests", desc: "In-house promo requests raised by locations.", icon: Megaphone, accent: "amber" },
+      { href: "/admin/marketing", title: "Marketing Portal", desc: "Upload posters and social graphics, plan the content calendar and raise promo requests.", icon: Images, accent: "purple" },
     ],
   },
 };

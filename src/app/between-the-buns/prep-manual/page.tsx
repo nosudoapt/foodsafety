@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { recipes } from "@/lib/btb-recipes";
+import PrintButton from "@/components/PrintButton";
 
 export default function PrepManualPage() {
   const [search, setSearch] = useState("");
@@ -18,15 +19,18 @@ export default function PrepManualPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10 print:hidden">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">BTB</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold text-gray-900">Prep Manual</h1>
               <p className="text-xs text-gray-500">Between the Buns © 2020 Version 2.0</p>
+            </div>
+            <div className="ml-auto">
+              <PrintButton />
             </div>
           </div>
 
@@ -69,7 +73,7 @@ export default function PrepManualPage() {
       </div>
 
       {/* Recipe List */}
-      <div className="max-w-4xl mx-auto px-4 py-4 space-y-3">
+      <div className="max-w-4xl mx-auto px-4 py-4 space-y-3 print:hidden">
         {filteredRecipes.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">No recipes found</p>
@@ -177,8 +181,56 @@ export default function PrepManualPage() {
         )}
       </div>
 
+      {/* Print / PDF export — every recipe, unfiltered and fully expanded */}
+      <div id="print-section" className="hidden print:block max-w-4xl mx-auto px-4 py-6 text-gray-900">
+        <div className="mb-5 border-b border-gray-400 pb-3">
+          <h1 className="text-2xl font-bold">Prep Manual</h1>
+          <p className="text-xs mt-1">
+            Between the Buns © 2020 Version 2.0 — all {recipes.length} recipes
+          </p>
+        </div>
+
+        {recipes.map((recipe) => (
+          <div key={recipe.id} className="mb-5 break-inside-avoid border border-gray-300 rounded-lg p-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-lg font-bold">{recipe.name}</h2>
+              <span className="text-xs text-gray-500">#{recipe.id}</span>
+            </div>
+            {recipe.yield && <p className="text-xs mt-1">Yield: {recipe.yield}</p>}
+
+            <h3 className="text-xs font-bold uppercase tracking-wide mt-3 mb-1">Ingredients</h3>
+            <ul className="text-sm space-y-0.5">
+              {recipe.ingredients.map((ing, idx) => (
+                <li key={idx}>
+                  • {ing.item}: {ing.amount}
+                </li>
+              ))}
+            </ul>
+
+            <h3 className="text-xs font-bold uppercase tracking-wide mt-3 mb-1">Method</h3>
+            <ol className="text-sm space-y-1">
+              {recipe.method.map((step, idx) => (
+                <li key={idx}>
+                  <span className="font-bold">{idx + 1}.</span> {step}
+                </li>
+              ))}
+            </ol>
+
+            {recipe.yield && (
+              <p className="text-xs mt-3">
+                <span className="font-semibold">Yield:</span> {recipe.yield}
+              </p>
+            )}
+          </div>
+        ))}
+
+        <p className="text-xs text-gray-500 text-center mt-6">
+          © Between the Buns 2020 Version 2.0 — Content is read-only
+        </p>
+      </div>
+
       {/* Footer */}
-      <div className="max-w-4xl mx-auto px-4 py-8 text-center">
+      <div className="max-w-4xl mx-auto px-4 py-8 text-center print:hidden">
         <p className="text-xs text-gray-400">
           © Between the Buns 2020 Version 2.0 — Content is read-only
         </p>

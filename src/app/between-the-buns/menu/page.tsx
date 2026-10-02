@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { menuItems, procedures, stationColors } from "@/lib/btb-menu";
+import PrintButton from "@/components/PrintButton";
 
 export default function MenuPage() {
   const [search, setSearch] = useState("");
@@ -9,6 +10,7 @@ export default function MenuPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const categories = ["All", ...new Set(menuItems.map((item) => item.category))];
+  const categoryOrder = [...new Set(menuItems.map((item) => item.category))];
 
   const filteredItems = menuItems.filter((item) => {
     const matchesSearch =
@@ -24,15 +26,18 @@ export default function MenuPage() {
   return (
     <div className="min-h-screen bg-[#fdf8e8]">
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10 print:hidden">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3 mb-3">
             <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">BTB</span>
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-xl font-bold text-gray-900">Recipe Cheat Sheets</h1>
               <p className="text-xs text-gray-500">Between the Buns — Menu Specifications</p>
+            </div>
+            <div className="ml-auto">
+              <PrintButton />
             </div>
           </div>
 
@@ -98,7 +103,7 @@ export default function MenuPage() {
       </div>
 
       {/* Menu Items */}
-      <div className="max-w-4xl mx-auto px-4 py-4 space-y-3">
+      <div className="max-w-4xl mx-auto px-4 py-4 space-y-3 print:hidden">
         {filteredItems.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500">No recipes found</p>
@@ -176,7 +181,7 @@ export default function MenuPage() {
           });
           if (relevantProcedures.length === 0) return null;
           return (
-            <div className="mt-8">
+            <div className="mt-8 print:hidden">
               <h2 className="text-lg font-bold text-gray-900 mb-4">Procedures</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {relevantProcedures.map(([key, proc]) => (
@@ -202,9 +207,74 @@ export default function MenuPage() {
           );
         })()}
 
-        <div className="text-center py-6">
+        <div className="text-center py-6 print:hidden">
           <p className="text-xs text-gray-400">© Between the Buns — Recipe Cheat Sheets</p>
         </div>
+      </div>
+
+      {/* Print / PDF export — every recipe and procedure, no search or tab filter */}
+      <div id="print-section" className="hidden print:block max-w-4xl mx-auto px-4 py-6 text-gray-900">
+        <div className="mb-5 border-b border-gray-400 pb-3">
+          <h1 className="text-2xl font-bold">Recipe Cheat Sheets</h1>
+          <p className="text-xs mt-1">
+            Between the Buns — Menu Specifications — {menuItems.length} recipes
+          </p>
+        </div>
+
+        {categoryOrder.map((cat) => (
+          <section key={cat} className="mb-6">
+            <h2 className="text-sm font-bold uppercase tracking-wide border-b border-gray-300 pb-1 mb-2">
+              {cat}
+            </h2>
+            {menuItems
+              .filter((item) => item.category === cat)
+              .map((item) => (
+                <div
+                  key={`${item.section}-${item.name}`}
+                  className="mb-3 break-inside-avoid"
+                >
+                  <div className="flex items-baseline gap-2 flex-wrap">
+                    <h3 className="font-semibold">{item.name}</h3>
+                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded-full">
+                      {item.section}
+                    </span>
+                    {item.station && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200">
+                        {stationColors[item.station].label}
+                      </span>
+                    )}
+                  </div>
+                  <ul className="text-sm mt-1 space-y-0.5">
+                    {item.ingredients.map((ing, idx) => (
+                      <li key={idx}>• {ing}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+          </section>
+        ))}
+
+        <section className="mb-6">
+          <h2 className="text-sm font-bold uppercase tracking-wide border-b border-gray-300 pb-1 mb-2">
+            Procedures
+          </h2>
+          {Object.entries(procedures).map(([key, proc]) => (
+            <div key={key} className="mb-3 break-inside-avoid">
+              <h3 className="font-semibold">{proc.title}</h3>
+              <ol className="text-sm mt-1 space-y-0.5">
+                {proc.steps.map((step, idx) => (
+                  <li key={idx}>
+                    <span className="font-bold">{idx + 1}.</span> {step}
+                  </li>
+                ))}
+              </ol>
+            </div>
+          ))}
+        </section>
+
+        <p className="text-xs text-gray-500 text-center mt-6">
+          © Between the Buns — Recipe Cheat Sheets
+        </p>
       </div>
     </div>
   );

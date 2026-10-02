@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
 import DemoRoleBadge from "@/components/DemoRoleBadge";
 
 const navigation = [
@@ -21,9 +22,16 @@ const navigation = [
   { name: "Settings", href: "/settings", icon: "⚙️" },
 ];
 
+// The designer is marketing-only (Patch 11): no operational sheets in its nav.
+const designerNavigation = [
+  { name: "Marketing Portal", href: "/admin/marketing", icon: "📣" },
+];
+
 export default function Sidebar() {
   const pathname = usePathname();
+  const { role } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const items = role === "designer" ? designerNavigation : navigation;
 
   return (
     <>
@@ -79,7 +87,7 @@ export default function Sidebar() {
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto py-4 px-3">
             <div className="space-y-1">
-              {navigation.map((item) => {
+              {items.map((item) => {
                 const isActive = pathname === item.href;
                 return (
                   <Link
