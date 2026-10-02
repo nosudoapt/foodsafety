@@ -1,13 +1,15 @@
 "use client";
 
+import BtbWordmark from "@/components/BtbWordmark";
+
 export default function GlutenFreeMenuPage() {
   return (
     <div className="min-h-screen bg-[#fdf8e8]">
-      {/* Header */}
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-gray-900 border-b-2 border-gray-900 pb-2">
-          Gluten Free Menu
-        </h1>
+      {/* Header — brand wordmark on cream, matching the printed sheet */}
+      <div className="max-w-2xl mx-auto px-4 pt-8 pb-4 text-center">
+        <BtbWordmark className="text-3xl sm:text-4xl justify-center" />
+        <h1 className="text-2xl font-bold text-gray-900 mt-3">Gluten Free Menu</h1>
+        <div className="mx-auto mt-2 h-1 w-20 rounded-full bg-[#b65a2e]" />
       </div>
 
       <div className="max-w-2xl mx-auto px-4 pb-8 space-y-6">
