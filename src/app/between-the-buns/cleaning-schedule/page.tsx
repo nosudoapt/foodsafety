@@ -1,28 +1,44 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { cleaningTasks } from "@/lib/btb-cleaning";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
+import { supabase } from "@/lib/supabase";
+import {
+  compressImage,
+  photoSrc,
+  parsePhotoList,
+  removePhotos,
+  uploadToSupabase,
+} from "@/lib/photos";
 
-// One log per task per week: who cleaned it, on what date/time, with a before
-// and after photo. Replaces the old 7-column date grid — each task is done once
-// a week and recorded here. Everything persists to localStorage so photos and
-// entries survive a refresh (the old version lost them).
+// One cleaning_logs row per task per week: who did it, when, and JSON arrays of
+// object paths for each photo side (multiple angles). Photos are compressed
+// on-device and uploaded to the ops-photos Storage bucket — the row only stores
+// paths. History loads from Supabase on mount; edits debounce-save per task.
 interface TaskLog {
-  date: string; // YYYY-MM-DD
-  time: string; // HH:MM
-  name: string; // person who did it (full name, not just initials)
-  before: string | null; // base64 data URL
-  after: string | null;
+  id?: string; // cleaning_logs row id (undefined until first save)
+  date: string; // YYYY-MM-DD → done_date
+  time: string; // HH:MM → done_time
+  name: string; // → done_by
+  before: string[]; // object paths → before_photo (JSON array)
+  after: string[]; // object paths → after_photo (JSON array)
 }
 
 type WeekData = Record<number, TaskLog>; // taskIdx -> log
 type Store = Record<string, WeekData>; // weekStart(YYYY-MM-DD) -> week
+type Side = "before" | "after";
+type Zoom = { idx: number; side: Side; i: number };
 
-const STORE_KEY = "btb.cleaning.v2";
+const SAVE_DEBOUNCE_MS = 600;
 
 function emptyLog(): TaskLog {
-  return { date: "", time: "", name: "", before: null, after: null };
+  return { date: "", time: "", name: "", before: [], after: [] };
+}
+
+/** An entry that has something worth persisting (date alone is not content). */
+function hasContent(l: TaskLog): boolean {
+  return !!(l.name || l.time || l.before.length || l.after.length);
 }
 
 function toISODate(d: Date): string {
@@ -38,21 +54,29 @@ function getStartOfWeek(date: Date): Date {
   return d;
 }
 
+function plusDays(weekKey: string, n: number): string {
+  const d = new Date(weekKey + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return toISODate(d);
+}
+
+/** The Monday of the week containing dateStr. */
+function mondayOf(dateStr: string): string {
+  return toISODate(getStartOfWeek(new Date(dateStr + "T12:00:00")));
+}
+
+/** Date to file an entry under when the user didn't pick one. */
+function defaultDate(weekKey: string): string {
+  const today = toISODate(new Date());
+  return today >= weekKey && today <= plusDays(weekKey, 6) ? today : weekKey;
+}
+
 function weekLabel(weekKey: string): string {
   const start = new Date(weekKey + "T12:00:00");
   const end = new Date(start);
   end.setDate(end.getDate() + 6);
   const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   return `${fmt(start)} – ${fmt(end)}`;
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
 }
 
 // View: everyone. Edit: staff/supervisor/manager — corporate is view-only
@@ -67,83 +91,282 @@ export default function CleaningSchedulePage() {
 
 function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
   const [store, setStore] = useState<Store>({});
+  const storeRef = useRef<Store>({});
   const [ready, setReady] = useState(false);
+  const [error, setError] = useState("");
+  const [uploading, setUploading] = useState<Record<string, boolean>>({});
+  const [zoom, setZoom] = useState<Zoom | null>(null);
   const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
   const [activeTab, setActiveTab] = useState<"today" | "history">("today");
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const weekKey = toISODate(currentWeekStart);
   const weekData: WeekData = store[weekKey] || {};
 
-  // Load once (async to keep the synchronous-setState-in-effect lint happy).
+  const commitStore = useCallback((next: Store) => {
+    storeRef.current = next;
+    setStore(next);
+  }, []);
+
+  const setLog = useCallback(
+    (key: string, idx: number, log: TaskLog) => {
+      commitStore({
+        ...storeRef.current,
+        [key]: { ...(storeRef.current[key] || {}), [idx]: log },
+      });
+    },
+    [commitStore],
+  );
+
+  // Persist the CURRENT state of one task row. Always re-reads storeRef so a
+  // save that races with typing can't clobber newer edits (pending debounce
+  // timers converge the content afterwards).
+  const persist = useCallback(
+    async (key: string, idx: number) => {
+      const t = timers.current.get(`${key}:${idx}`);
+      if (t) {
+        clearTimeout(t);
+        timers.current.delete(`${key}:${idx}`);
+      }
+      try {
+        const log = storeRef.current[key]?.[idx];
+        if (!log) return;
+        if (!hasContent(log)) {
+          if (log.id) {
+            const { error: err } = await supabase.from("cleaning_logs").delete().eq("id", log.id);
+            if (err) throw new Error(err.message);
+            setLog(key, idx, { ...emptyLog(), date: log.date });
+            setError("");
+          }
+          return;
+        }
+        const taskName = cleaningTasks[idx];
+        let id = log.id;
+        if (!id) {
+          // Idempotent first save: reuse an existing row for this task/week.
+          const { data: existing, error: err } = await supabase
+            .from("cleaning_logs")
+            .select("id")
+            .eq("week_start", key)
+            .eq("task_name", taskName)
+            .limit(1);
+          if (err) throw new Error(err.message);
+          id = existing?.[0]?.id;
+        }
+        const doneDate = log.date || defaultDate(key);
+        const payload = {
+          task_name: taskName,
+          week_start: key,
+          done_date: doneDate,
+          done_by: log.name || null,
+          done_time: log.time || null,
+          before_photo: JSON.stringify(log.before),
+          after_photo: JSON.stringify(log.after),
+        };
+        if (id) {
+          const { error: err } = await supabase.from("cleaning_logs").update(payload).eq("id", id);
+          if (err) throw new Error(err.message);
+        } else {
+          const { data, error: err } = await supabase
+            .from("cleaning_logs")
+            .insert(payload)
+            .select("id")
+            .single();
+          if (err) throw new Error(err.message);
+          id = data.id;
+        }
+        // Merge the row id / auto date into whatever the latest local edit is.
+        const after = storeRef.current[key]?.[idx];
+        if (after && hasContent(after)) {
+          setLog(key, idx, { ...after, id, date: after.date || doneDate });
+        } else if (id) {
+          // Content was cleared while this save was in flight — clean the row up.
+          await supabase.from("cleaning_logs").delete().eq("id", id);
+          setLog(key, idx, { ...emptyLog(), date: after?.date ?? "" });
+        }
+        setError("");
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not save this entry.");
+      }
+    },
+    [setLog],
+  );
+
+  const schedulePersist = useCallback(
+    (key: string, idx: number) => {
+      const k = `${key}:${idx}`;
+      const prev = timers.current.get(k);
+      if (prev) clearTimeout(prev);
+      timers.current.set(
+        k,
+        setTimeout(() => {
+          timers.current.delete(k);
+          void persist(key, idx);
+        }, SAVE_DEBOUNCE_MS),
+      );
+    },
+    [persist],
+  );
+
+  const updateLog = useCallback(
+    (key: string, idx: number, patch: Partial<TaskLog>) => {
+      const log = storeRef.current[key]?.[idx] || emptyLog();
+      setLog(key, idx, { ...log, ...patch });
+      schedulePersist(key, idx);
+    },
+    [setLog, schedulePersist],
+  );
+
+  // Load history once from Supabase (newest row wins per task/week).
   useEffect(() => {
     let cancelled = false;
-    const load = async () => {
+    (async () => {
       try {
-        const raw = localStorage.getItem(STORE_KEY);
-        const parsed: Store = raw ? JSON.parse(raw) : {};
-        if (!cancelled) setStore(parsed);
-      } catch {
-        /* corrupt or unavailable storage — start empty */
+        const { data, error: err } = await supabase
+          .from("cleaning_logs")
+          .select(
+            "id, task_name, done_by, done_date, done_time, before_photo, after_photo, week_start",
+          )
+          .order("created_at", { ascending: false });
+        if (err) throw new Error(err.message);
+        if (cancelled) return;
+        const loaded: Store = {};
+        for (const row of data ?? []) {
+          const idx = cleaningTasks.indexOf(row.task_name);
+          if (idx < 0) continue;
+          const key = row.week_start ? mondayOf(row.week_start) : mondayOf(row.done_date);
+          const week = loaded[key] || (loaded[key] = {});
+          if (week[idx]) continue;
+          week[idx] = {
+            id: row.id,
+            date: row.done_date || "",
+            time: row.done_time || "",
+            name: row.done_by || "",
+            before: parsePhotoList(row.before_photo),
+            after: parsePhotoList(row.after_photo),
+          };
+        }
+        commitStore(loaded);
+        setError("");
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "Could not load the schedule.");
       } finally {
         if (!cancelled) setReady(true);
       }
-    };
-    load();
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [commitStore]);
 
-  // Persist on every change (writing localStorage, not setState — lint-safe).
+  // Flush debounced saves so navigating away doesn't drop the last edit.
   useEffect(() => {
-    if (!ready) return;
+    const pending = timers.current;
+    return () => {
+      for (const k of Array.from(pending.keys())) {
+        const t = pending.get(k);
+        if (t) clearTimeout(t);
+        pending.delete(k);
+        const [key, idxStr] = k.split(":");
+        void persist(key, Number(idxStr));
+      }
+    };
+  }, [persist]);
+
+  // Zoom viewer keyboard shortcuts.
+  useEffect(() => {
+    if (!zoom) return;
+    const onKey = (e: KeyboardEvent) => {
+      const list = storeRef.current[weekKey]?.[zoom.idx]?.[zoom.side] || [];
+      if (e.key === "Escape") setZoom(null);
+      else if (e.key === "ArrowRight" && list.length)
+        setZoom((z) => (z ? { ...z, i: (z.i + 1) % list.length } : z));
+      else if (e.key === "ArrowLeft" && list.length)
+        setZoom((z) => (z ? { ...z, i: (z.i - 1 + list.length) % list.length } : z));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoom, weekKey]);
+
+  async function handleFiles(idx: number, side: Side, picked: File[]) {
+    if (!picked.length) return;
+    const ukey = `${idx}:${side}`;
+    setUploading((prev) => ({ ...prev, [ukey]: true }));
+    setError("");
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(store));
-    } catch {
-      /* quota or unavailable — keep working in memory */
-    }
-  }, [store, ready]);
-
-  const updateLog = useCallback(
-    (taskIdx: number, patch: Partial<TaskLog>) => {
-      setStore((prev) => {
-        const week = prev[weekKey] || {};
-        const log = week[taskIdx] || emptyLog();
-        return {
-          ...prev,
-          [weekKey]: { ...week, [taskIdx]: { ...log, ...patch } },
-        };
+      const added: string[] = [];
+      for (let i = 0; i < picked.length; i++) {
+        const blob = await compressImage(picked[i]);
+        const path = `cleaning/${weekKey}/${idx}/${side}-${crypto.randomUUID()}.jpg`;
+        await uploadToSupabase(path, blob);
+        added.push(path);
+      }
+      const log = storeRef.current[weekKey]?.[idx] || emptyLog();
+      const next: TaskLog =
+        side === "before"
+          ? { ...log, before: [...log.before, ...added] }
+          : { ...log, after: [...log.after, ...added] };
+      setLog(weekKey, idx, next);
+      await persist(weekKey, idx);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Photo upload failed.");
+    } finally {
+      setUploading((prev) => {
+        const next = { ...prev };
+        delete next[ukey];
+        return next;
       });
-    },
-    [weekKey],
-  );
+    }
+  }
 
-  const handlePhoto = useCallback(
-    async (taskIdx: number, which: "before" | "after", file: File | undefined) => {
-      if (!file) return;
-      const base64 = await fileToBase64(file);
-      updateLog(taskIdx, { [which]: base64 } as Partial<TaskLog>);
-    },
-    [updateLog],
-  );
-
-  const clearWeek = () => {
-    if (!confirm("Clear all entries for this week?")) return;
-    setStore((prev) => {
-      const next = { ...prev };
-      delete next[weekKey];
-      return next;
+  async function removePhoto(idx: number, side: Side, i: number) {
+    const log = storeRef.current[weekKey]?.[idx];
+    if (!log) return;
+    const path = log[side][i];
+    const next: TaskLog =
+      side === "before"
+        ? { ...log, before: log.before.filter((_, j) => j !== i) }
+        : { ...log, after: log.after.filter((_, j) => j !== i) };
+    setLog(weekKey, idx, next);
+    setZoom((z) => {
+      if (!z || z.idx !== idx || z.side !== side) return z;
+      if (!next[side].length) return null;
+      return { ...z, i: Math.min(z.i, next[side].length - 1) };
     });
-  };
+    if (path) void removePhotos([path]).catch(() => {});
+    await persist(weekKey, idx);
+  }
 
-  const deleteWeek = (key: string) => {
-    if (!confirm(`Delete the week of ${weekLabel(key)}?`)) return;
-    setStore((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
-  };
+  async function deleteWeek(key: string, message: string) {
+    if (!confirm(message)) return;
+    const week = storeRef.current[key] || {};
+    const ids: string[] = [];
+    const paths: string[] = [];
+    for (const idx of Object.keys(week).map(Number)) {
+      const t = timers.current.get(`${key}:${idx}`);
+      if (t) {
+        clearTimeout(t);
+        timers.current.delete(`${key}:${idx}`);
+      }
+      const l = week[idx];
+      if (l.id) ids.push(l.id);
+      paths.push(...l.before, ...l.after);
+    }
+    const next = { ...storeRef.current };
+    delete next[key];
+    commitStore(next);
+    setZoom(null);
+    try {
+      if (ids.length) {
+        const { error: err } = await supabase.from("cleaning_logs").delete().in("id", ids);
+        if (err) throw new Error(err.message);
+      }
+      if (paths.length) await removePhotos(paths).catch(() => {});
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete this week.");
+    }
+  }
 
   const goToPrevWeek = () => {
     const d = new Date(currentWeekStart);
@@ -158,12 +381,12 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
   const goToThisWeek = () => setCurrentWeekStart(getStartOfWeek(new Date()));
 
   const doneCount = cleaningTasks.reduce(
-    (n, _, idx) => (weekData[idx]?.name ? n + 1 : n),
+    (n, _, idx) => (weekData[idx] && hasContent(weekData[idx]) ? n + 1 : n),
     0,
   );
 
   const savedWeeks = Object.keys(store)
-    .filter((k) => Object.values(store[k]).some((l) => l.name || l.before || l.after))
+    .filter((k) => Object.values(store[k]).some(hasContent))
     .sort((a, b) => (a < b ? 1 : -1));
 
   if (!ready) {
@@ -211,6 +434,15 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 py-4">
+        {error && (
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-start justify-between gap-3">
+            <span>{error}</span>
+            <button onClick={() => setError("")} className="text-red-400 hover:text-red-600 font-bold" aria-label="Dismiss error">
+              ✕
+            </button>
+          </div>
+        )}
+
         {activeTab === "today" ? (
           <>
             {/* Week Navigation */}
@@ -236,7 +468,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
             <div className="space-y-3">
               {cleaningTasks.map((task, idx) => {
                 const log = weekData[idx] || emptyLog();
-                const logged = !!log.name;
+                const logged = hasContent(log);
                 return (
                   <div key={idx} className={`bg-white rounded-xl border p-4 ${logged ? "border-green-300" : "border-gray-200"}`}>
                     <div className="flex items-start gap-2 mb-3">
@@ -254,7 +486,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
                           type="date"
                           value={log.date}
                           disabled={readOnly}
-                          onChange={(e) => updateLog(idx, { date: e.target.value })}
+                          onChange={(e) => updateLog(weekKey, idx, { date: e.target.value })}
                           className="w-full mt-0.5 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 disabled:bg-gray-50"
                         />
                       </label>
@@ -264,7 +496,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
                           type="time"
                           value={log.time}
                           disabled={readOnly}
-                          onChange={(e) => updateLog(idx, { time: e.target.value })}
+                          onChange={(e) => updateLog(weekKey, idx, { time: e.target.value })}
                           className="w-full mt-0.5 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 disabled:bg-gray-50"
                         />
                       </label>
@@ -274,57 +506,73 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
                           type="text"
                           value={log.name}
                           disabled={readOnly}
-                          onChange={(e) => updateLog(idx, { name: e.target.value })}
+                          onChange={(e) => updateLog(weekKey, idx, { name: e.target.value })}
                           placeholder="Who cleaned it"
                           className="w-full mt-0.5 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 disabled:bg-gray-50"
                         />
                       </label>
                     </div>
 
-                    {/* before / after upload — always visible */}
+                    {/* before / after photo lists — multiple angles, tap to zoom */}
                     <div className="grid grid-cols-2 gap-3">
                       {(["before", "after"] as const).map((which) => {
-                        const src = log[which];
-                        const badge = which === "before" ? "bg-blue-600" : "bg-green-600";
+                        const photos = log[which];
+                        const ukey = `${idx}:${which}`;
                         return (
                           <div key={which} className="rounded-lg border border-gray-200 p-2">
-                            <p className="text-[10px] font-bold text-gray-500 uppercase mb-1">
-                              {which} photo
+                            <p className="text-[10px] font-bold text-gray-500 uppercase mb-1.5">
+                              {which} photos {photos.length ? `(${photos.length})` : ""}
                             </p>
-                            {src ? (
-                              <div className="relative">
-                                {/* eslint-disable-next-line @next/next/no-img-element -- data-URL upload preview, next/image can't optimize these */}
-                                <img src={src} alt={`${which}`} className="w-full h-28 object-cover rounded" />
-                                <span className={`absolute bottom-1 left-1 ${badge} text-white text-[8px] px-1 rounded capitalize`}>
-                                  {which}
-                                </span>
-                                {!readOnly && (
+                            <div className="flex flex-wrap gap-2">
+                              {photos.map((p, i) => (
+                                <div key={`${p}-${i}`} className="relative">
                                   <button
-                                    onClick={() => updateLog(idx, { [which]: null } as Partial<TaskLog>)}
-                                    className="absolute top-1 right-1 bg-red-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center"
-                                    aria-label={`Remove ${which} photo`}
+                                    type="button"
+                                    onClick={() => setZoom({ idx, side: which, i })}
+                                    className="block w-16 h-16 rounded overflow-hidden border border-gray-200 focus:outline-none focus:ring-2 focus:ring-red-400"
+                                    aria-label={`Zoom ${which} photo ${i + 1}`}
                                   >
-                                    ✕
+                                    {/* eslint-disable-next-line @next/next/no-img-element -- dynamic storage URLs */}
+                                    <img src={photoSrc(p)} alt={`${which} ${i + 1}`} className="w-full h-full object-cover" />
                                   </button>
-                                )}
-                              </div>
-                            ) : readOnly ? (
-                              <div className="h-28 rounded bg-gray-50 flex items-center justify-center text-xs text-gray-400">
-                                No photo
-                              </div>
-                            ) : (
-                              <label className="h-28 rounded border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-red-400 hover:bg-red-50/40 transition-colors">
-                                <span className="text-2xl">📷</span>
-                                <span className="text-[11px] text-gray-500 mt-1">Upload {which}</span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  capture="environment"
-                                  className="hidden"
-                                  onChange={(e) => handlePhoto(idx, which, e.target.files?.[0])}
-                                />
-                              </label>
-                            )}
+                                  {!readOnly && (
+                                    <button
+                                      type="button"
+                                      onClick={() => removePhoto(idx, which, i)}
+                                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white w-5 h-5 rounded-full text-[10px] flex items-center justify-center"
+                                      aria-label={`Remove ${which} photo ${i + 1}`}
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                              {readOnly ? (
+                                photos.length === 0 && (
+                                  <span className="text-xs text-gray-400 self-center">No photos</span>
+                                )
+                              ) : uploading[ukey] ? (
+                                <div className="w-16 h-16 rounded border border-gray-200 flex items-center justify-center">
+                                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-red-600" />
+                                </div>
+                              ) : (
+                                <label className="w-16 h-16 rounded border-2 border-dashed border-gray-300 flex flex-col items-center justify-center cursor-pointer hover:border-red-400 hover:bg-red-50/40 transition-colors">
+                                  <span className="text-lg leading-none">＋</span>
+                                  <span className="text-[9px] text-gray-500 mt-0.5">Add</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    multiple
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const picked = Array.from(e.target.files ?? []);
+                                      e.target.value = "";
+                                      if (picked.length) void handleFiles(idx, which, picked);
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
@@ -336,8 +584,11 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
 
             {!readOnly && (
               <div className="mt-6 flex items-center gap-3">
-                <p className="text-xs text-gray-500 mr-auto">Entries save automatically to this device.</p>
-                <button onClick={clearWeek} className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors">
+                <p className="text-xs text-gray-500 mr-auto">Entries save automatically.</p>
+                <button
+                  onClick={() => void deleteWeek(weekKey, "Clear all entries for this week?")}
+                  className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors"
+                >
                   Clear Week
                 </button>
               </div>
@@ -354,9 +605,9 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
             ) : (
               savedWeeks.map((key) => {
                 const week = store[key];
-                const logged = Object.values(week).filter((l) => l.name).length;
+                const logged = Object.values(week).filter(hasContent).length;
                 const photos = Object.values(week).reduce(
-                  (n, l) => n + (l.before ? 1 : 0) + (l.after ? 1 : 0),
+                  (n, l) => n + l.before.length + l.after.length,
                   0,
                 );
                 return (
@@ -379,7 +630,11 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
                           Open
                         </button>
                         {!readOnly && (
-                          <button onClick={() => deleteWeek(key)} className="text-sm text-gray-400 hover:text-red-500" aria-label="Delete week">
+                          <button
+                            onClick={() => void deleteWeek(key, `Delete the week of ${weekLabel(key)}?`)}
+                            className="text-sm text-gray-400 hover:text-red-500"
+                            aria-label="Delete week"
+                          >
                             🗑️
                           </button>
                         )}
@@ -392,6 +647,82 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
           </div>
         )}
       </div>
+
+      {/* Zoom viewer */}
+      {zoom &&
+        (() => {
+          const log = store[weekKey]?.[zoom.idx];
+          const photos = log?.[zoom.side] ?? [];
+          if (!photos.length) return null;
+          const i = Math.min(zoom.i, photos.length - 1);
+          return (
+            <div
+              className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+              onClick={() => setZoom(null)}
+              role="presentation"
+            >
+              <div
+                className="relative max-w-full max-h-full flex flex-col items-center"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => setZoom(null)}
+                  className="absolute -top-2 right-0 md:-right-10 bg-white/10 hover:bg-white/25 text-white w-8 h-8 rounded-full flex items-center justify-center"
+                  aria-label="Close viewer"
+                >
+                  ✕
+                </button>
+                {/* eslint-disable-next-line @next/next/no-img-element -- zoomed storage URL */}
+                <img
+                  src={photoSrc(photos[i])}
+                  alt={`${zoom.side} photo ${i + 1}`}
+                  className="max-h-[75vh] max-w-full rounded-lg object-contain"
+                />
+                <div className="flex items-center gap-3 mt-3 text-white text-sm">
+                  <span className="font-medium">{cleaningTasks[zoom.idx]}</span>
+                  <span className="uppercase text-[10px] bg-white/20 px-2 py-0.5 rounded">{zoom.side}</span>
+                  <span className="tabular-nums">
+                    {i + 1} / {photos.length}
+                  </span>
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => void removePhoto(zoom.idx, zoom.side, i)}
+                      className="text-red-300 hover:text-red-200 font-medium"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                {photos.length > 1 && (
+                  <div className="absolute inset-y-0 -left-3 md:-left-12 flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setZoom((z) => (z ? { ...z, i: (i - 1 + photos.length) % photos.length } : z))}
+                      className="bg-white/10 hover:bg-white/25 text-white w-9 h-9 rounded-full flex items-center justify-center text-lg"
+                      aria-label="Previous photo"
+                    >
+                      ‹
+                    </button>
+                  </div>
+                )}
+                {photos.length > 1 && (
+                  <div className="absolute inset-y-0 -right-3 md:-right-12 flex items-center">
+                    <button
+                      type="button"
+                      onClick={() => setZoom((z) => (z ? { ...z, i: (i + 1) % photos.length } : z))}
+                      className="bg-white/10 hover:bg-white/25 text-white w-9 h-9 rounded-full flex items-center justify-center text-lg"
+                      aria-label="Next photo"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }
