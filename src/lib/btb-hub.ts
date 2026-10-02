@@ -59,7 +59,7 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/documents", title: "Business Documents", desc: "Forms, SOPs, brand assets & menus — plain files, no expiry.", iconKey: "file", accent: "amber", feature: "documents" },
   { href: "/between-the-buns/staff-licenses", title: "Staff Licenses & Certs", desc: "Food-handler cards & certifications with expiry.", iconKey: "idCard", accent: "purple", feature: "staff_licenses" },
   { href: "/between-the-buns/inspections", title: "In-House Inspections", desc: "Self-audit checklists with scoring & history.", iconKey: "clipboardCheck", accent: "green", feature: "inspections" },
-  { href: "/between-the-buns/franchise-inspection", title: "Franchise Inspection", desc: "Weighted corporate audit — photos, CSV export, editable locations.", iconKey: "clipboardCheck", accent: "red", feature: "franchise_inspection" },
+  { href: "/between-the-buns/franchise-inspection", title: "Franchise Inspection", desc: "Weighted rubric — scoring, photo proofs & history.", iconKey: "clipboardCheck", accent: "red", feature: "franchise_inspection" },
   { href: "/between-the-buns/marketing", title: "Marketing", desc: "Promotions & the social media calendar.", iconKey: "megaphone", accent: "amber", feature: "marketing" },
   { href: "/between-the-buns/new-restaurant", title: "New Restaurant Checklist", desc: "Opening tasks by phase for a new location.", iconKey: "listChecks", accent: "purple", feature: "new_restaurant" },
   { href: "/between-the-buns/vault", title: "Login Vault", desc: "Encrypted credentials for vendor & utility logins.", iconKey: "key", accent: "red", feature: "vault" },

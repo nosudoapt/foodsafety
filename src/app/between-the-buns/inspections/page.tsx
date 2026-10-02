@@ -1,10 +1,10 @@
 "use client";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
-import InhouseInspections from "@/components/InhouseInspections";
+import InspectionForm from "@/components/InspectionForm";
 export default function Page() {
   return (
     <BtbFeatureGate feature="inspections">
-      {(readOnly) => <InhouseInspections readOnly={readOnly} />}
+      {(readOnly) => <InspectionForm type="in-house" readOnly={readOnly} />}
     </BtbFeatureGate>
   );
 }

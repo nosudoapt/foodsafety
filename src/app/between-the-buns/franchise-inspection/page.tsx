@@ -1,10 +1,10 @@
 "use client";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
-import FranchiseInspection from "@/components/FranchiseInspection";
+import InspectionForm from "@/components/InspectionForm";
 export default function Page() {
   return (
     <BtbFeatureGate feature="franchise_inspection">
-      {(readOnly) => <FranchiseInspection readOnly={readOnly} />}
+      {(readOnly) => <InspectionForm type="franchisee" readOnly={readOnly} />}
     </BtbFeatureGate>
   );
 }

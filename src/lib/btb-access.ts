@@ -56,7 +56,7 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   compliance:        { view: SUP_UP, edit: MGR_ONLY },
   documents:         { view: SUP_UP, edit: MGR_ONLY },
   staff_licenses:    { view: SUP_UP, edit: MGR_ONLY },
-  inspections:       { view: SUP_UP, edit: MGR },
+  inspections:       { view: MGR,    edit: MGR },     // manager + corporate; shared InspectionForm
   // The corporate franchise report — HQ only (managers/owners are walled out).
   franchise_inspection: { view: CORP, edit: CORP },
   marketing:         { view: MGR, edit: MGR },

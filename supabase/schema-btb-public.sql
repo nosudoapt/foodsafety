@@ -24,6 +24,7 @@ DECLARE
     'business_documents',
     'staff_licenses',
     'inhouse_inspections',
+    'corporate_inspections',
     'emergency_contacts',
     'operational_protocols',
     'handbook_documents',

@@ -1,5 +1,5 @@
 "use client";
-import InhouseInspections from "@/components/InhouseInspections";
+import InspectionForm from "@/components/InspectionForm";
 export default function Page() {
-  return <InhouseInspections />;
+  return <InspectionForm type="in-house" />;
 }

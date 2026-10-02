@@ -98,7 +98,7 @@ test("the manager tier edits the shared compliance/admin surfaces; staff & super
 
 test("supervisor sits between staff and manager", () => {
   // Sees the management operational surfaces (view), but cannot edit them…
-  for (const f of ["order_sheet", "compliance", "documents", "staff_licenses", "inspections"] as const) {
+  for (const f of ["order_sheet", "compliance", "documents", "staff_licenses"] as const) {
     assert.equal(btbCanView(f, "supervisor"), true, `supervisor views ${f}`);
     assert.equal(btbCanEdit(f, "supervisor"), false, `supervisor must not edit ${f}`);
   }
@@ -109,6 +109,14 @@ test("supervisor sits between staff and manager", () => {
   // Still does the shop-floor edits staff do.
   for (const f of ["prep_list", "cleaning_schedule"] as const) {
     assert.equal(btbCanEdit(f, "supervisor"), true, `supervisor edits ${f}`);
+  }
+});
+
+test("in-house inspections are manager-tier (manager + corporate only)", () => {
+  for (const r of BTB_ROLES) {
+    const expected = r === "manager" || r === "corporate";
+    assert.equal(btbCanView("inspections", r), expected, `inspections view for ${r}`);
+    assert.equal(btbCanEdit("inspections", r), expected, `inspections edit for ${r}`);
   }
 });
 
