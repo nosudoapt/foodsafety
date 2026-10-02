@@ -43,6 +43,7 @@ export interface BtbCard {
 // → management.
 export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/prep-list", title: "Daily Prep Sheet", desc: "3-section sheet — Produce, Sauces, Freezer. Par/OH/Make boxes.", iconKey: "layoutGrid", accent: "red", feature: "prep_list" },
+  { href: "/between-the-buns/cash-out", title: "Cash Out", desc: "End-of-day till count, safe drop & 30-day history.", iconKey: "calculator", accent: "green", feature: "cash_out" },
   { href: "/between-the-buns/order-sheet", title: "Order Sheet", desc: "ORDER = PAR − On Hand. Keeps 3 months of orders.", iconKey: "clipboard", accent: "amber", feature: "order_sheet" },
   { href: "/between-the-buns/cleaning-schedule", title: "Cleaning Schedule", desc: "Weekly tasks with before & after photo upload.", iconKey: "sparkles", accent: "purple", feature: "cleaning_schedule" },
   { href: "/between-the-buns/prep-manual", title: "Prep Manual", desc: "Searchable recipes & prep guides — 21 recipes.", iconKey: "book", accent: "red", feature: "reference" },
