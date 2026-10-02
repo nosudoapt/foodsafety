@@ -33,16 +33,18 @@ const orderQty = (e: Entry) => Math.max(0, (e.par || 0) - (e.on_hand || 0));
 const today = () => new Date().toISOString().slice(0, 10);
 
 // MGMT-only surface (see btb-access.ts): staff never reach it, corporate is
-// view-only — the gate resolves the role and hands us `readOnly`.
+// view-only — the gate resolves the role and hands us `readOnly`. PAR is still
+// gated by role inside the sheet (manager types it, everyone else reads it),
+// so widening the matrix to staff later can't hand them the PAR column.
 export default function OrderSheetPage() {
   return (
     <BtbFeatureGate feature="order_sheet">
-      {(readOnly) => <OrderSheet readOnly={readOnly} />}
+      {(readOnly, role) => <OrderSheet readOnly={readOnly} canEditPar={role === "manager"} />}
     </BtbFeatureGate>
   );
 }
 
-function OrderSheet({ readOnly }: { readOnly: boolean }) {
+function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boolean }) {
   // entries keyed by the catalog item name (descriptions are unique in the guide).
   const [entries, setEntries] = useState<Record<string, Entry>>({});
   const [history, setHistory] = useState<HistoryRow[]>([]);
@@ -251,6 +253,8 @@ function OrderSheet({ readOnly }: { readOnly: boolean }) {
                             value={e.par ? String(e.par) : ""}
                             onChange={(ev) => update(it.name, "par", ev.target.value)}
                             placeholder="0"
+                            disabled={!canEditPar}
+                            title={canEditPar ? undefined : "PAR is set by a manager"}
                             className="text-center px-1 h-9"
                           />
                         )}
