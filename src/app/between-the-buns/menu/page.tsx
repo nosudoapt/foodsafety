@@ -160,14 +160,19 @@ export default function MenuPage() {
           })
         )}
 
-        {/* Procedures Section - filter based on search */}
+        {/* Procedures Section — the Smoothie & Milkshake procedures belong to
+            the drinks, so only surface them under "All" or "Drinks". A search
+            still finds them from any category. */}
         {(() => {
+          const inDrinks = activeCategory === "All" || activeCategory === "Drinks";
           const relevantProcedures = Object.entries(procedures).filter(([key]) => {
-            if (!search) return true;
-            return (
-              key.toLowerCase().includes(search.toLowerCase()) ||
-              procedures[key as keyof typeof procedures].title.toLowerCase().includes(search.toLowerCase())
-            );
+            if (search) {
+              return (
+                key.toLowerCase().includes(search.toLowerCase()) ||
+                procedures[key as keyof typeof procedures].title.toLowerCase().includes(search.toLowerCase())
+              );
+            }
+            return inDrinks;
           });
           if (relevantProcedures.length === 0) return null;
           return (
