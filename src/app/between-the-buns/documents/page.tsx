@@ -1,9 +1,10 @@
 "use client";
 
-// BTB Business Documents — the shared DocumentVault (file uploads + expiry
-// alerts) rendered inside the cookie-authed BTB surface. There is no Supabase
-// session here, so we pass an `uploader` identity for the insert; managers and
-// owners can upload, corporate is read-only (BtbFeatureGate → readOnly).
+// BTB Business Documents — plain files with no expiry (forms, SOPs, brand
+// assets, menus). DocumentVault filters expiry_date IS NULL, so expiring items
+// live only in Compliance & Renewals. There is no Supabase session here, so we
+// pass an `uploader` identity for the insert; managers and owners can upload,
+// corporate is read-only (BtbFeatureGate → readOnly).
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import DocumentVault from "@/components/DocumentVault";
 
@@ -13,7 +14,7 @@ export default function Page() {
       {(readOnly) => (
         <DocumentVault
           title="Business Documents"
-          subtitle="Insurance, hood/fire, pest & lease files — with live expiry alerts"
+          subtitle="Forms, SOPs, brand assets & menus — files that don't expire"
           readOnly={readOnly}
           uploader={{ restaurantName: "The Grill House" }}
         />

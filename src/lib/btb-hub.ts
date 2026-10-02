@@ -57,7 +57,7 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/manuals", title: "Print & Procedure Manuals", desc: "Downloadable manuals by category.", iconKey: "printer", accent: "amber", feature: "manuals" },
   // Compliance & administration (management)
   { href: "/between-the-buns/compliance", title: "Compliance & Renewals", desc: "Licenses, permits & agreements with expiry alerts.", iconKey: "shield", accent: "red", feature: "compliance" },
-  { href: "/between-the-buns/documents", title: "Business Documents", desc: "Insurance, hood/fire, pest & lease files with expiry.", iconKey: "file", accent: "amber", feature: "documents" },
+  { href: "/between-the-buns/documents", title: "Business Documents", desc: "Forms, SOPs, brand assets & menus — plain files, no expiry.", iconKey: "file", accent: "amber", feature: "documents" },
   { href: "/between-the-buns/staff-licenses", title: "Staff Licenses & Certs", desc: "Food-handler cards & certifications with expiry.", iconKey: "idCard", accent: "purple", feature: "staff_licenses" },
   { href: "/between-the-buns/inspections", title: "In-House Inspections", desc: "Self-audit checklists with scoring & history.", iconKey: "clipboardCheck", accent: "green", feature: "inspections" },
   { href: "/between-the-buns/franchise-inspection", title: "Franchise Inspection", desc: "Weighted corporate audit — photos, CSV export, editable locations.", iconKey: "clipboardCheck", accent: "red", feature: "franchise_inspection" },

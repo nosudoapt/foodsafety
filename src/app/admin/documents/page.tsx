@@ -1,9 +1,8 @@
 "use client";
 
-// Business documents = the full compliance vault: licenses, insurance, hood &
-// fire certificates, pest reports, franchise & lease agreements — every doc with
-// an expiry the client asked us to track. All rendering, expiry status and
-// alerts come from the shared <DocumentVault>. Managers and owners manage;
+// Business documents = plain files with no expiry (forms, SOPs, brand assets,
+// menus). The shared <DocumentVault> filters expiry_date IS NULL; anything that
+// expires lives in Compliance & Renewals instead. Managers and owners manage;
 // corporate sees it read-only (staff/designer never reach this route — see
 // route-guards.ts).
 import { useEffect, useState } from "react";
@@ -43,7 +42,7 @@ export default function DocumentsPage() {
   return (
     <DocumentVault
       title="Business Documents"
-      subtitle="Licenses, insurance, inspections and agreements — with live expiry alerts"
+      subtitle="Forms, SOPs, brand assets & menus — files that don't expire"
       readOnly={readOnly}
     />
   );
