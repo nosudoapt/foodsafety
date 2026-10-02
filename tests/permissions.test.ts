@@ -54,7 +54,7 @@ test("only owner-tier can edit the vault, agreements and new restaurant", () => 
 
 test("corporate is read-only on operations but owns inspections and marketing", () => {
   assert.equal(canEdit("temp_sheet", "corporate"), false);
-  assert.equal(canEdit("prep_count", "corporate"), false);
+  assert.equal(canEdit("order_sheet", "corporate"), false);
   assert.equal(canView("temp_sheet", "corporate"), true);
   assert.equal(canEdit("corporate_inspection", "corporate"), true);
   assert.equal(canEdit("marketing_material", "corporate"), true);

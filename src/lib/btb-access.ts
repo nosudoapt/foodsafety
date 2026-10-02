@@ -10,7 +10,6 @@ import { BTB_ROLES, type BtbRole } from "./btb-roles";
 // Every BTB surface a role can reach. Slugs match /between-the-buns/<slug>
 // routes (the four reference pages share one "reference" bucket — all-view).
 export const BTB_FEATURES = [
-  "prep_count",
   "prep_list",
   "order_sheet",
   "cleaning_schedule",
@@ -46,7 +45,6 @@ const CORP: readonly BtbRole[] = ["corporate"];                      // franchis
 // view = who sees the card at all; edit = who can create/edit/delete.
 // edit is always a subset of view. Kept explicit so intent is auditable.
 export const BTB_MATRIX: Record<BtbFeature, Access> = {
-  prep_count:        { view: ALL,    edit: OPS_EDIT },
   prep_list:         { view: ALL,    edit: OPS_EDIT },
   order_sheet:       { view: SUP_UP, edit: MGR_ONLY }, // supervisor+corporate view; manager edits
   cleaning_schedule: { view: ALL,    edit: OPS_EDIT },

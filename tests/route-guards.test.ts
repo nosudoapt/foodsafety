@@ -15,7 +15,7 @@ import { ROLES, OWNER_TIER_ROLES, MGMT_ROLES } from "../src/lib/roles";
 // demo's Supabase session — so these stay out of PROTECTED_PREFIXES.
 test("BTB pages are outside the demo's Supabase gate", () => {
   assert.equal(isProtectedPath("/between-the-buns"), false);
-  assert.equal(isProtectedPath("/between-the-buns/prep-count"), false);
+  assert.equal(isProtectedPath("/between-the-buns/prep-list"), false);
   assert.equal(isProtectedPath("/between-the-buns/menu"), false);
   assert.equal(PROTECTED_PREFIXES.includes("/between-the-buns"), false);
   assert.equal(isProtectedPath("/auth/sign-in"), false);

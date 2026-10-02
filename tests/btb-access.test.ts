@@ -53,8 +53,8 @@ test("staff is walled from vault, compliance, documents, staff-licenses, order-s
 });
 
 test("corporate is view-only on operations but can edit inspections", () => {
-  assert.equal(btbCanView("prep_count", "corporate"), true);
-  assert.equal(btbCanEdit("prep_count", "corporate"), false);
+  assert.equal(btbCanView("prep_list", "corporate"), true);
+  assert.equal(btbCanEdit("prep_list", "corporate"), false);
   assert.equal(btbCanEdit("cleaning_schedule", "corporate"), false);
   assert.equal(btbCanEdit("order_sheet", "corporate"), false);
   assert.equal(btbCanView("compliance", "corporate"), true);
@@ -107,7 +107,7 @@ test("supervisor sits between staff and manager", () => {
     assert.equal(btbCanView(f, "supervisor"), false, `supervisor must not view ${f}`);
   }
   // Still does the shop-floor edits staff do.
-  for (const f of ["prep_count", "prep_list", "cleaning_schedule"] as const) {
+  for (const f of ["prep_list", "cleaning_schedule"] as const) {
     assert.equal(btbCanEdit(f, "supervisor"), true, `supervisor edits ${f}`);
   }
 });
@@ -120,7 +120,6 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROUTE_FEATURE: Record<string, string> = {
-  "prep-count": "prep_count",
   "prep-list": "prep_list",
   "order-sheet": "order_sheet",
   "cleaning-schedule": "cleaning_schedule",

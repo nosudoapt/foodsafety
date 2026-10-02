@@ -17,7 +17,6 @@ export type Access = "edit" | "view" | "notify" | "none";
 /** Every trackable feature in the product, grouped by module. */
 export const FEATURES = [
   // Module 1 — Daily Operations
-  "prep_count",
   "order_sheet",
   "temp_sheet",
   "cleaning_schedule",
@@ -57,7 +56,6 @@ export type Feature = (typeof FEATURES)[number];
 // defaulting) so the food-safety intent of each cell is auditable at a glance.
 export const MATRIX: Record<Feature, Record<Role, Access>> = {
   // Module 1 — Daily Operations
-  prep_count:            { staff: "edit", manager: "edit", owner: "edit", multi_location_owner: "view", corporate: "view", designer: "none" },
   order_sheet:           { staff: "edit", manager: "edit", owner: "edit", multi_location_owner: "view", corporate: "view", designer: "none" },
   temp_sheet:            { staff: "edit", manager: "edit", owner: "edit", multi_location_owner: "view", corporate: "view", designer: "none" },
   cleaning_schedule:     { staff: "edit", manager: "edit", owner: "edit", multi_location_owner: "view", corporate: "view", designer: "none" },

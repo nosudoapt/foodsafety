@@ -42,7 +42,6 @@ export interface BtbCard {
 // so there is no second place to keep in sync. Ordered operational → reference
 // → management.
 export const BTB_CARDS: readonly BtbCard[] = [
-  { href: "/between-the-buns/prep-count", title: "Daily Prep Count", desc: "MAKE = PAR − On Hand. Fast tablet entry, 7-day record.", iconKey: "calculator", accent: "red", feature: "prep_count" },
   { href: "/between-the-buns/prep-list", title: "Daily Prep Sheet", desc: "3-section sheet — Produce, Sauces, Freezer. Par/OH/Make boxes.", iconKey: "layoutGrid", accent: "red", feature: "prep_list" },
   { href: "/between-the-buns/order-sheet", title: "Order Sheet", desc: "ORDER = PAR − On Hand. Keeps 3 months of orders.", iconKey: "clipboard", accent: "amber", feature: "order_sheet" },
   { href: "/between-the-buns/cleaning-schedule", title: "Cleaning Schedule", desc: "Weekly tasks with before & after photo upload.", iconKey: "sparkles", accent: "purple", feature: "cleaning_schedule" },
