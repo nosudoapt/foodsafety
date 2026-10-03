@@ -27,8 +27,8 @@ interface PrepEntry {
   initial: string;
   /** Freezer/Dairy column only (prep_counts.pull). */
   pull: string;
-  /** Carried through untouched: the new sheet prints no Urg column, so the
-   *  flag round-trips instead of being wiped on every save. */
+  /** The client's Urgent flag — checkbox beside every item name in all three
+   *  columns. Loads from prep_counts.urgent and saves back with the row. */
   urgent: boolean;
 }
 
@@ -595,11 +595,27 @@ function Row({
         index % 2 === 0 ? "bg-white" : "bg-gray-50"
       } border-b border-gray-50`}
     >
-      <span className="text-xs font-medium text-gray-900 truncate" title={item.name}>
-        {item.name}
-        {pullMode && item.unit && (
-          <span className="ml-1 text-[10px] font-normal text-gray-400">{item.unit}</span>
-        )}
+      <span className="flex items-center gap-1 min-w-0">
+        <span
+          className={`text-xs font-medium min-w-0 truncate ${
+            e.urgent ? "text-red-700 font-semibold" : "text-gray-900"
+          }`}
+          title={item.name}
+        >
+          {item.name}
+          {pullMode && item.unit && (
+            <span className="ml-1 text-[10px] font-normal text-gray-400">{item.unit}</span>
+          )}
+        </span>
+        <input
+          type="checkbox"
+          aria-label={`Urgent: ${item.name}`}
+          title="Urgent"
+          checked={e.urgent}
+          disabled={readOnly}
+          onChange={(ev) => updateEntry(key, "urgent", ev.target.checked)}
+          className="w-3.5 h-3.5 shrink-0 accent-red-600 cursor-pointer disabled:cursor-not-allowed"
+        />
       </span>
 
       {!pullMode && (
