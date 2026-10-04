@@ -4,6 +4,16 @@ import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
+import {
+  defaultStore,
+  drain,
+  enqueue,
+  newOp,
+  pendingCount,
+  shouldQueue,
+  type OfflineOp,
+  type TempRecordPayload,
+} from "@/lib/offline-queue";
 import { PageHeader, Card, Button, Input } from "@/components/ui";
 
 interface TempRecord {
@@ -40,6 +50,10 @@ export default function TemperaturesPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [offlinePending, setOfflinePending] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [queue] = useState(() => defaultStore());
+  const TEMP_KINDS = ["temp_record"] as const;
   const [formData, setFormData] = useState({
     record_type: "cold_storage",
     equipment_name: "",
@@ -47,6 +61,35 @@ export default function TemperaturesPage() {
     temperature: "",
     notes: "",
   });
+
+  const sendQueuedRecord = async (op: OfflineOp) => {
+    const { error } = await supabase.from("temperature_records").insert(op.payload as TempRecordPayload);
+    if (error) throw error;
+  };
+
+  // Replay readings the tablet captured with no signal — on load and on 'online'.
+  const syncOffline = async () => {
+    const res = await drain(queue, sendQueuedRecord, TEMP_KINDS);
+    setOfflinePending(await pendingCount(queue, TEMP_KINDS));
+    if (res.sent) setRefreshKey((k) => k + 1);
+    return res;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!cancelled) await syncOffline();
+    })();
+    const onOnline = () => {
+      void syncOffline();
+    };
+    window.addEventListener("online", onOnline);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("online", onOnline);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount sync
+  }, []);
 
   useEffect(() => {
     const fetchRecords = async () => {
@@ -85,7 +128,7 @@ export default function TemperaturesPage() {
     const temp = parseFloat(formData.temperature);
     const isSafe = temp >= (recordType?.minTemp || 0) && temp <= (recordType?.maxTemp || 100);
 
-    const { error } = await supabase.from("temperature_records").insert({
+    const payload: TempRecordPayload = {
       user_id: session.user.id,
       restaurant_name: "My Restaurant",
       location_id: activeLocationId(),
@@ -97,13 +140,29 @@ export default function TemperaturesPage() {
       max_safe_temp: recordType?.maxTemp || 100,
       is_safe: isSafe,
       notes: formData.notes,
-    });
+      recorded_at: new Date().toISOString(),
+    };
 
-    if (!error) {
-      setShowForm(false);
-      setFormData({ record_type: "cold_storage", equipment_name: "", food_item: "", temperature: "", notes: "" });
-      setRefreshKey((k) => k + 1);
+    const { error } = await supabase.from("temperature_records").insert(payload);
+
+    if (error) {
+      // Offline: park the reading (recorded_at frozen to now) and replay it
+      // on the next load / 'online'. A schema error still surfaces below.
+      if (shouldQueue(error.message)) {
+        await enqueue(queue, newOp("temp_record", `${formData.food_item} · ${temp}°C`, payload));
+        setOfflinePending(await pendingCount(queue, TEMP_KINDS));
+        setShowForm(false);
+        setFormData({ record_type: "cold_storage", equipment_name: "", food_item: "", temperature: "", notes: "" });
+        return;
+      }
+      setSaveError("Couldn't save this reading — run supabase/schema-features.sql, then retry.");
+      return;
     }
+
+    setSaveError(null);
+    setShowForm(false);
+    setFormData({ record_type: "cold_storage", equipment_name: "", food_item: "", temperature: "", notes: "" });
+    setRefreshKey((k) => k + 1);
   };
 
   const getRecordTypeColor = (type: string) => {
@@ -129,6 +188,19 @@ export default function TemperaturesPage() {
           </Button>
         }
       />
+
+      {saveError && (
+        <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
+          {saveError}
+        </div>
+      )}
+
+      {offlinePending > 0 && (
+        <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+          {offlinePending} reading{offlinePending === 1 ? "" : "s"} stored on this device — they&apos;ll sync to
+          the database the next time the connection comes back.
+        </div>
+      )}
 
       {/* Add Record Form */}
       {showForm && (

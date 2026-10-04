@@ -12,6 +12,16 @@ import {
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
+import {
+  defaultStore,
+  drain,
+  enqueue,
+  newOp,
+  pendingCount,
+  shouldQueue,
+  type OfflineOp,
+  type PrepSavePayload,
+} from "@/lib/offline-queue";
 import { buildParMaps, parFor } from "@/lib/par-prefill";
 import {
   checklistProgress,
@@ -106,6 +116,54 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pullMissing, setPullMissing] = useState(false);
+  const [offlinePending, setOfflinePending] = useState(0);
+
+  // Offline outbox — one store per mount so IndexedDB survives a reload and
+  // SSR (no indexedDB) falls back to a harmless in-memory queue.
+  const [queue] = useState(() => defaultStore());
+  const PREP_KINDS = ["prep_save"] as const;
+
+  const refreshPending = async () => {
+    setOfflinePending(await pendingCount(queue, PREP_KINDS));
+  };
+
+  const sendQueuedSave = async (op: OfflineOp) => {
+    const payload = op.payload as PrepSavePayload;
+    let del = supabase.from("prep_counts").delete().eq("count_date", payload.date);
+    if (payload.scope) del = del.or(payload.scope);
+    const { error: delErr } = await del;
+    if (delErr) throw delErr;
+    if (payload.rows.length) {
+      const { error: insErr } = await supabase.from("prep_counts").insert(payload.rows);
+      if (insErr) throw insErr;
+    }
+  };
+
+  // Replay anything the tablet saved while it was offline — on load and
+  // whenever the browser reports the connection is back.
+  const syncOffline = async () => {
+    const res = await drain(queue, sendQueuedSave, PREP_KINDS);
+    if (res.sent) setError(null);
+    await refreshPending();
+    return res;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      await syncOffline();
+    })();
+    const onOnline = () => {
+      void syncOffline();
+    };
+    window.addEventListener("online", onOnline);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("online", onOnline);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount sync
+  }, []);
 
   const handleDateChange = (newDate: string) => {
     setDate(newDate);
@@ -242,16 +300,29 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
     let del = supabase.from("prep_counts").delete().eq("count_date", date);
     if (scope) del = del.or(scope);
     const { error: delErr } = await del;
+    let insErr = delErr;
     if (!delErr && rows.length) {
-      const { error: insErr } = await supabase.from("prep_counts").insert(rows);
-      if (insErr) {
-        setError(
-          "Couldn't save — run supabase/schema-locations.sql and supabase/schema-prep-sheet.sql (adds the Pull column), then retry.",
+      insErr = (await supabase.from("prep_counts").insert(rows)).error;
+    }
+    const fail = delErr ?? insErr;
+    if (fail) {
+      // Offline (or any non-schema failure): park the save in IndexedDB and
+      // replay it on the next load / 'online' event. A missing table or
+      // column is a migration the owner runs by hand — queueing won't fix it.
+      if (shouldQueue(fail.message)) {
+        await enqueue(
+          queue,
+          newOp("prep_save", `Prep sheet · ${date}`, {
+            date,
+            scope,
+            rows,
+          } satisfies PrepSavePayload),
         );
+        await refreshPending();
+        setSavedAt(null);
         setSaving(false);
         return;
       }
-    } else if (delErr) {
       setError(
         "Couldn't save — run supabase/schema-locations.sql and supabase/schema-prep-sheet.sql (adds the Pull column), then retry.",
       );
@@ -321,6 +392,11 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
                 Saved {savedAt}
               </span>
             )}
+            {!savedAt && offlinePending > 0 && (
+              <span className="ml-auto text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-full">
+                Saved on this device · syncing later
+              </span>
+            )}
           </div>
 
           {/* Date & Day — top centre, as on the printed sheet */}
@@ -364,6 +440,13 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         {error && (
           <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
             {error}
+          </div>
+        )}
+
+        {offlinePending > 0 && (
+          <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
+            {offlinePending} save{offlinePending === 1 ? "" : "s"} stored on this device — they&apos;ll sync to
+            the database the next time the connection comes back.
           </div>
         )}
 
