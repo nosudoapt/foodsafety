@@ -24,6 +24,7 @@ previous one, so the order matters. All files are idempotent (safe to re-run).
 | 17 | `schema-staff-schedule.sql` | `staff_members` + `staff_shifts` — weekly roster calendar (90-day retention on shifts via `purge_staff_schedule()`). Needs `locations` from #11. |
 | 18 | `schema-tax-dates.sql` | `corporate_dates` — filing deadlines, payroll remittances, licences and renewals with optional monthly/quarterly/annual recurrence. `location_id IS NULL` = company-wide. Kept forever (a purged deadline would silently vanish from next year's view). |
 | 19 | `schema-training.sql` | `training_topics` + `training_sections` — the SOP/onboarding guide (sections are plain text: paragraphs + `- ` checklist lines, `published` hides drafts from staff). Kept forever. |
+| 20 | `schema-month-end-inventory.sql` | `inventory_items` + `inventory_counts` — the closing count sheet (`count_month` is a `YYYY-MM` key, one row per item per month) with value and variance against the previous close. Retention: 24 months via `purge_inventory_counts()`. |
 
 ## Role set — single source of truth
 

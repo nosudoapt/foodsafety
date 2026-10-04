@@ -43,6 +43,7 @@ export interface BtbCard {
 // → management.
 export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/prep-list", title: "Daily Prep Sheet", desc: "3-section sheet — Produce, Sauces, Freezer. Par/OH/Make boxes.", iconKey: "layoutGrid", accent: "red", feature: "prep_list" },
+  { href: "/between-the-buns/month-end-inventory", title: "Month-End Inventory", desc: "Closing count sheet — value, variance vs last month.", iconKey: "listChecks", accent: "green", feature: "month_end_inventory" },
   { href: "/between-the-buns/training-guide", title: "Training Guide", desc: "SOPs and onboarding — search, checklist sections, publish when ready.", iconKey: "bookCheck", accent: "purple", feature: "training_guide" },
   { href: "/between-the-buns/tax-dates", title: "Corporate Dates", desc: "Tax returns, remittances, licences and renewals — one list.", iconKey: "clipboard", accent: "amber", feature: "tax_dates" },
   { href: "/between-the-buns/staff-schedule", title: "Staff Schedule", desc: "Weekly shifts and the roster — managers post, everyone reads.", iconKey: "idCard", accent: "purple", feature: "staff_schedule" },

@@ -15,6 +15,7 @@ export const BTB_FEATURES = [
   "staff_schedule",
   "tax_dates",
   "training_guide",
+  "month_end_inventory",
   "order_sheet",
   "cleaning_schedule",
   "reference",        // prep-manual, menu, allergen-chart, gluten-free
@@ -58,6 +59,8 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   tax_dates:         { view: ALL,    edit: MGR_ONLY },
   // SOP library: everyone reads published topics; only managers draft/publish.
   training_guide:    { view: ALL,    edit: MGR_ONLY },
+  // Closing counts: everyone reads the sheet, managers type the numbers.
+  month_end_inventory: { view: ALL,  edit: MGR_ONLY },
   order_sheet:       { view: SUP_UP, edit: MGR_ONLY }, // supervisor+corporate view; manager edits
   cleaning_schedule: { view: ALL,    edit: OPS_EDIT },
   reference:         { view: ALL,    edit: [] },
