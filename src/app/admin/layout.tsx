@@ -30,6 +30,7 @@ const navItems = [
   { label: "Corporate Dates", href: "/between-the-buns/tax-dates", icon: "🗓️", roles: MGMT },
   { label: "Training Guide", href: "/between-the-buns/training-guide", icon: "📘", roles: MGMT },
   { label: "Month-End Inventory", href: "/between-the-buns/month-end-inventory", icon: "📦", roles: MGMT },
+  { label: "Branding Requests", href: "/between-the-buns/branding-requests", icon: "🎨", roles: MGMT },
   { label: "Compliance & Renewals", href: "/admin/compliance", icon: "🛡️", roles: MGMT },
   { label: "Documents", href: "/admin/documents", icon: "📄", roles: MGMT },
   { label: "Staff Licenses", href: "/admin/staff-licenses", icon: "🪪", roles: MGMT },
