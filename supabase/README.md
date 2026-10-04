@@ -21,6 +21,7 @@ previous one, so the order matters. All files are idempotent (safe to re-run).
 | 14 | `schema-marketing-fields.sql` | `marketing_promotions.category` / `size` / `person_name` / `location_id` — the promotion form's category, size, person and target site. Needs `locations` from #11; until it's run the marketing board hides those four inputs. |
 | 15 | `schema-vault-categories.sql` | Widens `login_vault.category` to the Login Vault's flat category list (Debit machine, Internet, MYR POS, Bank login, Uber …) while keeping every legacy bucket readable. Keep in sync with [`src/lib/vault-categories.ts`](../src/lib/vault-categories.ts). |
 | 16 | `schema-cash-out.sql` | `cash_outs` — end-of-day till reconciliation (till, cash sale, delivery fees, tips, cash-out, safe drop) with a 30-day retention purge (`purge_cash_outs()`). |
+| 17 | `schema-staff-schedule.sql` | `staff_members` + `staff_shifts` — weekly roster calendar (90-day retention on shifts via `purge_staff_schedule()`). Needs `locations` from #11. |
 
 ## Role set — single source of truth
 
