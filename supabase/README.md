@@ -22,6 +22,7 @@ previous one, so the order matters. All files are idempotent (safe to re-run).
 | 15 | `schema-vault-categories.sql` | Widens `login_vault.category` to the Login Vault's flat category list (Debit machine, Internet, MYR POS, Bank login, Uber …) while keeping every legacy bucket readable. Keep in sync with [`src/lib/vault-categories.ts`](../src/lib/vault-categories.ts). |
 | 16 | `schema-cash-out.sql` | `cash_outs` — end-of-day till reconciliation (till, cash sale, delivery fees, tips, cash-out, safe drop) with a 30-day retention purge (`purge_cash_outs()`). |
 | 17 | `schema-staff-schedule.sql` | `staff_members` + `staff_shifts` — weekly roster calendar (90-day retention on shifts via `purge_staff_schedule()`). Needs `locations` from #11. |
+| 18 | `schema-tax-dates.sql` | `corporate_dates` — filing deadlines, payroll remittances, licences and renewals with optional monthly/quarterly/annual recurrence. `location_id IS NULL` = company-wide. Kept forever (a purged deadline would silently vanish from next year's view). |
 
 ## Role set — single source of truth
 

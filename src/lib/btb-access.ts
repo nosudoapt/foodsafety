@@ -13,6 +13,7 @@ export const BTB_FEATURES = [
   "prep_list",
   "cash_out",
   "staff_schedule",
+  "tax_dates",
   "order_sheet",
   "cleaning_schedule",
   "reference",        // prep-manual, menu, allergen-chart, gluten-free
@@ -52,6 +53,8 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   cash_out:          { view: ALL,    edit: MGR_ONLY },
   // Roster + shifts: everyone reads the week, only managers post or remove.
   staff_schedule:    { view: ALL,    edit: MGR_ONLY },
+  // Deadlines are read-only for the team; managers own the calendar entries.
+  tax_dates:         { view: ALL,    edit: MGR_ONLY },
   order_sheet:       { view: SUP_UP, edit: MGR_ONLY }, // supervisor+corporate view; manager edits
   cleaning_schedule: { view: ALL,    edit: OPS_EDIT },
   reference:         { view: ALL,    edit: [] },

@@ -43,6 +43,7 @@ export interface BtbCard {
 // → management.
 export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/prep-list", title: "Daily Prep Sheet", desc: "3-section sheet — Produce, Sauces, Freezer. Par/OH/Make boxes.", iconKey: "layoutGrid", accent: "red", feature: "prep_list" },
+  { href: "/between-the-buns/tax-dates", title: "Corporate Dates", desc: "Tax returns, remittances, licences and renewals — one list.", iconKey: "clipboard", accent: "amber", feature: "tax_dates" },
   { href: "/between-the-buns/staff-schedule", title: "Staff Schedule", desc: "Weekly shifts and the roster — managers post, everyone reads.", iconKey: "idCard", accent: "purple", feature: "staff_schedule" },
   { href: "/between-the-buns/cash-out", title: "Cash Out", desc: "End-of-day till count, safe drop & 30-day history.", iconKey: "calculator", accent: "green", feature: "cash_out" },
   { href: "/between-the-buns/order-sheet", title: "Order Sheet", desc: "ORDER = PAR − On Hand. Keeps 3 months of orders.", iconKey: "clipboard", accent: "amber", feature: "order_sheet" },

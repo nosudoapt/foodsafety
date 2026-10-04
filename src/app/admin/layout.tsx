@@ -27,6 +27,7 @@ const navItems = [
   { label: "Between the Buns", href: "/between-the-buns", icon: "🍔", roles: OPS },
   // Same page the BTB hub card opens — managers close the till from either door.
   { label: "Cash Out", href: "/between-the-buns/cash-out", icon: "💵", roles: MGMT },
+  { label: "Corporate Dates", href: "/between-the-buns/tax-dates", icon: "🗓️", roles: MGMT },
   { label: "Compliance & Renewals", href: "/admin/compliance", icon: "🛡️", roles: MGMT },
   { label: "Documents", href: "/admin/documents", icon: "📄", roles: MGMT },
   { label: "Staff Licenses", href: "/admin/staff-licenses", icon: "🪪", roles: MGMT },

@@ -131,6 +131,7 @@ const ROUTE_FEATURE: Record<string, string> = {
   "prep-list": "prep_list",
   "cash-out": "cash_out",
   "staff-schedule": "staff_schedule",
+  "tax-dates": "tax_dates",
   "order-sheet": "order_sheet",
   "cleaning-schedule": "cleaning_schedule",
   compliance: "compliance",
