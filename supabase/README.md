@@ -1,7 +1,53 @@
 # Database setup (Supabase)
 
-Run these SQL files **in order** in the Supabase SQL Editor. Each builds on the
-previous one, so the order matters. All files are idempotent (safe to re-run).
+## Migrations — `npm run db:migrate`
+
+The files below are listed **in run order** in [`migrations.json`](./migrations.json)
+and applied by `scripts/migrate.mjs`, which records each run in a `_migrations`
+table so nothing is applied twice.
+
+```bash
+npm run db:migrate:dry        # plan only — works even without a DB URL
+npm run db:migrate:status      # applied vs pending table
+npm run db:migrate             # apply everything pending
+npm run db:migrate:step -- 16  # apply up to step 16
+npm run db:migrate -- --force  # re-run steps already recorded
+```
+
+1. Put the **superuser** connection string in `.env.local` (see
+   [`.env.example`](../.env.example)):
+   `SUPABASE_DB_URL=postgresql://postgres:…@db.<project>.supabase.co:5432/postgres`
+   — Supabase Dashboard → Project Settings → Database → Connection String →
+   **URI**. It is *not* the anon key; migrations create tables, policies and
+   functions.
+2. Applied steps are stored with their SHA-256 checksum. Already applied and
+   unchanged → skipped. **Edited after it ran → the runner stops** (restore the
+   file, or pass `--force` if you really meant it).
+3. Each file is sent as a single statement batch, so a failure rolls that whole
+   file back and the error prints the file name plus line number.
+4. `NODE_ENV=production` refuses to apply without `--allow-prod`, and a missing
+   `SUPABASE_DB_URL` refuses to apply at all (instead of half-working).
+5. Pasting files into the SQL Editor by hand still works — both paths read the
+   same files; the runner just remembers what already ran.
+
+`tests/migrate.test.mjs` fails the build if the manifest, the `.sql` files on
+disk and the numbered table below ever disagree.
+
+### Adding a migration
+
+1. Write `supabase/schema-<thing>.sql` — idempotent, with a header comment.
+2. Append the next free `{"step": N, "file": …, "description": …}` to
+   `migrations.json` **and** a row to the numbered table below.
+3. `npm run db:migrate:dry` to preview, then `npm run db:migrate`.
+4. Step 23 (`seed-demo.sql`) is a *reset*: it deletes and re-inserts the demo
+   accounts' sample rows, so it is tracked like any other step rather than
+   re-run every time. Re-seed deliberately with `npm run db:migrate -- --force`.
+
+## Manual order (SQL Editor)
+
+Run these files **in order** in the Supabase SQL Editor if you'd rather paste
+them yourself. Each builds on the previous one, so the order matters. All files
+are idempotent (safe to re-run).
 
 | # | File | Purpose |
 |---|------|---------|

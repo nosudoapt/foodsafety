@@ -1,0 +1,119 @@
+{
+  "steps": [
+    {
+      "step": 1,
+      "file": "schema.sql",
+      "description": "Base tables (profiles, core app tables), uuid-ossp, RLS bootstrap."
+    },
+    {
+      "step": 2,
+      "file": "schema-rbac.sql",
+      "description": "Document/inspection/marketing tables + their RLS. Sets an initial role CHECK."
+    },
+    {
+      "step": 3,
+      "file": "schema-roles.sql",
+      "description": "Canonical 6-role CHECK (supersedes #2's), 30-day trial column, handle_new_user() trigger."
+    },
+    {
+      "step": 4,
+      "file": "schema-features.sql",
+      "description": "Operational BTB tables (prep counts, orders, cleaning schedule)."
+    },
+    {
+      "step": 5,
+      "file": "schema-compliance.sql",
+      "description": "Compliance register, login vault, emergency contacts, handbook, protocols, new-restaurant tasks + RLS."
+    },
+    {
+      "step": 6,
+      "file": "schema-documents.sql",
+      "description": "Widens business_documents.doc_type to cover every expiring document the vault tracks (licenses, insurance, hood/fire, pest, franchise, lease)."
+    },
+    {
+      "step": 7,
+      "file": "fix-rls.sql",
+      "description": "Corrects the profiles select/update policies."
+    },
+    {
+      "step": 8,
+      "file": "schema-btb-public.sql",
+      "description": "Demo-grade. Opens the compliance/admin tables to public RLS so the cookie-authed Between the Buns surface (no Supabase session) can read/write them. NOT production row security \u2014 see the file header."
+    },
+    {
+      "step": 9,
+      "file": "schema-cleaning-photos.sql",
+      "description": "cleaning_logs.done_time + cleaning_logs.week_start + the public ops-photos Storage bucket and its policies (multi-angle cleaning photos)."
+    },
+    {
+      "step": 10,
+      "file": "schema-emergency-contacts.sql",
+      "description": "emergency_contacts.category + phone_2/phone_3/contact_name/email \u2014 the category directory (Electrician, Plumber, Grease Trap\u2026) with 3 preferences per entry."
+    },
+    {
+      "step": 11,
+      "file": "schema-locations.sql",
+      "description": "locations + location_members, profiles.location_id, location_id on prep/order/cleaning + the 3 dashboard-counter tables, urgent flag on PAR sheets, fixed-id seed + membership backfill."
+    },
+    {
+      "step": 12,
+      "file": "schema-inspection-consolidation.sql",
+      "description": "corporate_inspections.inspection_type (corporate / in-house / franchisee share one table), backfills legacy inhouse_inspections rows, opens the table to the BTB tablet."
+    },
+    {
+      "step": 13,
+      "file": "schema-prep-sheet.sql",
+      "description": "prep_counts.pull \u2014 the Freezer pull & Dairy column of the new Daily Prep Sheet. Run last: until it's run the sheet still reads, but Save refuses with a message naming this file."
+    },
+    {
+      "step": 14,
+      "file": "schema-marketing-fields.sql",
+      "description": "marketing_promotions.category / size / person_name / location_id \u2014 the promotion form's category, size, person and target site. Needs locations from #11; until it's run the marketing board hides those four inputs."
+    },
+    {
+      "step": 15,
+      "file": "schema-vault-categories.sql",
+      "description": "Widens login_vault.category to the Login Vault's flat category list (Debit machine, Internet, MYR POS, Bank login, Uber \u2026) while keeping every legacy bucket readable. Keep in sync with src/lib/vault-categories.ts."
+    },
+    {
+      "step": 16,
+      "file": "schema-cash-out.sql",
+      "description": "cash_outs \u2014 end-of-day till reconciliation (till, cash sale, delivery fees, tips, cash-out, safe drop) with a 30-day retention purge (purge_cash_outs())."
+    },
+    {
+      "step": 17,
+      "file": "schema-staff-schedule.sql",
+      "description": "staff_members + staff_shifts \u2014 weekly roster calendar (90-day retention on shifts via purge_staff_schedule()). Needs locations from #11."
+    },
+    {
+      "step": 18,
+      "file": "schema-tax-dates.sql",
+      "description": "corporate_dates \u2014 filing deadlines, payroll remittances, licences and renewals with optional monthly/quarterly/annual recurrence. location_id IS NULL = company-wide. Kept forever (a purged deadline would silently vanish from next year's view)."
+    },
+    {
+      "step": 19,
+      "file": "schema-training.sql",
+      "description": "training_topics + training_sections \u2014 the SOP/onboarding guide (sections are plain text: paragraphs + - checklist lines, published hides drafts from staff). Kept forever."
+    },
+    {
+      "step": 20,
+      "file": "schema-month-end-inventory.sql",
+      "description": "inventory_items + inventory_counts \u2014 the closing count sheet (count_month is a YYYY-MM key, one row per item per month) with value and variance against the previous close. Retention: 24 months via purge_inventory_counts()."
+    },
+    {
+      "step": 21,
+      "file": "schema-branding-requests.sql",
+      "description": "branding_requests \u2014 signage/menu/uniform/packaging requests on a status board (open \u2192 in_review \u2192 in_progress \u2192 done/declined). Retention: finished requests older than 24 months via purge_branding_requests(); open work is never purged."
+    },
+    {
+      "step": 22,
+      "file": "schema-storage-buckets.sql",
+      "description": "Storage buckets cleaning-photos, inspection-photos, training-videos + their policies (upload targets for uploadToSupabase() in src/lib/files.ts). Existing cleaning/inspection photos stay in ops-photos (#9)."
+    },
+    {
+      "step": 23,
+      "file": "seed-demo.sql",
+      "description": "Demo accounts + sample rows (RESETS demo data on re-run \u2014 re-apply with --force or --step=23 after editing it)."
+    }
+  ]
+}

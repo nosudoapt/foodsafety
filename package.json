@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "rm -rf .test-dist && tsc -p tsconfig.test.json && node --test .test-dist/tests/"
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:migrate:dry": "node scripts/migrate.mjs --dry-run",
+    "db:migrate:status": "node scripts/migrate.mjs --status",
+    "db:migrate:step": "node scripts/migrate.mjs --step",
+    "test": "rm -rf .test-dist && tsc -p tsconfig.test.json && node --test .test-dist/tests/ tests/*.test.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -15,6 +19,7 @@
     "date-fns": "^4.4.0",
     "lucide-react": "^1.45.0",
     "next": "16.3.5",
+    "postgres": "^3.4.9",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
