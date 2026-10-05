@@ -11,6 +11,7 @@ import { BTB_ROLES, type BtbRole } from "./btb-roles";
 // routes (the four reference pages share one "reference" bucket — all-view).
 export const BTB_FEATURES = [
   "prep_list",
+  "checklists",
   "cash_out",
   "staff_schedule",
   "tax_dates",
@@ -52,6 +53,8 @@ const CORP: readonly BtbRole[] = ["corporate"];                      // franchis
 // edit is always a subset of view. Kept explicit so intent is auditable.
 export const BTB_MATRIX: Record<BtbFeature, Access> = {
   prep_list:         { view: ALL,    edit: OPS_EDIT },
+  // Opening/closing duties — same who as the prep sheet (the checklist used to be a tab on it).
+  checklists:        { view: ALL,    edit: OPS_EDIT },
   // End-of-day money: everyone may read the count, only the store manager writes it.
   cash_out:          { view: ALL,    edit: MGR_ONLY },
   // Roster + shifts: everyone reads the week, only managers post or remove.

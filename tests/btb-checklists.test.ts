@@ -6,7 +6,7 @@ import {
   defaultOpeningItems,
 } from "../src/lib/btb-checklists";
 
-// The Daily Kitchen Checks page and the prep sheet's Opening/Closing tab both
+// The Daily Kitchen Checks page and /between-the-buns/checklists both
 // render these lists — a malformed default would break both at once.
 
 test("opening and closing defaults are complete, unique and unticked", () => {

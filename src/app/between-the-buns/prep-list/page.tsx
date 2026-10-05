@@ -23,12 +23,6 @@ import {
   type PrepSavePayload,
 } from "@/lib/offline-queue";
 import { buildParMaps, parFor } from "@/lib/par-prefill";
-import {
-  checklistProgress,
-  defaultClosingItems,
-  defaultOpeningItems,
-  type ChecklistItem,
-} from "@/lib/btb-checklists";
 
 interface PrepEntry {
   par: string;
@@ -52,8 +46,6 @@ interface SavedPrepList {
   savedAt: string;
 }
 
-type CheckType = "opening" | "closing";
-
 const EMPTY: PrepEntry = { par: "", oh: "", make: "", initial: "", pull: "", urgent: false };
 
 // Only the left/middle columns carry a Par — prefill and the manager-only gate
@@ -66,30 +58,6 @@ const makeOf = (par: string, oh: string): string => {
   const o = parseFloat(oh);
   return !isNaN(p) && !isNaN(o) ? String(Math.max(0, p - o)) : "";
 };
-
-// --- checklist persistence ------------------------------------------------
-// Kept on the tablet (localStorage) rather than daily_checks: the BTB surface
-// has no Supabase session, so an insert would fail on the device that needs it.
-const checklistKey = (date: string, type: CheckType) => `foodsafety.prep_checklist.${date}.${type}`;
-
-function readChecklist(date: string, type: CheckType): ChecklistItem[] {
-  const fallback = type === "opening" ? defaultOpeningItems : defaultClosingItems;
-  try {
-    const raw = localStorage.getItem(checklistKey(date, type));
-    const parsed = raw ? (JSON.parse(raw) as ChecklistItem[]) : null;
-    return Array.isArray(parsed) && parsed.length ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function writeChecklist(date: string, type: CheckType, items: ChecklistItem[]): void {
-  try {
-    localStorage.setItem(checklistKey(date, type), JSON.stringify(items));
-  } catch {
-    // Private browsing / storage disabled — the ticks just won't survive a reload.
-  }
-}
 
 // Staff/manager/owner fill it daily; corporate can read the sheet but not
 // type into it (btb-access.ts) — hence `readOnly` on the boxes and Save.
@@ -110,7 +78,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   );
   const [prepData, setPrepData] = useState<PrepData>({});
   const [savedLists, setSavedLists] = useState<SavedPrepList[]>([]);
-  const [activeTab, setActiveTab] = useState<"today" | "checklist" | "history">("today");
+  const [activeTab, setActiveTab] = useState<"today" | "history">("today");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
@@ -426,9 +394,6 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
             <button onClick={() => setActiveTab("today")} className={tabClass("today")}>
               Today&apos;s Prep
             </button>
-            <button onClick={() => setActiveTab("checklist")} className={tabClass("checklist")}>
-              Opening / Closing
-            </button>
             <button onClick={() => setActiveTab("history")} className={tabClass("history")}>
               History ({savedLists.length}/7)
             </button>
@@ -500,24 +465,6 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
               </div>
             )}
           </>
-        ) : activeTab === "checklist" ? (
-          /* Opening / Closing */
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <ChecklistCard
-              title="Opening Checklist"
-              icon="☀️"
-              date={date}
-              type="opening"
-              readOnly={readOnly}
-            />
-            <ChecklistCard
-              title="Closing Checklist"
-              icon="🌙"
-              date={date}
-              type="closing"
-              readOnly={readOnly}
-            />
-          </div>
         ) : (
           /* History Tab */
           <div className="space-y-4">
@@ -753,108 +700,6 @@ function Row({
         readOnly={readOnly}
         className={`${cellClass} ${readOnly ? "bg-gray-50" : "bg-white"}`}
       />
-    </div>
-  );
-}
-
-// --- Opening / Closing ----------------------------------------------------
-// Same duties as the Daily Kitchen Checks page (src/lib/btb-checklists.ts),
-// but living inside the prep sheet so a shift can tick them off in one place.
-function ChecklistCard({
-  title,
-  icon,
-  date,
-  type,
-  readOnly,
-}: {
-  title: string;
-  icon: string;
-  date: string;
-  type: CheckType;
-  readOnly: boolean;
-}) {
-  const [items, setItems] = useState<ChecklistItem[]>(() =>
-    type === "opening" ? defaultOpeningItems : defaultClosingItems,
-  );
-
-  // localStorage is browser-only: read it just after mount (the dashboard's
-  // active-location read does the same) so SSR and the first client render match.
-  useEffect(() => {
-    const t = setTimeout(() => setItems(readChecklist(date, type)), 0);
-    return () => clearTimeout(t);
-  }, [date, type]);
-
-  const toggle = (id: string) => {
-    const next = items.map((i) => (i.id === id ? { ...i, completed: !i.completed } : i));
-    setItems(next);
-    writeChecklist(date, type, next);
-  };
-
-  const reset = () => {
-    const next = (type === "opening" ? defaultOpeningItems : defaultClosingItems).map((i) => ({
-      ...i,
-    }));
-    setItems(next);
-    writeChecklist(date, type, next);
-  };
-
-  const { done, total } = checklistProgress(items);
-  const sections = ["Front", "Kitchen"];
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="flex items-center gap-2 px-4 py-3 bg-gray-50 border-b border-gray-200">
-        <span aria-hidden>{icon}</span>
-        <h2 className="font-bold text-gray-900 text-sm">{title}</h2>
-        <span className="ml-auto text-xs font-semibold text-gray-500">
-          {done}/{total} done
-        </span>
-        {!readOnly && (
-          <button
-            onClick={reset}
-            className="text-xs text-gray-400 hover:text-red-600 font-medium"
-          >
-            Reset
-          </button>
-        )}
-      </div>
-
-      {sections.map((section) => {
-        const list = items.filter((i) => i.section === section);
-        if (list.length === 0) return null;
-        return (
-          <div key={section}>
-            <div className="px-4 py-1.5 bg-red-50 border-b border-gray-100">
-              <h3 className="text-xs font-bold text-red-700 uppercase tracking-wide">
-                {section} Area
-              </h3>
-            </div>
-            {list.map((item) => (
-              <label
-                key={item.id}
-                className={`flex items-start gap-3 px-4 py-2 border-b border-gray-50 ${
-                  readOnly ? "" : "cursor-pointer hover:bg-gray-50"
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={item.completed}
-                  disabled={readOnly}
-                  onChange={() => toggle(item.id)}
-                  className="mt-0.5 w-4 h-4 accent-red-600 shrink-0 disabled:cursor-not-allowed"
-                />
-                <span
-                  className={`text-xs leading-relaxed ${
-                    item.completed ? "text-gray-400 line-through" : "text-gray-700"
-                  }`}
-                >
-                  {item.text}
-                </span>
-              </label>
-            ))}
-          </div>
-        );
-      })}
     </div>
   );
 }

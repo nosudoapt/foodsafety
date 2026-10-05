@@ -129,6 +129,7 @@ import { join } from "node:path";
 
 const ROUTE_FEATURE: Record<string, string> = {
   "prep-list": "prep_list",
+  checklists: "checklists",
   "cash-out": "cash_out",
   "staff-schedule": "staff_schedule",
   "tax-dates": "tax_dates",
