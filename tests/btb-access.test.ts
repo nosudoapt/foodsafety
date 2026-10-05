@@ -120,6 +120,15 @@ test("in-house inspections are manager-tier (manager + corporate only)", () => {
   }
 });
 
+test("staff cannot reach branding requests; supervisors view, managers edit", () => {
+  for (const r of BTB_ROLES) {
+    const canView = r !== "staff";
+    const canEdit = r === "manager";
+    assert.equal(btbCanView("branding_requests", r), canView, `branding view for ${r}`);
+    assert.equal(btbCanEdit("branding_requests", r), canEdit, `branding edit for ${r}`);
+  }
+});
+
 // --- route coverage -------------------------------------------------------
 // The matrix is only worth something if each route actually uses it. This
 // guards against a page shipping without the gate — staff could deep-link

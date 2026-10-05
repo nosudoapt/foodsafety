@@ -1,4 +1,6 @@
-const CACHE_NAME = 'foodsafe-v2';
+// Bump the version whenever the offline shell must be purged — old cache
+// entries otherwise keep serving a stale layout (activate deletes the rest).
+const CACHE_NAME = 'foodsafe-v3';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icons/icon-192.png',

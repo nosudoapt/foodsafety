@@ -65,9 +65,9 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   training_guide:    { view: ALL,    edit: MGR_ONLY },
   // Closing counts: everyone reads the sheet, managers type the numbers.
   month_end_inventory: { view: ALL,  edit: MGR_ONLY },
-  // Everyone may file a request (the page creates rows itself); only managers
-  // move cards through the board or delete them.
-  branding_requests: { view: ALL,    edit: MGR_ONLY },
+  // Staff are walled out entirely; supervisors read the board and only
+  // managers move cards through it or delete them.
+  branding_requests: { view: SUP_UP, edit: MGR_ONLY }, // staff walled out — marketing board
   order_sheet:       { view: SUP_UP, edit: MGR_ONLY }, // supervisor+corporate view; manager edits
   cleaning_schedule: { view: ALL,    edit: OPS_EDIT },
   reference:         { view: ALL,    edit: [] },

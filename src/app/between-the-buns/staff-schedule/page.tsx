@@ -202,7 +202,7 @@ function StaffSchedule({ readOnly }: { readOnly: boolean }) {
     "font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent";
 
   return (
-    <div>
+    <div className="max-w-7xl mx-auto px-4 py-6">
       <PageHeader
         title="Staff Schedule"
         subtitle={`Weekly calendar · shifts kept ${STAFF_SCHEDULE_RETENTION_DAYS} days`}
@@ -258,7 +258,7 @@ function StaffSchedule({ readOnly }: { readOnly: boolean }) {
                 <option value="">Everyone</option>
                 {members.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name} (mine)
+                    {m.name}
                   </option>
                 ))}
               </select>
