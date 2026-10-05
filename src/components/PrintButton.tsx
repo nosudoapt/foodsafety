@@ -7,14 +7,17 @@
 export default function PrintButton({
   label = "Print / Save PDF",
   className = "",
+  onClick,
 }: {
   label?: string;
   className?: string;
+  /** Override the default window.print() — e.g. load PDFs into #print-section first. */
+  onClick?: () => void;
 }) {
   return (
     <button
       type="button"
-      onClick={() => window.print()}
+      onClick={onClick ?? (() => window.print())}
       className={`print:hidden inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors ${className}`}
     >
       🖨️ {label}

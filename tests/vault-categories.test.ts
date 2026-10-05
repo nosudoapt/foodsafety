@@ -55,3 +55,18 @@ test("legacy rows stay reachable and unknown values fall back", () => {
     assert.ok(!legacyValues.includes(c.value), `${c.value} clashes with a legacy bucket`);
   }
 });
+
+const page = readFileSync(
+  join(__dirname, "../../src/app/admin/vault/page.tsx"),
+  "utf8"
+);
+
+test("the screen is a flat list with an Add Login button and Missing badges", () => {
+  assert.ok(page.includes("Add Login"), "an Add Login button sits at the top");
+  assert.ok(page.includes('id='), "the list renders every category");
+  assert.ok(page.includes(">Missing<") || page.includes("Missing"), "empty categories show Missing");
+  assert.ok(page.includes("bg-red-500"), "the missing cue is a red dot/badge");
+  // The old category dropdown that grouped logins is gone — the add flow picks
+  // from the same flat list (buttons, not a <select>).
+  assert.ok(!/<select[^>]*>[^<]*{VAULT_CATEGORIES/.test(page), "no grouping dropdown");
+});

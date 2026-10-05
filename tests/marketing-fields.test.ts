@@ -32,3 +32,16 @@ test("a database without the migration still renders the board", () => {
   assert.ok(board.includes("PROMO_COLUMNS_LEGACY"), "keep the fallback projection");
   assert.ok(board.includes("legacySchema"), "the form must know when to hide the new inputs");
 });
+
+test("sizes and categories match the client's approved list", () => {
+  const approvedSizes = ['24"×36"', '8"×11"', "8'×4'", '×10"', "Social Media Poster"];
+  for (const size of approvedSizes) {
+    assert.ok(board.includes(size), `the size list must include ${size}`);
+  }
+  assert.ok(board.includes("Select Location"), "the form asks for a Select Location dropdown");
+  // Category labels are client wording, but the stored values are pinned by
+  // marketing_promotions_category_check — those must not drift.
+  for (const value of ["poster", "flyer", "social", "story", "menu_board", "signage"]) {
+    assert.ok(board.includes(`value: "${value}"`), `category ${value} must stay DB-legal`);
+  }
+});

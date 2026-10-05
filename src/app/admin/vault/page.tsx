@@ -293,7 +293,15 @@ export default function VaultPage() {
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-2xl">{cat.icon}</span>
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-900">{cat.label}</p>
+                      <p className="font-semibold text-slate-900 flex flex-wrap items-center gap-2">
+                        {cat.label}
+                        {entries.length === 0 && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-600">
+                            <span className="h-1.5 w-1.5 rounded-full bg-red-500" aria-hidden="true" />
+                            Missing
+                          </span>
+                        )}
+                      </p>
                       <p className="text-[11px] text-slate-400">
                         {entries.length === 0
                           ? "No login stored"

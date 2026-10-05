@@ -32,28 +32,28 @@ const statusColors = {
   completed: "bg-gray-100 text-gray-700",
 };
 
-// Print + digital poster presets so staff export at the right dimensions.
+// The client-approved size list — the exact formats marketing exports at.
 // `cat` ties every preset to the category picker on the promotion form.
+// NOTE: the stored `size` is free text, so this list can change without SQL;
+// `category` is constrained by the CHECK in schema-marketing-fields.sql.
 const posterSizes = [
-  { name: "A4 Poster", dims: "210 × 297 mm", px: "2480 × 3508 px", use: "In-store print", ratio: "aspect-[210/297]", cat: "Poster" },
-  { name: "A3 Poster", dims: "297 × 420 mm", px: "3508 × 4961 px", use: "Window / wall", ratio: "aspect-[297/420]", cat: "Poster" },
-  { name: "US Letter", dims: '8.5 × 11 in', px: "2550 × 3300 px", use: "Counter flyer", ratio: "aspect-[85/110]", cat: "Flyer" },
-  { name: "Table Tent", dims: "4 × 6 in", px: "1200 × 1800 px", use: "Table card", ratio: "aspect-[4/6]", cat: "Signage" },
-  { name: "Instagram Post", dims: "1080 × 1080", px: "1:1 square", use: "Feed post", ratio: "aspect-square", cat: "Social" },
-  { name: "Instagram Story", dims: "1080 × 1920", px: "9:16 vertical", use: "Story / Reel", ratio: "aspect-[9/16]", cat: "Story" },
-  { name: "Facebook Post", dims: "1200 × 630", px: "1.91:1", use: "Link share", ratio: "aspect-[1200/630]", cat: "Social" },
-  { name: "Menu Board", dims: "1920 × 1080", px: "16:9 screen", use: "Digital display", ratio: "aspect-video", cat: "Menu Board" },
+  { name: '24"×36" Poster', dims: '24 × 36 in', px: "2880 × 4320 px", use: "Wall / window", ratio: "aspect-[24/36]", cat: "Poster" },
+  { name: '8"×11" Flyer', dims: '8 × 11 in', px: "960 × 1320 px", use: "Counter handout", ratio: "aspect-[8/11]", cat: "Flyer" },
+  { name: "8'×4' Banner", dims: "8 × 4 ft", px: "960 × 480 px", use: "Outdoor banner", ratio: "aspect-[8/4]", cat: "Signage" },
+  { name: '5\'×10" Sign', dims: '5 ft × 10 in', px: "600 × 120 px", use: "Bench / roadside", ratio: "aspect-[50/10]", cat: "Signage" },
+  { name: "Social Media Poster", dims: "1080 × 1080 px", px: "1:1 square", use: "Feed post", ratio: "aspect-square", cat: "Social" },
 ];
 
 // What a promotion is for. Stored on marketing_promotions.category — see
-// supabase/schema-marketing-fields.sql.
+// supabase/schema-marketing-fields.sql. Labels are client wording; the stored
+// `value` must stay inside that migration's CHECK list.
 const CATEGORIES = [
   { value: "poster", label: "Poster" },
   { value: "flyer", label: "Flyer / Handout" },
-  { value: "social", label: "Social Post" },
-  { value: "story", label: "Story / Reel" },
+  { value: "social", label: "Social Media Poster" },
+  { value: "story", label: "Social Story" },
   { value: "menu_board", label: "Menu Board" },
-  { value: "signage", label: "In-store Signage" },
+  { value: "signage", label: "Sign / Banner" },
 ];
 
 function categoryLabel(value: string | null | undefined): string {
@@ -450,7 +450,7 @@ export default function MarketingBoard({ readOnly = false }: { readOnly?: boolea
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Location
+                        Select Location
                       </label>
                       <select
                         value={locationId}

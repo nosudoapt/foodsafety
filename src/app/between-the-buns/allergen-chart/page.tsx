@@ -39,7 +39,9 @@ function StatusCell({ status }: { status: AllergenStatus }) {
 
 export default function AllergenChartPage() {
   return (
-    <div className="min-h-screen bg-[#fdf8e8]">
+    // The whole sheet is the printable surface: @media print hides everything
+    // else on the page, so the chart + credits are exactly what hits the paper.
+    <div id="print-section" className="min-h-screen bg-[#fdf8e8]">
       {/* Header — brand wordmark on cream, matching the printed sheet */}
       <div className="max-w-2xl mx-auto px-4 pt-8 pb-4 text-center">
         <BtbWordmark className="text-3xl sm:text-4xl justify-center" />

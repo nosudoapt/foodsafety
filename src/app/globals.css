@@ -140,3 +140,24 @@ input::placeholder {
     print-color-adjust: exact;
   }
 }
+
+/* Patch 12 — the print surface. A page that ships #print-section prints only
+   what is inside it (the chart, the guide, the stored PDF manuals in an
+   iframe) and drops every bar, button and card around it. The :has() guard
+   keeps pages without a print section — /reports, /admin/print-materials —
+   printing exactly as they did before. */
+@media print {
+  body:has(#print-section) * {
+    visibility: hidden;
+  }
+  #print-section,
+  #print-section * {
+    visibility: visible;
+  }
+  #print-section {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}

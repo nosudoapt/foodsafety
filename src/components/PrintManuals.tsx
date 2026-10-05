@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getProfileContext } from "@/lib/profile";
 import { downloadDataUrl, fileToDataUrl, formatFileSize, printDataUrl } from "@/lib/files";
+import PrintButton from "@/components/PrintButton";
 
 interface Manual {
   id: string;
@@ -59,6 +60,43 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
   const [category, setCategory] = useState("general");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Patch 12 — page-level print: the stored PDFs are pulled into the hidden
+  // #print-section (one iframe each) and the dialog opens once they've loaded,
+  // so "Print / Save PDF" hands over the manuals themselves, not the grid.
+  const [printFiles, setPrintFiles] = useState<{ id: string; title: string; url: string }[]>([]);
+  const framesLoaded = useRef(0);
+  const printWhenReady = useRef(false);
+
+  const printAll = async () => {
+    setError("");
+    const pdfs = manuals.filter((m) => m.fileName.toLowerCase().endsWith(".pdf"));
+    const files: { id: string; title: string; url: string }[] = [];
+    for (const m of pdfs) {
+      const { data, error } = await supabase
+        .from("print_manuals")
+        .select("file_url")
+        .eq("id", m.id)
+        .single();
+      if (!error && data?.file_url) files.push({ id: m.id, title: m.title, url: data.file_url });
+    }
+    if (files.length === 0) {
+      // Nothing stored as a PDF — print the list itself.
+      window.print();
+      return;
+    }
+    framesLoaded.current = 0;
+    printWhenReady.current = true;
+    setPrintFiles(files);
+  };
+
+  const onPrintFrameLoad = () => {
+    framesLoaded.current += 1;
+    if (printWhenReady.current && framesLoaded.current >= printFiles.length) {
+      printWhenReady.current = false;
+      window.print();
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -179,14 +217,17 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
             Management manuals available for download and printing
           </p>
         </div>
-        {!readOnly && (
-          <button
-            onClick={() => setShowUpload(true)}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center gap-2"
-          >
-            <span>+</span> Upload Manual
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          <PrintButton onClick={printAll} />
+          {!readOnly && (
+            <button
+              onClick={() => setShowUpload(true)}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center gap-2"
+            >
+              <span>+</span> Upload Manual
+            </button>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -370,6 +411,25 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
           );
         })}
       </div>
+      )}
+
+      {/* Print-only surface (Patch 12): the stored manuals themselves, one
+          iframe per PDF. globals.css hides everything outside this box when
+          the page goes to the printer. */}
+      {printFiles.length > 0 && (
+        <div id="print-section" className="hidden print:block">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Procedure Manuals</h1>
+          {printFiles.map((f) => (
+            <iframe
+              key={f.id}
+              src={f.url}
+              title={f.title}
+              onLoad={onPrintFrameLoad}
+              className="w-full border-0"
+              style={{ height: "100vh", pageBreakAfter: "always" }}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
