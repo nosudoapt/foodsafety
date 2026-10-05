@@ -21,6 +21,7 @@ export function parseArgs(argv) {
     allowProd: false,
     help: false,
     step: null,
+    baseline: null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -34,6 +35,11 @@ export function parseArgs(argv) {
       const next = argv[++i];
       if (next === undefined) throw new Error("--step needs a number, e.g. --step 16");
       out.step = readStep(next);
+    } else if (a.startsWith("--baseline=")) out.baseline = readStep(a.slice("--baseline=".length));
+    else if (a === "--baseline") {
+      const next = argv[++i];
+      if (next === undefined) throw new Error("--baseline needs a number, e.g. --baseline 15");
+      out.baseline = readStep(next);
     } else {
       throw new Error(`Unknown argument: ${a} (try --help)`);
     }
@@ -43,7 +49,7 @@ export function parseArgs(argv) {
 
 function readStep(value) {
   const n = Number(value);
-  if (!Number.isInteger(n) || n < 1) throw new Error(`--step must be a positive integer, got "${value}"`);
+  if (!Number.isInteger(n) || n < 1) throw new Error(`step numbers must be positive integers, got "${value}"`);
   return n;
 }
 

@@ -48,6 +48,8 @@ ${bold("supabase migration runner")}
   --dry-run          print the plan, don't touch the database
   --status           applied / pending table
   --step <N>         only steps up to and including N
+  --baseline <N>     mark steps 1..N as applied without executing them
+                     (adopt an existing database; next run applies N+1..)
   --force            re-run steps even if they're recorded as applied
   --allow-prod       required to apply when NODE_ENV=production
   -h, --help         this text
@@ -231,6 +233,35 @@ async function main() {
   }
 
   await ensureMigrationsTable(sql);
+
+  if (args.baseline !== null) {
+    const targets = steps.filter((s) => s.step <= args.baseline);
+    if (targets.length === 0) {
+      console.error(`\n${red("❌")} --baseline ${args.baseline} matches no manifest step.`);
+      await cleanup(1);
+      return;
+    }
+    const already = await loadApplied(sql);
+    let recorded = 0;
+    for (const s of targets) {
+      if (already.has(s.file)) continue;
+      await sql`
+        insert into _migrations (step, filename, checksum, duration_ms)
+        values (${s.step}, ${s.file}, ${s.checksum}, 0)
+        on conflict (filename) do nothing
+      `;
+      recorded++;
+    }
+    console.log(
+      `${green("📌")} baseline: steps ${targets[0].step}–${targets[targets.length - 1].step} ` +
+        `marked applied (${recorded} new, ${targets.length - recorded} already recorded) — nothing executed.`,
+    );
+    const next = steps.filter((s) => s.step > args.baseline);
+    if (next.length) console.log(dim(`   next pending: step ${next[0].step} (${next[0].file})`));
+    await cleanup(0);
+    return;
+  }
+
   const applied = await loadApplied(sql);
   const entries = plan({ steps, applied, force: args.force, maxStep: args.step });
 

@@ -45,15 +45,21 @@ test("flags parse in both spellings and typos are fatal", () => {
     allowProd: false,
     help: false,
     step: null,
+    baseline: null,
   });
   assert.equal(parseArgs(["--dry-run"]).dryRun, true);
   assert.equal(parseArgs(["--step=16"]).step, 16);
   assert.equal(parseArgs(["--step", "16"]).step, 16);
+  assert.equal(parseArgs(["--baseline", "15"]).baseline, 15);
+  assert.equal(parseArgs(["--baseline=15", "--step=22"]).baseline, 15);
+  assert.equal(parseArgs(["--baseline=15", "--step=22"]).step, 22);
   assert.equal(parseArgs(["--status", "--force", "--allow-prod"]).status, true);
   assert.equal(parseArgs(["-h"]).help, true);
   assert.throws(() => parseArgs(["--dry-runn"]), /Unknown argument/);
   assert.throws(() => parseArgs(["--step", "abc"]), /positive integer/);
   assert.throws(() => parseArgs(["--step", "0"]), /positive integer/);
+  assert.throws(() => parseArgs(["--baseline", "0"]), /positive integer/);
+  assert.throws(() => parseArgs(["--baseline"]), /needs a number/);
   assert.throws(() => parseArgs(["--step"]), /needs a number/);
 });
 
