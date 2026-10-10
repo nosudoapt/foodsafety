@@ -169,6 +169,7 @@ const UNGATED_ROUTES = new Set([
   "allergen-chart",
   "gluten-free",
   "prep-manual",
+  "fryer-timing",
 ]);
 
 test("every BTB route is either gated by its feature or explicitly ungated", () => {

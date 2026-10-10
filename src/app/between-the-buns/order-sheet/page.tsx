@@ -110,11 +110,11 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
   async function save() {
     if (readOnly || saving) return;
     setSaving(true);
-    // Only persist touched lines (a PAR or an on-hand actually entered).
+    // Only persist touched lines (a PAR, an on-hand, or an urgent flag).
     const rows = BROOKS_ORDER_GUIDE.flatMap((cat) =>
       cat.items
         .map((it) => ({ name: it.name, e: entries[it.name] }))
-        .filter(({ e }) => e && (e.par > 0 || e.on_hand > 0))
+        .filter(({ e }) => e && (e.par > 0 || e.on_hand > 0 || e.urgent))
         .map(({ name, e }) => ({
           item_name: name,
           par: e!.par,

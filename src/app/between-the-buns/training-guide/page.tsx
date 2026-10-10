@@ -21,8 +21,17 @@ import {
   type TrainingTopic,
 } from "@/lib/training";
 
-const TOPIC_COLS = "id, title, category, est_minutes, published, position, created_by, location_id";
+const TOPIC_COLS = "id, title, category, est_minutes, published, position, created_by, location_id, video_url";
 const SECTION_COLS = "id, topic_id, position, heading, body";
+
+/** YouTube watch/shorts URL → embed URL; anything else plays as-is. */
+function videoEmbed(url: string): { kind: "youtube" | "file"; src: string } | null {
+  const u = (url ?? "").trim();
+  if (!u) return null;
+  const yt = u.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/);
+  if (yt) return { kind: "youtube", src: `https://www.youtube.com/embed/${yt[1]}` };
+  return { kind: "file", src: u };
+}
 
 // The SOP library. Staff read published topics; managers draft, publish and
 // reorder them. Sections are plain text — paragraphs plus "- " checklist lines.
@@ -48,6 +57,9 @@ function TrainingGuide({ readOnly }: { readOnly: boolean }) {
 
   const [newTopic, setNewTopic] = useState({ title: "", category: "food_safety", est_minutes: "5" });
   const [newSection, setNewSection] = useState({ heading: "", body: "" });
+  // Unsaved video-URL drafts, keyed by topic so switching topics never leaks
+  // one topic's draft into another (no effect needed — the key does the reset).
+  const [videoDrafts, setVideoDrafts] = useState<Record<string, string>>({});
 
   const loadTopics = async () => {
     const scope = locationScope();
@@ -221,6 +233,27 @@ function TrainingGuide({ readOnly }: { readOnly: boolean }) {
     await loadSections(selectedId);
   };
 
+  const saveVideo = async () => {
+    if (readOnly || !selected) return;
+    setError(null);
+    const url = (videoDrafts[selected.id] ?? selected.video_url ?? "").trim();
+    const { error: err } = await supabase
+      .from("training_topics")
+      .update({ video_url: url || null })
+      .eq("id", selected.id);
+    if (err) {
+      setError("Couldn't save the video — run supabase/schema-training-video.sql, then retry.");
+      return;
+    }
+    setVideoDrafts((d) => {
+      const next = { ...d };
+      delete next[selected.id];
+      return next;
+    });
+    setNotice(url ? "Training video saved" : "Training video removed");
+    await loadTopics();
+  };
+
   return (
     <div>
       {/* Interactive UI — hidden when the guide goes to the printer. */}
@@ -369,6 +402,49 @@ function TrainingGuide({ readOnly }: { readOnly: boolean }) {
                     </div>
                   )}
                 </div>
+
+                {/* Training video — plays for everyone, set by managers. */}
+                {(() => {
+                  const embed = videoEmbed(selected.video_url ?? "");
+                  const draft = videoDrafts[selected.id] ?? selected.video_url ?? "";
+                  return (
+                    <div className="mt-4">
+                      {embed ? (
+                        embed.kind === "youtube" ? (
+                          <iframe
+                            src={embed.src}
+                            title={`${selected.title} — training video`}
+                            className="w-full aspect-video rounded-xl border border-slate-200"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        ) : (
+                          <video src={embed.src} controls className="w-full rounded-xl border border-slate-200" />
+                        )
+                      ) : (
+                        !readOnly && (
+                          <p className="text-xs text-slate-400">No video yet — paste a YouTube or mp4 link below.</p>
+                        )
+                      )}
+                      {!readOnly && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Input
+                            accent="purple"
+                            placeholder="YouTube or mp4 link…"
+                            value={draft}
+                            onChange={(e) =>
+                              setVideoDrafts((d) => ({ ...d, [selected.id]: e.target.value }))
+                            }
+                            className="grow min-w-[12rem]"
+                          />
+                          <Button accent="purple" variant="soft" onClick={saveVideo} disabled={saving}>
+                            {saving ? "Saving…" : "Save video"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="mt-5 space-y-6">
                   {ordered.length === 0 ? (

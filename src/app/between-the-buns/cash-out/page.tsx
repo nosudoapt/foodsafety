@@ -18,9 +18,12 @@ import {
 } from "@/lib/cash-out";
 
 const HISTORY_COLS =
-  "id, count_date, till_amount, cash_sale, delivery_fees, driver_tips, cash_out, safe_drop, created_by, created_at";
+  "id, count_date, till_amount, cash_sale, delivery_fees, driver_tips, cash_out, safe_drop, local_purchase, single_trays, large_trays, review_cards, open_tickets, created_by, created_at";
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+// Counts print without trailing ".00"; money always shows cents.
+const fmtCount = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(2));
 
 // End-of-day till reconciliation. Viewable by every BTB role (the matrix makes
 // it view-only for staff/corporate); managers and owners fill it in.
@@ -42,6 +45,11 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
     driver_tips: "",
     cash_out: "",
     safe_drop: "",
+    local_purchase: "",
+    single_trays: "",
+    large_trays: "",
+    review_cards: "",
+    open_tickets: "",
   });
   const [history, setHistory] = useState<CashOutRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +92,11 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
         driver_tips: Number(r.driver_tips) || 0,
         cash_out: Number(r.cash_out) || 0,
         safe_drop: Number(r.safe_drop) || 0,
+        local_purchase: Number(r.local_purchase) || 0,
+        single_trays: Number(r.single_trays) || 0,
+        large_trays: Number(r.large_trays) || 0,
+        review_cards: Number(r.review_cards) || 0,
+        open_tickets: Number(r.open_tickets) || 0,
       })),
     );
     setError(null);
@@ -119,8 +132,13 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
               driver_tips: String(Number(row.driver_tips) || 0),
               cash_out: String(Number(row.cash_out) || 0),
               safe_drop: String(Number(row.safe_drop) || 0),
+              local_purchase: String(Number(row.local_purchase) || 0),
+              single_trays: String(Number(row.single_trays) || 0),
+              large_trays: String(Number(row.large_trays) || 0),
+              review_cards: String(Number(row.review_cards) || 0),
+              open_tickets: String(Number(row.open_tickets) || 0),
             }
-          : { till_amount: "", cash_sale: "", delivery_fees: "", driver_tips: "", cash_out: "", safe_drop: "" },
+          : { till_amount: "", cash_sale: "", delivery_fees: "", driver_tips: "", cash_out: "", safe_drop: "", local_purchase: "", single_trays: "", large_trays: "", review_cards: "", open_tickets: "" },
       );
       setError(null);
       setSavedAt(null);
@@ -149,7 +167,7 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
     if (scope) del = del.or(scope);
     const { error: delErr } = await del;
     if (delErr) {
-      setError("Couldn't save — run supabase/schema-cash-out.sql, then retry.");
+      setError("Couldn't save — run supabase/schema-cash-out.sql and supabase/schema-cash-out-columns.sql, then retry.");
       setSaving(false);
       return;
     }
@@ -159,7 +177,7 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
       created_by: createdBy,
     });
     if (insErr) {
-      setError("Couldn't save — run supabase/schema-cash-out.sql, then retry.");
+      setError("Couldn't save — run supabase/schema-cash-out.sql and supabase/schema-cash-out-columns.sql, then retry.");
       setSaving(false);
       return;
     }
@@ -176,13 +194,18 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
   const windowTotals = totalsFor(history);
   const cutoff = retentionCutoff(today());
 
-  const FIELDS: { key: keyof typeof form; label: string; hint?: string }[] = [
+  const FIELDS: { key: keyof typeof form; label: string; hint?: string; step?: string }[] = [
     { key: "till_amount", label: "Till Amount", hint: "counted in the drawer" },
     { key: "cash_sale", label: "Cash Sale" },
     { key: "delivery_fees", label: "Delivery Fees" },
     { key: "driver_tips", label: "Driver Tips" },
     { key: "cash_out", label: "Cash Out", hint: "handed over" },
     { key: "safe_drop", label: "Safe", hint: "dropped" },
+    { key: "local_purchase", label: "Local Purchase", hint: "paid out of the drawer" },
+    { key: "single_trays", label: "Single Serving Trays", hint: "count", step: "1" },
+    { key: "large_trays", label: "Large Serving Trays", hint: "count", step: "1" },
+    { key: "review_cards", label: "Google Review Cards", hint: "given out", step: "1" },
+    { key: "open_tickets", label: "Open Tickets", hint: "left open at close", step: "1" },
   ];
 
   return (
@@ -229,7 +252,7 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
                   accent="red"
                   type="number"
                   inputMode="decimal"
-                  step="0.01"
+                  step={f.step ?? "0.01"}
                   min="0"
                   placeholder="0.00"
                   title={f.hint}
@@ -284,6 +307,11 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
                   <th className="text-right px-3 py-2 font-bold">Tips</th>
                   <th className="text-right px-3 py-2 font-bold">Cash Out</th>
                   <th className="text-right px-3 py-2 font-bold">Safe</th>
+                  <th className="text-right px-3 py-2 font-bold">Local Purch.</th>
+                  <th className="text-right px-3 py-2 font-bold">Single Tray</th>
+                  <th className="text-right px-3 py-2 font-bold">Large Tray</th>
+                  <th className="text-right px-3 py-2 font-bold">Review Cards</th>
+                  <th className="text-right px-3 py-2 font-bold">Open Tick.</th>
                   <th className="text-right px-3 py-2 font-bold">Left</th>
                   <th className="text-left px-4 py-2 font-bold">By</th>
                 </tr>
@@ -291,13 +319,13 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={14} className="px-4 py-8 text-center text-slate-400">
                       Loading…
                     </td>
                   </tr>
                 ) : history.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-slate-400">
+                    <td colSpan={14} className="px-4 py-8 text-center text-slate-400">
                       No cash-outs since {cutoff}
                     </td>
                   </tr>
@@ -311,6 +339,11 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
                       <td className="px-3 py-2 text-right tabular-nums">{r.driver_tips.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold">{r.cash_out.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right tabular-nums font-semibold">{r.safe_drop.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{r.local_purchase.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtCount(r.single_trays)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtCount(r.large_trays)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtCount(r.review_cards)}</td>
+                      <td className="px-3 py-2 text-right tabular-nums">{fmtCount(r.open_tickets)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{tillLeft(r).toFixed(2)}</td>
                       <td className="px-4 py-2 text-slate-500">{r.created_by ?? "—"}</td>
                     </tr>
@@ -327,6 +360,11 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
                     <td className="px-3 py-2 text-right tabular-nums">{windowTotals.driver_tips.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{windowTotals.cash_out.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">{windowTotals.safe_drop.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{windowTotals.local_purchase.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtCount(windowTotals.single_trays)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtCount(windowTotals.large_trays)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtCount(windowTotals.review_cards)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{fmtCount(windowTotals.open_tickets)}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {tillLeft(windowTotals).toFixed(2)}
                     </td>

@@ -8,12 +8,14 @@ import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import {
   countQty,
+  foodCostPct,
   monthLabel,
   prevMonth,
   recentMonths,
   thisMonth,
   toLines,
   totalValue,
+  usageValue,
   variance,
   type InventoryCount,
   type InventoryItem,
@@ -43,6 +45,8 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [newItem, setNewItem] = useState({ name: "", unit: "ea", unit_cost: "" });
+  // Month math — opening + purchases + sales. Closing is the live count total.
+  const [summary, setSummary] = useState({ opening_value: "0", purchases: "0", sales: "0" });
 
   const months = useMemo(() => recentMonths(thisMonth(), 12), []);
   const prevKey = prevMonth(month);
@@ -79,7 +83,52 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     const { data: pdata } = await pq;
     setPrevCounts(((pdata ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
     setError(null);
+    await loadSummary(key);
     setLoading(false);
+  };
+
+  const loadSummary = async (key: string) => {
+    const scope = locationScope();
+    let q = supabase
+      .from("inventory_month_summary")
+      .select("opening_value, purchases, sales")
+      .eq("count_month", key);
+    if (scope) q = q.or(scope);
+    const { data } = await q;
+    const row = (data?.[0] as { opening_value: number; purchases: number; sales: number } | undefined) ?? null;
+    if (row) {
+      setSummary({
+        opening_value: String(Number(row.opening_value) || 0),
+        purchases: String(Number(row.purchases) || 0),
+        sales: String(Number(row.sales) || 0),
+      });
+    } else {
+      setSummary({ opening_value: "0", purchases: "0", sales: "0" });
+    }
+  };
+
+  const saveSummary = async () => {
+    if (readOnly || saving) return;
+    setSaving(true);
+    setError(null);
+    const scope = locationScope();
+    let del = supabase.from("inventory_month_summary").delete().eq("count_month", month);
+    if (scope) del = del.or(scope);
+    const { error: delErr } = await del;
+    if (!delErr) {
+      const { error: insErr } = await supabase.from("inventory_month_summary").insert({
+        count_month: month,
+        opening_value: countQty(summary.opening_value),
+        purchases: countQty(summary.purchases),
+        sales: countQty(summary.sales),
+        location_id: activeLocationId(),
+      });
+      if (!insErr) setNotice(`${monthLabel(month)} month math saved`);
+      else setError("Couldn't save month math — run supabase/schema-inventory-summary.sql, then retry.");
+    } else {
+      setError("Couldn't save month math — run supabase/schema-inventory-summary.sql, then retry.");
+    }
+    setSaving(false);
   };
 
   useEffect(() => {
@@ -194,7 +243,7 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     <div>
       <PageHeader
         title="Month-End Inventory"
-        subtitle="Closing count sheet with value and month-over-month variance"
+        subtitle="Closing count sheet — value auto-summed, usage and food cost % from month math"
         action={notice ? <Badge accent="green">{notice}</Badge> : undefined}
       />
 
@@ -225,7 +274,7 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
         <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
         <StatTile label="Closing value" value={currentTotal.toFixed(2)} icon={Layers} accent="green" />
         <StatTile
           label={`vs ${monthLabel(prevKey)}`}
@@ -234,7 +283,77 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
           accent={valueVar.delta < 0 ? "red" : "blue"}
         />
         <StatTile label="Items counted" value={`${counted}/${lines.length}`} icon={Layers} accent="slate" />
+        <StatTile
+          label="Usage $"
+          value={usageValue(countQty(summary.opening_value), countQty(summary.purchases), currentTotal).toFixed(2)}
+          icon={Layers}
+          accent="amber"
+        />
+        <StatTile
+          label="Food cost %"
+          value={`${foodCostPct(countQty(summary.opening_value), countQty(summary.purchases), currentTotal, countQty(summary.sales)).toFixed(1)}%`}
+          icon={Layers}
+          accent="red"
+        />
       </div>
+
+      <Card className="p-4 mb-5">
+        <p className="text-sm font-bold text-slate-900 mb-1">Month math — opening, purchases, sales</p>
+        <p className="text-xs text-slate-400 mb-3">
+          Closing = Opening + Purchases − Usage · Food cost % = (Opening + Purchases − Closing) ÷ Sales × 100 · Closing is summed automatically from the count below.
+        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="block text-sm w-32">
+            <span className="block text-xs font-medium text-slate-500 mb-1">Opening $</span>
+            <Input
+              accent="green"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={summary.opening_value}
+              readOnly={readOnly}
+              onChange={(e) => setSummary((s) => ({ ...s, opening_value: e.target.value }))}
+            />
+          </label>
+          <label className="block text-sm w-32">
+            <span className="block text-xs font-medium text-slate-500 mb-1">Purchases $</span>
+            <Input
+              accent="green"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={summary.purchases}
+              readOnly={readOnly}
+              onChange={(e) => setSummary((s) => ({ ...s, purchases: e.target.value }))}
+            />
+          </label>
+          <label className="block text-sm w-32">
+            <span className="block text-xs font-medium text-slate-500 mb-1">Net sales $</span>
+            <Input
+              accent="green"
+              type="number"
+              inputMode="decimal"
+              step="0.01"
+              min="0"
+              value={summary.sales}
+              readOnly={readOnly}
+              onChange={(e) => setSummary((s) => ({ ...s, sales: e.target.value }))}
+            />
+          </label>
+          {!readOnly && (
+            <>
+              <Button accent="green" variant="soft" onClick={() => setSummary((s) => ({ ...s, opening_value: previousTotal.toFixed(2) }))}>
+                Use last close ({previousTotal.toFixed(2)})
+              </Button>
+              <Button accent="green" onClick={saveSummary} disabled={saving}>
+                {saving ? "Saving…" : "Save month math"}
+              </Button>
+            </>
+          )}
+        </div>
+      </Card>
 
       <Card className="overflow-hidden mb-5">
         <div className="overflow-x-auto">

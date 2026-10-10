@@ -10,6 +10,7 @@ import {
   type PrepItem,
 } from "@/lib/btb-prep-list";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
+import PrintButton from "@/components/PrintButton";
 import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import {
@@ -210,7 +211,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         // Nothing saved for this date yet — seed PAR so a manager doesn't
         // retype it every day. On Hand stays blank: staff still counts it.
         const snap = PAR_KEY_SET.has(key) ? parFor(maps, key) : undefined;
-        next[key] = snap && snap.par > 0 ? { ...EMPTY, par: String(snap.par) } : { ...EMPTY };
+        next[key] = snap && snap.par > 0 ? { ...EMPTY, par: String(snap.par), urgent: !!snap.urgent } : { ...EMPTY };
       }
       setPrepData(next);
       setError(null);
@@ -390,13 +391,14 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
           </div>
 
           {/* Tabs */}
-          <div className="mt-3 flex justify-center gap-2">
+          <div className="mt-3 flex justify-center gap-2 print:hidden">
             <button onClick={() => setActiveTab("today")} className={tabClass("today")}>
               Today&apos;s Prep
             </button>
             <button onClick={() => setActiveTab("history")} className={tabClass("history")}>
               History ({savedLists.length}/7)
             </button>
+            <PrintButton />
           </div>
         </div>
       </div>
@@ -520,6 +522,52 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
             )}
           </div>
         )}
+      </div>
+
+      {/* Print sheet — the full prep list unfiltered, values as text. */}
+      <div id="print-section" className="hidden print:block max-w-4xl mx-auto px-4 py-6 text-gray-900">
+        <h1 className="text-xl font-bold">Daily Prep Sheet — {day}, {date}</h1>
+        <p className="text-xs text-gray-500 mb-4">Between the Buns · MAKE = PAR − On Hand · 🔥 = urgent</p>
+        {prepColumns.map((column) => (
+          <div key={column.label} className="mb-5 break-inside-avoid">
+            <h2 className="font-bold text-sm mb-1">{column.label}</h2>
+            {column.sections.map((section) => (
+              <div key={section.title} className="mb-2">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{section.title}</h3>
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-300 text-gray-500">
+                      <th className="text-left py-1">Item</th>
+                      <th className="text-right">Par</th>
+                      <th className="text-right">OH</th>
+                      <th className="text-right">Make</th>
+                      <th className="text-right">Init</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.items.map((item) => {
+                      const e = prepData[itemKey(item)];
+                      return (
+                        <tr key={itemKey(item)} className="border-b border-gray-100">
+                          <td className="py-1">
+                            {item.name}
+                            {item.unit ? <span className="text-gray-400"> ({item.unit})</span> : null}
+                            {e?.urgent ? " 🔥" : ""}
+                            {e?.pull ? <span className="text-gray-500"> · pull {e.pull}</span> : null}
+                          </td>
+                          <td className="text-right">{e?.par ?? ""}</td>
+                          <td className="text-right">{e?.oh ?? ""}</td>
+                          <td className="text-right font-bold">{e?.make ?? ""}</td>
+                          <td className="text-right">{e?.initial ?? ""}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -24,6 +24,7 @@ const STARTERS: Omit<Protocol, "id">[] = [
   { title: "Debit / Card Machine Down", icon: "💳", sort_order: 3, steps: ["Verify Wi-Fi is up", "Restart the terminal", "Accept cash only if unresolved", "Call the POS/merchant support line"] },
   { title: "Phone Line Down", icon: "☎️", sort_order: 4, steps: ["Check handset & base power", "Forward calls to a manager mobile", "Post a notice for online orders", "Call the phone provider"] },
   { title: "Fire / Evacuation", icon: "🔥", sort_order: 5, steps: ["Pull the alarm and call 911", "Evacuate via the nearest exit — never use elevators", "Assemble at the parking lot sign; manager does a head count", "Do not re-enter until the fire department clears the building", "Call the owner/corporate once everyone is safe", "Report to the hood & fire suppression company (see Emergency Contacts)"] },
+  { title: "POS Down", icon: "🧾", sort_order: 6, steps: ["Stay calm — take orders on the manual order pad", "Check Wi-Fi and power to the terminals first", "Restart the affected terminal (wait 60s)", "Accept cash only until the POS is back", "Write every order down with time + table", "Call POS support (see Emergency Contacts) and re-enter tickets once restored"] },
 ];
 
 // Older builds stored edited protocols in localStorage only. Salvage them when
@@ -149,7 +150,7 @@ export default function OperationalProtocols({ readOnly = false }: { readOnly?: 
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Emergency Protocols" subtitle="Step-by-step for power, internet, payments, phone & fire" action={<Badge accent="amber">{loading ? "…" : rows.length}</Badge>} />
+      <PageHeader title="Emergency Protocols" subtitle="Step-by-step for power, internet, payments, phone, fire & POS" action={<Badge accent="amber">{loading ? "…" : rows.length}</Badge>} />
 
       {error && (
         <div className="flex items-center justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3">

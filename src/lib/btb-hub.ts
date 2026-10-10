@@ -26,6 +26,7 @@ export type BtbIconKey =
   | "clipboardCheck"
   | "megaphone"
   | "listChecks"
+  | "flame"
   | "key";
 
 export interface BtbCard {
@@ -47,7 +48,7 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/branding-requests", title: "Branding Requests", desc: "Signage, menus, uniforms — file it, marketing works the board.", iconKey: "sparkles", accent: "amber", feature: "branding_requests" },
   { href: "/between-the-buns/month-end-inventory", title: "Month-End Inventory", desc: "Closing count sheet — value, variance vs last month.", iconKey: "listChecks", accent: "green", feature: "month_end_inventory" },
   { href: "/between-the-buns/training-guide", title: "Training Guide", desc: "SOPs and onboarding — search, checklist sections, publish when ready.", iconKey: "bookCheck", accent: "purple", feature: "training_guide" },
-  { href: "/between-the-buns/tax-dates", title: "Corporate Dates", desc: "Tax returns, remittances, licences and renewals — one list.", iconKey: "clipboard", accent: "amber", feature: "tax_dates" },
+  { href: "/between-the-buns/tax-dates", title: "Tax & Renewal Dates", desc: "GST/PST returns, registry renewals, year-end filings — one list.", iconKey: "clipboard", accent: "amber", feature: "tax_dates" },
   { href: "/between-the-buns/staff-schedule", title: "Staff Schedule", desc: "Weekly shifts and the roster — managers post, everyone reads.", iconKey: "idCard", accent: "purple", feature: "staff_schedule" },
   { href: "/between-the-buns/cash-out", title: "Cash Out", desc: "End-of-day till count, safe drop & 30-day history.", iconKey: "calculator", accent: "green", feature: "cash_out" },
   { href: "/between-the-buns/order-sheet", title: "Order Sheet", desc: "ORDER = PAR − On Hand. Keeps 3 months of orders.", iconKey: "clipboard", accent: "amber", feature: "order_sheet" },
@@ -56,6 +57,7 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/menu", title: "Recipe Cheat Sheets", desc: "Burgers, wraps, salads, smoothies & shakes.", iconKey: "utensils", accent: "amber", feature: "reference" },
   { href: "/between-the-buns/allergen-chart", title: "Bun Allergy Chart", desc: "Allergen info for all bun types.", iconKey: "alert", accent: "amber", feature: "reference" },
   { href: "/between-the-buns/gluten-free", title: "Gluten Free Menu", desc: "Safe options for gluten-free & Celiac guests.", iconKey: "salad", accent: "green", feature: "reference" },
+  { href: "/between-the-buns/fryer-timing", title: "Fryer Timing & Portions", desc: "Cook times & portion sizes for every fryer item.", iconKey: "flame", accent: "red", feature: "reference" },
   // Reference & safety (all roles)
   { href: "/between-the-buns/emergency", title: "Emergency Contacts", desc: "Priority-ordered numbers — tap to call.", iconKey: "phone", accent: "red", feature: "emergency" },
   { href: "/between-the-buns/protocols", title: "Operational Protocols", desc: "Step-by-step procedures for the whole team.", iconKey: "fileText", accent: "purple", feature: "protocols" },

@@ -222,7 +222,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
           {!readOnly && (
             <button
               onClick={() => setShowUpload(true)}
-              className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700 transition-colors flex items-center gap-2"
+              className="bg-[#E07B2E] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[#c76a24] transition-colors flex items-center gap-2"
             >
               <span>+</span> Upload Manual
             </button>
@@ -310,7 +310,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
               <button
                 onClick={handleUpload}
                 disabled={!selectedFile || !title || saving}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-[#E07B2E] text-white rounded-lg font-medium hover:bg-[#c76a24] disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Upload
               </button>
@@ -321,7 +321,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
 
       {/* Category Filter */}
       <div className="flex gap-2 overflow-x-auto">
-        <button className="px-4 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white whitespace-nowrap">
+        <button className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#E07B2E] text-white whitespace-nowrap">
           All ({manuals.length})
         </button>
         {categories.map((cat) => {
@@ -329,7 +329,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
           return (
             <button
               key={cat.value}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 whitespace-nowrap"
+              className="px-4 py-2 rounded-lg text-sm font-semibold bg-[#f3ead3] text-[#7a5230] hover:bg-[#ead9b8] whitespace-nowrap"
             >
               {cat.icon} {cat.label} ({count})
             </button>
@@ -361,7 +361,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
               key={manual.id}
               className="bg-white rounded-xl border border-gray-200 overflow-hidden"
             >
-              <div className="h-32 bg-gradient-to-br from-gray-700 to-gray-900 flex items-center justify-center">
+              <div className="h-32 bg-gradient-to-br from-[#b65a2e] to-[#E07B2E] flex items-center justify-center">
                 <span className="text-5xl">📑</span>
               </div>
 
@@ -395,7 +395,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
                 <div className="flex gap-2">
                   <button
                     onClick={() => printManual(manual)}
-                    className="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg text-xs font-semibold hover:bg-red-700 transition-colors"
+                    className="flex-1 px-3 py-2 bg-[#E07B2E] text-white rounded-lg text-xs font-semibold hover:bg-[#c76a24] transition-colors"
                   >
                     🖨️ Print
                   </button>

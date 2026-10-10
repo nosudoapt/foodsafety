@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { ChevronLeft, LogOut } from "lucide-react";
+import BtbWordmark from "@/components/BtbWordmark";
 
 interface BtbMe {
   name?: string;
@@ -41,23 +42,25 @@ export default function BetweenTheBunsLayout({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50">
-      <header className="sticky top-0 z-30 bg-red-600 text-white shadow-sm print:hidden">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-3">
+    <div className="min-h-screen bg-[#fdf8e8]">
+      <header className="sticky top-0 z-30 bg-white border-b border-[#e6dcc0] shadow-sm print:hidden">
+        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
           {isHub ? (
             <span className="w-24" aria-hidden />
           ) : (
-            <Link href="/between-the-buns" className="flex items-center gap-1.5 text-sm font-medium text-red-50 hover:text-white transition-colors">
+            <Link href="/between-the-buns" className="flex items-center gap-1.5 text-sm font-semibold text-[#b65a2e] hover:text-[#9c4a24] transition-colors">
               <ChevronLeft className="w-4 h-4" /> Staff hub
             </Link>
           )}
-          <span className="font-bold tracking-tight">Between the Buns</span>
+          <Link href="/between-the-buns" aria-label="Between the Buns home">
+            <BtbWordmark className="text-xl sm:text-2xl" />
+          </Link>
           <div className="flex items-center gap-3">
             {me.name && (
-              <span className="hidden sm:inline text-xs text-red-100">
+              <span className="hidden sm:inline text-xs text-gray-600">
                 {me.name}
                 {me.role && (
-                  <span className="ml-1.5 font-semibold uppercase text-[10px] tracking-wide bg-white/15 rounded-full px-2 py-0.5">
+                  <span className="ml-1.5 font-bold uppercase text-[10px] tracking-wide bg-[#E07B2E] text-white rounded-full px-2 py-0.5">
                     {me.role.replace("_", " ")}
                   </span>
                 )}
@@ -65,7 +68,7 @@ export default function BetweenTheBunsLayout({
             )}
             <button
               onClick={signOut}
-              className="flex items-center gap-1.5 text-sm font-medium text-red-50 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 text-sm font-semibold text-[#b65a2e] hover:text-[#9c4a24] transition-colors"
               aria-label="Sign out"
             >
               <LogOut className="w-4 h-4" /> Sign out

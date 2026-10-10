@@ -1,8 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { menuItems, procedures, stationColors } from "@/lib/btb-menu";
+import {
+  menuItems,
+  stationColors,
+  ingredientName,
+  ingredientStation,
+} from "@/lib/btb-menu";
 import PrintButton from "@/components/PrintButton";
+import BtbWordmark from "@/components/BtbWordmark";
 
 export default function MenuPage() {
   const [search, setSearch] = useState("");
@@ -16,7 +22,7 @@ export default function MenuPage() {
     const matchesSearch =
       item.name.toLowerCase().includes(search.toLowerCase()) ||
       item.ingredients.some((ing) =>
-        ing.toLowerCase().includes(search.toLowerCase())
+        ingredientName(ing).toLowerCase().includes(search.toLowerCase())
       );
     const matchesCategory =
       activeCategory === "All" || item.category === activeCategory;
@@ -29,12 +35,9 @@ export default function MenuPage() {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10 print:hidden">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-red-600 rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-sm">BTB</span>
-            </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-bold text-gray-900">Recipe Cheat Sheets</h1>
-              <p className="text-xs text-gray-500">Between the Buns — Menu Specifications</p>
+              <BtbWordmark className="text-lg sm:text-xl justify-start" />
+              <p className="text-xs text-[#b65a2e] font-semibold mt-1">Recipe Cheat Sheets — Menu Specifications</p>
             </div>
             <div className="ml-auto">
               <PrintButton />
@@ -61,7 +64,7 @@ export default function MenuPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search recipes or ingredients..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 text-gray-900 bg-white"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#E07B2E] text-gray-900 bg-white"
             />
             {search && (
               <button
@@ -81,8 +84,8 @@ export default function MenuPage() {
                 onClick={() => setActiveCategory(cat)}
                 className={`px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
                   activeCategory === cat
-                    ? "bg-red-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    ? "bg-[#E07B2E] text-white"
+                    : "bg-[#f3ead3] text-[#7a5230] hover:bg-[#ead9b8]"
                 }`}
               >
                 {cat}
@@ -90,12 +93,11 @@ export default function MenuPage() {
             ))}
           </div>
 
-          {/* Station Legend */}
-          <div className="flex items-center gap-3 mt-2 text-[10px]">
-            <span className="text-gray-500 font-medium">Stations:</span>
-            {Object.entries(stationColors).map(([key, val]) => (
-              <span key={key} className={`px-2 py-0.5 rounded-full font-bold ${val.bg} ${val.text}`}>
-                {val.label}
+          {/* Station colour legend — matches the printed cheat sheets */}
+          <div className="flex items-center gap-3 mt-2 text-[11px] font-bold">
+            {(Object.keys(stationColors) as (keyof typeof stationColors)[]).map((key) => (
+              <span key={key} style={{ color: stationColors[key].color }}>
+                {stationColors[key].label}
               </span>
             ))}
           </div>
@@ -110,7 +112,7 @@ export default function MenuPage() {
           </div>
         ) : (
           filteredItems.map((item) => {
-            const key = `${item.section}-${item.name}`;
+            const key = `${item.category}-${item.name}`;
             const isExpanded = expandedId === key;
             return (
               <div
@@ -125,17 +127,8 @@ export default function MenuPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{item.name}</h3>
                       <span className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full font-medium">
-                        {item.section}
+                        {item.category}
                       </span>
-                      {item.station && (
-                        <span
-                          className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                            stationColors[item.station].bg
-                          } ${stationColors[item.station].text}`}
-                        >
-                          {stationColors[item.station].label}
-                        </span>
-                      )}
                     </div>
                   </div>
                   <span className="text-gray-400 ml-2">{isExpanded ? "▲" : "▼"}</span>
@@ -149,12 +142,21 @@ export default function MenuPage() {
                       </h4>
                       <div className="bg-gray-50 rounded-lg p-3">
                         <ul className="space-y-1">
-                          {item.ingredients.map((ing, idx) => (
-                            <li key={idx} className="flex items-center gap-2 text-sm">
-                              <span className="w-1.5 h-1.5 bg-red-500 rounded-full flex-shrink-0" />
-                              <span className="text-gray-900">{ing}</span>
-                            </li>
-                          ))}
+                          {item.ingredients.map((ing, idx) => {
+                            const station = ingredientStation(ing);
+                            const color = station ? stationColors[station].color : "#111827";
+                            return (
+                              <li key={idx} className="flex items-center gap-2 text-sm">
+                                <span
+                                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                  style={{ backgroundColor: color }}
+                                />
+                                <span className="font-semibold" style={{ color }}>
+                                  {ingredientName(ing)}
+                                </span>
+                              </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     </div>
@@ -165,59 +167,24 @@ export default function MenuPage() {
           })
         )}
 
-        {/* Procedures Section — the Smoothie & Milkshake procedures belong to
-            the drinks, so only surface them under "All" or "Drinks". A search
-            still finds them from any category. */}
-        {(() => {
-          const inDrinks = activeCategory === "All" || activeCategory === "Drinks";
-          const relevantProcedures = Object.entries(procedures).filter(([key]) => {
-            if (search) {
-              return (
-                key.toLowerCase().includes(search.toLowerCase()) ||
-                procedures[key as keyof typeof procedures].title.toLowerCase().includes(search.toLowerCase())
-              );
-            }
-            return inDrinks;
-          });
-          if (relevantProcedures.length === 0) return null;
-          return (
-            <div className="mt-8 print:hidden">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">Procedures</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {relevantProcedures.map(([key, proc]) => (
-                  <div
-                    key={key}
-                    className="bg-white rounded-xl border border-gray-200 p-4"
-                  >
-                    <h3 className="font-bold text-gray-900 mb-2">{proc.title}</h3>
-                    <ol className="space-y-1">
-                      {proc.steps.map((step, idx) => (
-                        <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                          <span className="font-bold text-red-600 flex-shrink-0">
-                            {idx + 1}.
-                          </span>
-                          {step}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
-
         <div className="text-center py-6 print:hidden">
           <p className="text-xs text-gray-400">© Between the Buns — Recipe Cheat Sheets</p>
         </div>
       </div>
 
-      {/* Print / PDF export — every recipe and procedure, no search or tab filter */}
+      {/* Print / PDF export — every recipe, grouped by category, no search or tab filter */}
       <div id="print-section" className="hidden print:block max-w-4xl mx-auto px-4 py-6 text-gray-900">
         <div className="mb-5 border-b border-gray-400 pb-3">
           <h1 className="text-2xl font-bold">Recipe Cheat Sheets</h1>
           <p className="text-xs mt-1">
             Between the Buns — Menu Specifications — {menuItems.length} recipes
+          </p>
+          <p className="text-[11px] mt-1 font-bold flex gap-3">
+            {(Object.keys(stationColors) as (keyof typeof stationColors)[]).map((key) => (
+              <span key={key} style={{ color: stationColors[key].color }}>
+                {stationColors[key].label}
+              </span>
+            ))}
           </p>
         </div>
 
@@ -230,47 +197,29 @@ export default function MenuPage() {
               .filter((item) => item.category === cat)
               .map((item) => (
                 <div
-                  key={`${item.section}-${item.name}`}
+                  key={`${item.category}-${item.name}`}
                   className="mb-3 break-inside-avoid"
                 >
-                  <div className="flex items-baseline gap-2 flex-wrap">
-                    <h3 className="font-semibold">{item.name}</h3>
-                    <span className="text-[10px] px-1.5 py-0.5 bg-gray-100 rounded-full">
-                      {item.section}
-                    </span>
-                    {item.station && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-200">
-                        {stationColors[item.station].label}
-                      </span>
-                    )}
-                  </div>
+                  <h3 className="font-semibold">{item.name}</h3>
                   <ul className="text-sm mt-1 space-y-0.5">
-                    {item.ingredients.map((ing, idx) => (
-                      <li key={idx}>• {ing}</li>
-                    ))}
+                    {item.ingredients.map((ing, idx) => {
+                      const station = ingredientStation(ing);
+                      const color = station ? stationColors[station].color : "#111827";
+                      return (
+                        <li
+                          key={idx}
+                          className="font-semibold"
+                          style={{ color, printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }}
+                        >
+                          • {ingredientName(ing)}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               ))}
           </section>
         ))}
-
-        <section className="mb-6">
-          <h2 className="text-sm font-bold uppercase tracking-wide border-b border-gray-300 pb-1 mb-2">
-            Procedures
-          </h2>
-          {Object.entries(procedures).map(([key, proc]) => (
-            <div key={key} className="mb-3 break-inside-avoid">
-              <h3 className="font-semibold">{proc.title}</h3>
-              <ol className="text-sm mt-1 space-y-0.5">
-                {proc.steps.map((step, idx) => (
-                  <li key={idx}>
-                    <span className="font-bold">{idx + 1}.</span> {step}
-                  </li>
-                ))}
-              </ol>
-            </div>
-          ))}
-        </section>
 
         <p className="text-xs text-gray-500 text-center mt-6">
           © Between the Buns — Recipe Cheat Sheets

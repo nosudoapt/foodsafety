@@ -25,7 +25,7 @@ import {
 } from "@/lib/branding-requests";
 
 const COLS =
-  "id, title, category, description, priority, status, requested_by, due_date, location_id, created_at, updated_at";
+  "id, title, category, description, priority, status, requested_by, contact_email, file_url, file_name, due_date, location_id, created_at, updated_at";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -74,7 +74,33 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
     priority: "normal",
     due_date: "",
     description: "",
+    contact_email: "",
   });
+  const [file, setFile] = useState<{ name: string; url: string } | null>(null);
+  const [fileErr, setFileErr] = useState<string | null>(null);
+
+  const pickFile = async (f: File | undefined) => {
+    setFileErr(null);
+    if (!f) {
+      setFile(null);
+      return;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      setFileErr("File must be under 5 MB — compress the image or PDF first.");
+      return;
+    }
+    const url = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("read failed"));
+      reader.readAsDataURL(f);
+    }).catch(() => "");
+    if (!url) {
+      setFileErr("Couldn't read that file — try a JPG, PNG or PDF.");
+      return;
+    }
+    setFile({ name: f.name, url });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -137,14 +163,18 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
       due_date: form.due_date || null,
       description: form.description.trim() || null,
       requested_by: requester ?? role,
+      contact_email: form.contact_email.trim() || null,
+      file_url: file?.url ?? null,
+      file_name: file?.name ?? null,
       location_id: activeLocationId(),
     });
     if (err) {
-      setError("Couldn't file the request — run supabase/schema-branding-requests.sql, then retry.");
+      setError("Couldn't file the request — run supabase/schema-branding-requests.sql and schema-branding-attachments.sql, then retry.");
       setSaving(false);
       return;
     }
-    setForm({ title: "", category: "signage", priority: "normal", due_date: "", description: "" });
+    setForm({ title: "", category: "signage", priority: "normal", due_date: "", description: "", contact_email: "" });
+    setFile(null);
     setNotice(`Filed: ${title}`);
     setSaving(false);
     await load();
@@ -275,6 +305,36 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
             placeholder="Sizes, colours, deadline, who it's for…"
           />
         </label>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm grow min-w-[12rem]">
+            <span className="block text-xs font-medium text-slate-500 mb-1">Your email (designer replies here)</span>
+            <Input
+              accent="amber"
+              type="email"
+              value={form.contact_email}
+              onChange={(e) => setForm((f) => ({ ...f, contact_email: e.target.value }))}
+              placeholder="manager@store.com"
+            />
+          </label>
+          <label className="text-sm">
+            <span className="block text-xs font-medium text-slate-500 mb-1">Attachment (JPG/PNG/PDF, ≤5 MB)</span>
+            <input
+              type="file"
+              accept=".jpg,.jpeg,.png,.pdf,.svg,.psd,.ai"
+              onChange={(e) => pickFile(e.target.files?.[0])}
+              className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold hover:file:bg-slate-50"
+            />
+          </label>
+          {file && (
+            <span className="text-xs text-slate-600">
+              📎 {file.name}{" "}
+              <button className="text-slate-400 hover:text-red-600" onClick={() => setFile(null)}>
+                remove
+              </button>
+            </span>
+          )}
+        </div>
+        {fileErr && <p className="mt-2 text-xs text-red-600">{fileErr}</p>}
       </Card>
 
       {loading ? (
@@ -313,10 +373,32 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
                       {r.description && (
                         <p className="mt-2 text-xs text-slate-500 line-clamp-3">{r.description}</p>
                       )}
+                      {r.file_url && (
+                        <a
+                          href={r.file_url}
+                          download={r.file_name ?? "attachment"}
+                          className="mt-2 inline-block text-xs font-semibold text-amber-700 hover:text-amber-800"
+                        >
+                          📎 {r.file_name ?? "Attachment"} (tap to download)
+                        </a>
+                      )}
                       <p className="mt-2 text-[11px] text-slate-400">
                         {r.requested_by ? `by ${r.requested_by}` : "—"}
+                        {r.contact_email ? ` · ${r.contact_email}` : ""}
                         {r.due_date && <span className={DUE_STYLE[tone]}> · {DUE_TEXT[tone]}</span>}
                       </p>
+                      <button
+                        className="mt-1 text-[11px] font-semibold text-amber-700 hover:text-amber-800"
+                        onClick={() => {
+                          const subject = encodeURIComponent(`Branding: ${r.title}`);
+                          const body = encodeURIComponent(
+                            `Hi,\n\nRe: ${r.title} [${r.category} / ${r.priority}]${r.due_date ? ` — needed by ${r.due_date}` : ""}\n\n${r.description ?? ""}\n\n${r.file_url ? "Attachment is pinned on the request card — open the board to download it (email can't carry attachments).\n\n" : ""}Thanks!`,
+                          );
+                          window.location.href = `mailto:${(r.contact_email ?? "").trim()}?subject=${subject}&body=${body}`;
+                        }}
+                      >
+                        Email about this request
+                      </button>
                       {!readOnly && (
                         <select
                           aria-label={`Status for ${r.title}`}

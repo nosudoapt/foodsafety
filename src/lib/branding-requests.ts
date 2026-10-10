@@ -22,6 +22,11 @@ export interface BrandingRequest {
   priority: string;
   status: string;
   requested_by?: string | null;
+  /** Reply-to email for the requester — used by the Email designer button. */
+  contact_email?: string | null;
+  /** Optional pinned file (base64 data URL) + original name. */
+  file_url?: string | null;
+  file_name?: string | null;
   due_date?: string | null;
   location_id?: string | null;
   created_at?: string;

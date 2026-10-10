@@ -5,14 +5,16 @@ import PrintButton from "@/components/PrintButton";
 
 export default function GlutenFreeMenuPage() {
   return (
-    <div className="min-h-screen bg-[#fdf8e8]">
+    // Same printable-surface pattern as the allergen chart: @media print hides
+    // everything else, so the menu + credits are exactly what hits the paper.
+    <div id="print-section" className="min-h-screen bg-[#fdf8e8]">
       {/* Header — brand wordmark on cream, matching the printed sheet */}
       <div className="max-w-2xl mx-auto px-4 pt-8 pb-4 text-center">
         <BtbWordmark className="text-3xl sm:text-4xl justify-center" />
         <h1 className="text-2xl font-bold text-gray-900 mt-3">Gluten Free Menu</h1>
         <div className="mx-auto mt-2 h-1 w-20 rounded-full bg-[#b65a2e]" />
         {/* The whole sheet is the printable content — only the control drops out. */}
-        <div className="mt-3 flex justify-center">
+        <div className="mt-3 flex justify-center print:hidden">
           <PrintButton />
         </div>
       </div>
@@ -29,7 +31,7 @@ export default function GlutenFreeMenuPage() {
             <ul className="space-y-2">
               <li className="flex items-start gap-2 text-sm text-gray-800">
                 <span className="text-green-600 font-bold">•</span>
-                Caesar Salad
+                Caesar Salad (no croutons)
               </li>
               <li className="flex items-start gap-2 text-sm text-gray-800">
                 <span className="text-green-600 font-bold">•</span>

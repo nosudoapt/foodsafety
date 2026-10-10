@@ -264,6 +264,33 @@ function StaffSchedule({ readOnly }: { readOnly: boolean }) {
               </select>
             </label>
             <span className="text-xs text-slate-400">Shifts age out after {STAFF_SCHEDULE_RETENTION_DAYS} days</span>
+            <span className="ml-auto flex gap-2 print:hidden">
+              <Button
+                accent="blue"
+                variant="soft"
+                onClick={() => {
+                  const emails = members.map((m) => (m.email ?? "").trim()).filter(Boolean);
+                  const lines = days.map((day) => {
+                    const list = byDay[day];
+                    const body = list.length
+                      ? list.map((s) => `${nameOf(s.staff_member_id)} ${shiftLabel(s.start_time, s.end_time)}`).join("; ")
+                      : "—";
+                    return `${dayLabel(day)}: ${body}`;
+                  });
+                  const subject = encodeURIComponent(`Staff schedule ${weekLabel}`);
+                  const text = encodeURIComponent(`Hi team,\n\nHere is the schedule for ${weekLabel}:\n\n${lines.join("\n")}\n\nThanks!`);
+                  window.location.href = `mailto:${emails.join(",")}?subject=${subject}&body=${text}`;
+                }}
+              >
+                Email schedule
+              </Button>
+              <Button accent="blue" variant="soft" onClick={() => window.print()}>
+                Print
+              </Button>
+            </span>
+            {!members.some((m) => (m.email ?? "").trim()) && (
+              <span className="text-xs text-amber-600">Add emails on the Roster tab so Email schedule reaches staff.</span>
+            )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">

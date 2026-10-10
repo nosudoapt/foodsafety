@@ -5,12 +5,13 @@ import {
   BookOpen, Calculator, ClipboardList, LayoutGrid,
   Sparkles, AlertTriangle, Salad, UtensilsCrossed,
   Phone, FileText, BookCheck, Printer, ShieldCheck,
-  File as FileIcon, IdCard, ClipboardCheck, Megaphone, ListChecks, KeyRound,
+  File as FileIcon, IdCard, ClipboardCheck, Megaphone, ListChecks, KeyRound, Flame,
   Search,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Input, NavCard } from "@/components/ui";
 import { cardsForRole, hiddenCardsForRole, type BtbIconKey } from "@/lib/btb-hub";
+import BtbWordmark from "@/components/BtbWordmark";
 import type { BtbRole } from "@/lib/btb-roles";
 
 const ICONS: Record<BtbIconKey, LucideIcon> = {
@@ -32,6 +33,7 @@ const ICONS: Record<BtbIconKey, LucideIcon> = {
   clipboardCheck: ClipboardCheck,
   megaphone: Megaphone,
   listChecks: ListChecks,
+  flame: Flame,
   key: KeyRound,
 };
 
@@ -52,13 +54,13 @@ export default function BtbHub({ role }: { role: BtbRole }) {
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
       <div className="text-center mb-8 animate-fade-in">
-        <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-sm">
-          <span className="text-white font-bold text-xl">BTB</span>
+        <div className="flex justify-center mb-3">
+          <BtbWordmark className="text-2xl sm:text-3xl" />
         </div>
         <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Staff Resource Hub</h1>
         <p className="text-slate-500 mt-1">Everything your team needs, in one place</p>
         <p className="mt-3">
-          <span className="inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700 uppercase tracking-wide">
+          <span className="inline-flex items-center text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#f3e2cf] text-[#b65a2e] uppercase tracking-wide">
             Viewing as {role.replace("_", " ")}
           </span>
         </p>

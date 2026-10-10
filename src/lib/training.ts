@@ -12,6 +12,8 @@ export interface TrainingTopic {
   published: boolean;
   position: number;
   created_by?: string | null;
+  /** Optional training video — YouTube link or direct mp4 URL. */
+  video_url?: string | null;
 }
 
 export interface TrainingSection {

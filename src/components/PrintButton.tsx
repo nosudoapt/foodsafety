@@ -18,7 +18,7 @@ export default function PrintButton({
     <button
       type="button"
       onClick={onClick ?? (() => window.print())}
-      className={`print:hidden inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold bg-red-600 text-white hover:bg-red-700 transition-colors ${className}`}
+      className={`print:hidden inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold bg-[#E07B2E] text-white hover:bg-[#c76a24] transition-colors ${className}`}
     >
       🖨️ {label}
     </button>

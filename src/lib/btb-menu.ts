@@ -1,461 +1,166 @@
 export type Station = "fryer" | "line" | "hot-plate";
 
+// One ingredient line on a recipe cheat sheet. A bare string renders in the
+// default dark colour; a [name, station] tuple colours the line by the station
+// that preps it, matching the printed charts: fryer = red, line = green,
+// hot-plate = purple. Dips and "on the side" items stay uncoloured.
+export type Ingredient = string | [name: string, station: Station];
+
 export interface MenuItem {
   name: string;
+  // Drives the cheat-sheet tabs. Mirrors the printed chart sections:
+  // Signature Burgers, Classic Burgers, Garden Burgers, Kids & Lunch,
+  // Handhelds, Salads, Smoothies, Milkshakes.
   category: string;
-  section: string;
-  ingredients: string[];
-  station?: Station;
+  ingredients: Ingredient[];
+}
+
+/** Display text of an ingredient line, tuple or not. */
+export function ingredientName(ing: Ingredient): string {
+  return typeof ing === "string" ? ing : ing[0];
+}
+
+/** Station colouring an ingredient line, or undefined for the default colour. */
+export function ingredientStation(ing: Ingredient): Station | undefined {
+  return typeof ing === "string" ? undefined : ing[1];
 }
 
 export const menuItems: MenuItem[] = [
   // SIGNATURE BURGERS
-  {
-    name: "Driving Crazy",
-    category: "Burgers",
-    section: "Signature",
-    ingredients: [
-      "Elk patty",
-      "Swiss cheese",
-      "Honey mustard",
-      "Avocado sauce",
-      "Sriracha",
-      "Lettuce",
-      "Red onions",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Lamborghini",
-    category: "Burgers",
-    section: "Signature",
-    ingredients: [
-      "Lamb patty",
-      "Feta cheese",
-      "Chipotle Mint",
-      "Red onions",
-      "Cucumber",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Oinker Delight",
-    category: "Burgers",
-    section: "Signature",
-    ingredients: [
-      "Boar patty",
-      "BBQ Sauce",
-      "Spicy cranberry",
-      "Coleslaw",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Mission Bison",
-    category: "Burgers",
-    section: "Signature",
-    ingredients: [
-      "Bison patty",
-      "Cheddar",
-      "Caramelized onions",
-      "Bacon x2",
-      "Bacon ketchup",
-      "Lettuce",
-      "Tomato",
-    ],
-    station: "hot-plate",
-  },
+  { name: "Driving Crazy", category: "Signature Burgers", ingredients: [
+    ["Elk patty", "hot-plate"], ["Swiss cheese", "hot-plate"], ["Honey mustard", "line"],
+    ["Avocado sauce", "line"], ["Sriracha", "line"], ["Lettuce", "line"], ["Red onions", "line"],
+  ] },
+  { name: "Lamborghini", category: "Signature Burgers", ingredients: [
+    ["Lamb patty", "hot-plate"], ["Feta cheese", "hot-plate"], ["Chipotle Mint", "line"],
+    ["Red onions", "line"], ["Cucumber", "line"],
+  ] },
+  { name: "Oinker Delight", category: "Signature Burgers", ingredients: [
+    ["Boar patty", "hot-plate"], ["BBQ Sauce", "line"], ["Spicy cranberry", "line"], ["Coleslaw", "line"],
+  ] },
+  { name: "Mission Bison", category: "Signature Burgers", ingredients: [
+    ["Bison patty", "hot-plate"], ["Cheddar", "hot-plate"], ["Caramelized onions", "hot-plate"],
+    ["Bacon x2", "hot-plate"], ["Bacon ketchup", "line"], ["Lettuce", "line"], ["Tomato", "line"],
+  ] },
 
   // CLASSIC BURGERS
-  {
-    name: "Buffalo Crunch",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "Fried chicken",
-      "Buffalo sauce toss",
-      "Honey slaw",
-      "Sliced pickles",
-    ],
-    station: "fryer",
-  },
-  {
-    name: "Cajun Bird",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "Cajun breast",
-      "Cheddar",
-      "Caramelized onions",
-      "Smoky mayo",
-      "Lettuce",
-      "Tomato",
-    ],
-    station: "line",
-  },
-  {
-    name: "Gordon Turkey",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "Turkey patty",
-      "Ham slices x2",
-      "Swiss cheese",
-      "Smoky mayo",
-      "Spicy cranberry",
-      "Lettuce",
-      "Tomato",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Fish N Chippy",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "4 oz Cod fish (cut into 2)",
-      "3pcs fries",
-      "Swiss cheese",
-      "Tartar",
-      "Coleslaw",
-    ],
-    station: "fryer",
-  },
-  {
-    name: "Ridiculously Huge",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "2x5 oz beef patty",
-      "Cheddar x2",
-      "Mushroom",
-      "Bacon x2",
-      "Smoky mayo",
-      "Lettuce",
-      "Tomato",
-      "Red onions",
-      "Pickles",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "So Satisfrying",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "5oz beef patty",
-      "Cheddar",
-      "Bacon x2",
-      "Onion ring x2",
-      "Fried pickle x1",
-      "Smoky mayo",
-      "Lettuce",
-      "Tomato",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Mozza Madness",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "2x3oz beef patty",
-      "Mozza slice x1",
-      "Bacon x2",
-      "Mozza sticks x3",
-      "Smoky mayo",
-      "Lettuce",
-      "Tomato",
-      "Pickles",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Cheese Please",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "5oz beef patty",
-      "Cheddar",
-      "Mozzarella",
-      "Smoky mayo",
-      "Lettuce",
-      "Tomato",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Chick N Licking",
-    category: "Burgers",
-    section: "Classic",
-    ingredients: [
-      "Fried chicken",
-      "Parmesan cheese",
-      "Bacon x2",
-      "Caesar dressing",
-      "Lettuce",
-    ],
-    station: "fryer",
-  },
+  { name: "Buffalo Crunch", category: "Classic Burgers", ingredients: [
+    ["Fried chicken", "fryer"], ["Buffalo sauce toss", "line"], ["Honey slaw", "line"], ["Sliced pickles", "line"],
+  ] },
+  { name: "Cajun Bird", category: "Classic Burgers", ingredients: [
+    ["Cajun breast", "hot-plate"], ["Cheddar", "hot-plate"], ["Caramelized onions", "hot-plate"],
+    ["Smoky mayo", "line"], ["Lettuce", "line"], ["Tomato", "line"],
+  ] },
+  { name: "Gordon Turkey", category: "Classic Burgers", ingredients: [
+    ["Turkey patty", "hot-plate"], ["Ham slices x2", "hot-plate"], ["Swiss cheese", "hot-plate"],
+    ["Smoky mayo", "line"], ["Spicy cranberry", "line"], ["Lettuce", "line"], ["Tomato", "line"],
+  ] },
+  { name: "Fish N Chippy", category: "Classic Burgers", ingredients: [
+    ["4 oz Cod fish (cut into 2)", "fryer"], ["3pcs fries", "fryer"], ["Swiss cheese", "hot-plate"],
+    ["Tartar", "line"], ["Coleslaw", "line"],
+  ] },
+  { name: "Ridiculously Huge", category: "Classic Burgers", ingredients: [
+    ["2x5 oz beef patty", "hot-plate"], ["Cheddar x2", "hot-plate"], ["Mushroom", "hot-plate"],
+    ["Bacon x2", "hot-plate"], ["Smoky mayo", "line"], ["Lettuce", "line"], ["Tomato", "line"],
+    ["Red onions", "line"], ["Pickles", "line"],
+  ] },
+  { name: "So Satisfrying", category: "Classic Burgers", ingredients: [
+    ["5oz beef patty", "hot-plate"], ["Cheddar", "hot-plate"], ["Bacon x2", "hot-plate"],
+    ["Onion ring x2", "fryer"], ["Fried pickle x1", "fryer"], ["Smoky mayo", "line"],
+    ["Lettuce", "line"], ["Tomato", "line"],
+  ] },
+  { name: "Mozza Madness", category: "Classic Burgers", ingredients: [
+    ["2x3oz beef patty", "hot-plate"], ["Mozza slice x1", "hot-plate"], ["Bacon x2", "hot-plate"],
+    ["Mozza sticks x3", "fryer"], ["Smoky mayo", "line"], ["Lettuce", "line"], ["Tomato", "line"], ["Pickles", "line"],
+  ] },
+  { name: "Cheese Please", category: "Classic Burgers", ingredients: [
+    ["5oz beef patty", "hot-plate"], ["Cheddar", "hot-plate"], ["Mozzarella", "hot-plate"],
+    ["Smoky mayo", "line"], ["Lettuce", "line"], ["Tomato", "line"],
+  ] },
+  { name: "Chick N Licking", category: "Classic Burgers", ingredients: [
+    ["Fried chicken", "fryer"], ["Parmesan cheese", "hot-plate"], ["Bacon x2", "hot-plate"],
+    ["Caesar dressing", "line"], ["Lettuce", "line"],
+  ] },
 
   // GARDEN BURGERS
-  {
-    name: "Aloo Tikki",
-    category: "Burgers",
-    section: "Garden",
-    ingredients: [
-      "Aloo Tikki x1",
-      "Cheddar",
-      "Chipotle Mint",
-      "Ketchup",
-      "Lettuce",
-      "Red Onions",
-      "Cucumber",
-    ],
-    station: "fryer",
-  },
-  {
-    name: "Where Is The Beef",
-    category: "Burgers",
-    section: "Garden",
-    ingredients: [
-      "Veggie Patty",
-      "Vegan Mayo",
-      "Lettuce",
-      "Tomato",
-      "Pickle",
-    ],
-    station: "hot-plate",
-  },
+  { name: "Aloo Tikki", category: "Garden Burgers", ingredients: [
+    ["Aloo Tikki x1", "fryer"], ["Cheddar", "hot-plate"], ["Chipotle Mint", "line"], ["Ketchup", "line"],
+    ["Lettuce", "line"], ["Red Onions", "line"], ["Cucumber", "line"],
+  ] },
+  { name: "Where Is The Beef", category: "Garden Burgers", ingredients: [
+    ["Veggie Patty", "hot-plate"], ["Vegan Mayo", "line"], ["Lettuce", "line"], ["Tomato", "line"], ["Pickle", "line"],
+  ] },
 
   // KIDS & LUNCH
-  {
-    name: "Kids Burger",
-    category: "Kids & Lunch",
-    section: "Kids",
-    ingredients: [
-      "3 oz Beef Patty",
-      "Cheddar",
-      "Ketchup",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Lunch Special Burger",
-    category: "Kids & Lunch",
-    section: "Lunch",
-    ingredients: [
-      "2 x 3oz beef patty",
-      "Cheddar x1",
-      "Smoky mayo",
-      "Lettuce",
-      "Tomato",
-    ],
-    station: "hot-plate",
-  },
+  { name: "Kids Burger", category: "Kids & Lunch", ingredients: [
+    ["3 oz Beef Patty", "hot-plate"], ["Cheddar", "hot-plate"], ["Ketchup", "line"],
+  ] },
+  { name: "Lunch Special Burger", category: "Kids & Lunch", ingredients: [
+    ["2 x 3oz beef patty", "hot-plate"], ["Cheddar x1", "hot-plate"], ["Smoky mayo", "line"],
+    ["Lettuce", "line"], ["Tomato", "line"],
+  ] },
 
   // HANDHELDS
-  {
-    name: "Greek Chicken Wrap",
-    category: "Handhelds",
-    section: "Wraps",
-    ingredients: [
-      "Grilled Chicken",
-      "Greek Dressing",
-      "Romaine",
-      "Cucumber",
-      "Tomato",
-      "Red Onions",
-      "Red Pepper",
-      "Black Olives",
-      "Feta",
-      "Oregano",
-    ],
-    station: "hot-plate",
-  },
-  {
-    name: "Chipotle Chicken Wrap",
-    category: "Handhelds",
-    section: "Wraps",
-    ingredients: [
-      "Breaded Chicken Fingers x2",
-      "Chipotle Mayo",
-      "Romaine",
-      "Cheddar",
-      "Tomato",
-      "Onion",
-    ],
-  },
-  {
-    name: "Chicken Caesar Wrap",
-    category: "Handhelds",
-    section: "Wraps",
-    ingredients: [
-      "Breaded Chicken Fingers x2",
-      "Bacon x2",
-      "Caesar Dressing",
-      "Romaine",
-      "Parmesan",
-    ],
-  },
+  { name: "Greek Chicken Wrap", category: "Handhelds", ingredients: [
+    ["Grilled Chicken", "hot-plate"], ["Greek Dressing", "line"], ["Romaine", "line"], ["Cucumber", "line"],
+    ["Tomato", "line"], ["Red Onions", "line"], ["Red Pepper", "line"], ["Black Olives", "line"],
+    ["Feta", "line"], ["Oregano", "line"],
+  ] },
+  { name: "Chipotle Chicken Wrap", category: "Handhelds", ingredients: [
+    ["Breaded Chicken Fingers x2", "fryer"], ["Chipotle Mayo", "line"], ["Romaine", "line"],
+    ["Cheddar", "line"], ["Tomato", "line"], ["Onion", "line"],
+  ] },
+  { name: "Chicken Caesar Wrap", category: "Handhelds", ingredients: [
+    ["Breaded Chicken Fingers x2", "fryer"], ["Bacon x2", "hot-plate"], ["Caesar Dressing", "line"],
+    ["Romaine", "line"], ["Parmesan", "line"],
+  ] },
 
   // SALADS
-  {
-    name: "Greek Salad",
-    category: "Salads",
-    section: "Salads",
-    ingredients: [
-      "Romaine",
-      "Cucumber",
-      "Tomato",
-      "Red Onions",
-      "Red Pepper",
-      "Black Olives",
-      "Feta",
-      "Oregano",
-      "Garlic Toast x1",
-      "Greek Dressing (dip)",
-    ],
-  },
-  {
-    name: "Caesar Salad",
-    category: "Salads",
-    section: "Salads",
-    ingredients: [
-      "Romaine",
-      "Parmesan",
-      "Croutons",
-      "Lemon wedge x1",
-      "Bacon x2 chopped",
-      "Garlic Toast x1",
-      "Caesar Dressing (dip)",
-    ],
-  },
+  { name: "Greek Salad", category: "Salads", ingredients: [
+    ["Romaine", "line"], ["Cucumber", "line"], ["Tomato", "line"], ["Red Onions", "line"],
+    ["Red Pepper", "line"], ["Black Olives", "line"], ["Feta", "line"], ["Oregano", "line"],
+    ["Garlic Toast x1", "hot-plate"], "Greek Dressing (dip)",
+  ] },
+  { name: "Caesar Salad", category: "Salads", ingredients: [
+    ["Romaine", "line"], ["Parmesan", "line"], ["Croutons", "line"], ["Lemon wedge x1", "line"],
+    ["Bacon x2 chopped", "hot-plate"], ["Garlic Toast x1", "hot-plate"], "Caesar Dressing (dip)",
+  ] },
 
-  // SMOOTHIES
-  {
-    name: "Pineapple Mango",
-    category: "Drinks",
-    section: "Smoothies",
-    ingredients: [
-      "6 pcs Mango",
-      "4 pcs Pineapple",
-      "1 large ice cube",
-      "1.5 scoop frozen yogurt",
-      "250 ml oat milk",
-    ],
-  },
-  {
-    name: "Strawberry Banana",
-    category: "Drinks",
-    section: "Smoothies",
-    ingredients: [
-      "5 pcs Strawberry",
-      "7 pcs Banana",
-      "1 large ice cube",
-      "1.5 scoop frozen yogurt",
-      "250 ml oat milk",
-    ],
-  },
-  {
-    name: "All Berry",
-    category: "Drinks",
-    section: "Smoothies",
-    ingredients: [
-      "Berry Mix – 1/3 cup",
-      "1 large ice cube",
-      "1.5 scoop frozen yogurt",
-      "250 ml oat milk",
-    ],
-  },
+  // SMOOTHIES (no station colouring — plain quantities)
+  { name: "Pineapple Mango", category: "Smoothies", ingredients: [
+    "6 pcs Mango", "4 pcs Pineapple", "1 large ice cube", "1.5 scoop frozen yogurt", "250 ml oat milk",
+  ] },
+  { name: "Strawberry Banana", category: "Smoothies", ingredients: [
+    "5 pcs Strawberry", "7 pcs Banana", "1 large ice cube", "1.5 scoop frozen yogurt", "250 ml oat milk",
+  ] },
+  { name: "All Berry", category: "Smoothies", ingredients: [
+    "Berry Mix – 1/3 cup", "1 large ice cube", "1.5 scoop frozen yogurt", "250 ml oat milk",
+  ] },
 
-  // MILKSHAKES
-  {
-    name: "Vanilla Milkshake",
-    category: "Drinks",
-    section: "Milkshakes",
-    ingredients: [
-      "125 ml milk",
-      "2.5 scoops ice cream",
-      "1.5 tbsp caramel syrup",
-    ],
-  },
-  {
-    name: "Strawberry Milkshake",
-    category: "Drinks",
-    section: "Milkshakes",
-    ingredients: [
-      "125 ml milk",
-      "2.5 scoops ice cream",
-      "1.5 tbsp strawberry syrup",
-    ],
-  },
-  {
-    name: "Chocolate Oreo Milkshake",
-    category: "Drinks",
-    section: "Milkshakes",
-    ingredients: [
-      "125 ml milk",
-      "2.5 scoops ice cream",
-      "1.5 tbsp chocolate syrup",
-      "2 pc Oreo cookies",
-    ],
-  },
-  {
-    name: "Coffee Milkshake",
-    category: "Drinks",
-    section: "Milkshakes",
-    ingredients: [
-      "125 ml milk",
-      "2.5 scoops ice cream",
-      "1 tbsp caramel syrup",
-      "2 tsp coffee",
-    ],
-  },
-  {
-    name: "Biscoff Milkshake",
-    category: "Drinks",
-    section: "Milkshakes",
-    ingredients: [
-      "125 ml milk",
-      "2.5 scoops ice cream",
-      "2 tbsp biscoff paste",
-    ],
-  },
-  {
-    name: "Kit Kat Milkshake",
-    category: "Drinks",
-    section: "Milkshakes",
-    ingredients: [
-      "125 ml milk",
-      "2.5 scoops ice cream",
-      "2 oz Kit Kat mix",
-    ],
-  },
+  // MILKSHAKES (no station colouring — plain quantities)
+  { name: "Vanilla", category: "Milkshakes", ingredients: [
+    "125 ml milk", "2.5 scoops ice cream", "1.5 tbsp caramel syrup",
+  ] },
+  { name: "Strawberry", category: "Milkshakes", ingredients: [
+    "125 ml milk", "2.5 scoops ice cream", "1.5 tbsp strawberry syrup",
+  ] },
+  { name: "Chocolate Oreo", category: "Milkshakes", ingredients: [
+    "125 ml milk", "2.5 scoops ice cream", "1.5 tbsp chocolate syrup", "2 pc Oreo cookies",
+  ] },
+  { name: "Coffee", category: "Milkshakes", ingredients: [
+    "125 ml milk", "2.5 scoops ice cream", "1 tbsp caramel syrup", "2 tsp coffee",
+  ] },
+  { name: "Biscoff", category: "Milkshakes", ingredients: [
+    "125 ml milk", "2.5 scoops ice cream", "2 tbsp biscoff paste",
+  ] },
+  { name: "Kit Kat", category: "Milkshakes", ingredients: [
+    "125 ml milk", "2.5 scoops ice cream", "2 oz Kit Kat mix",
+  ] },
 ];
 
-export const procedures = {
-  Smoothies: {
-    title: "Smoothie Procedure",
-    steps: [
-      "In a blender, add fruits, one large ice cube.",
-      "Add 1.5 scoop of frozen yogurt.",
-      "Add 250 ml of oat milk.",
-      "Blend until smooth consistency.",
-      "Transfer into the glass, cover it and serve it with straw.",
-    ],
-  },
-  Milkshakes: {
-    title: "Milkshake Procedure",
-    steps: [
-      "Pour milk into the glass, then ice cream (Size 6 scoop) and add flavour, blend it in milkshake machine.",
-      "Transfer into the glass (add whip if requested) cover it and serve it with straw.",
-    ],
-  },
-};
-
-export const stationColors: Record<Station, { bg: string; text: string; label: string }> = {
-  fryer: { bg: "bg-red-100", text: "text-red-700", label: "Fryer" },
-  line: { bg: "bg-green-100", text: "text-green-700", label: "Line" },
-  "hot-plate": { bg: "bg-purple-100", text: "text-purple-700", label: "Hot Plate" },
+// Per-station text colour + label, sampled from the printed cheat sheets.
+export const stationColors: Record<Station, { color: string; label: string }> = {
+  fryer: { color: "#a8321f", label: "Fryer" },
+  line: { color: "#2b6a2e", label: "Line" },
+  "hot-plate": { color: "#30318f", label: "Hot Plate" },
 };

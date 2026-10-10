@@ -1,8 +1,92 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { recipes } from "@/lib/btb-recipes";
 import PrintButton from "@/components/PrintButton";
+import { supabase } from "@/lib/supabase";
+import { downloadDataUrl, formatFileSize, printDataUrl } from "@/lib/files";
+
+interface OriginalManual {
+  id: string;
+  title: string;
+  file_name: string;
+  file_size: number | null;
+  file_url: string;
+}
+
+// The shared full manual PDF, uploaded once by a manager under Print &
+// Procedure Manuals → Operations. Newest Operations PDF wins, so replacing it
+// is just uploading a newer one there.
+function OriginalManualSlot() {
+  const [manual, setManual] = useState<OriginalManual | null>(null);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("print_manuals")
+        .select("id, title, file_name, file_size, file_url")
+        .eq("category", "operations")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (cancelled) return;
+      setManual((data?.[0] as OriginalManual | undefined) ?? null);
+      setLoaded(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="max-w-4xl mx-auto px-4 pb-4 print:hidden">
+      <div className="bg-white rounded-xl border-2 border-red-200 overflow-hidden">
+        <div className="px-4 py-3 bg-red-50 border-b border-red-100">
+          <h2 className="font-bold text-gray-900 text-sm">📕 Original Full Manual (PDF)</h2>
+        </div>
+        <div className="px-4 py-4">
+          {!loaded ? (
+            <p className="text-sm text-gray-400">Loading…</p>
+          ) : manual ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-gray-900 truncate">{manual.title}</p>
+                <p className="text-xs text-gray-500">
+                  {manual.file_name} · {formatFileSize(manual.file_size)}
+                </p>
+              </div>
+              <div className="ml-auto flex gap-2">
+                <button
+                  onClick={() => downloadDataUrl(manual.file_url, manual.file_name)}
+                  className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-red-700 transition"
+                >
+                  Download
+                </button>
+                <button
+                  onClick={() =>
+                    manual.file_name.toLowerCase().endsWith(".pdf")
+                      ? printDataUrl(manual.file_url)
+                      : downloadDataUrl(manual.file_url, manual.file_name)
+                  }
+                  className="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-200 transition"
+                >
+                  Print
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-500">
+              The original full manual hasn&apos;t been uploaded yet — managers, add the PDF under{" "}
+              <span className="font-semibold">Print &amp; Procedure Manuals → Operations</span> and it
+              will appear here automatically.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function PrepManualPage() {
   const [search, setSearch] = useState("");
@@ -235,6 +319,9 @@ export default function PrepManualPage() {
           © Between the Buns 2020 Version 2.0 — Content is read-only
         </p>
       </div>
+
+      {/* Original full manual — download/print the shared PDF */}
+      <OriginalManualSlot />
     </div>
   );
 }

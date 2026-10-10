@@ -12,6 +12,13 @@ export interface CashOutDraft {
   cash_out: number;
   /** Amount moved to the safe. */
   safe_drop: number;
+  /** Cash paid out of the drawer for local purchases. */
+  local_purchase: number;
+  /** Catering counts — trays, review cards handed out, tickets left open. */
+  single_trays: number;
+  large_trays: number;
+  review_cards: number;
+  open_tickets: number;
 }
 
 export interface CashOutRow extends CashOutDraft {
@@ -39,6 +46,11 @@ export function toDraft(input: {
   driver_tips: string | number;
   cash_out: string | number;
   safe_drop: string | number;
+  local_purchase?: string | number;
+  single_trays?: string | number;
+  large_trays?: string | number;
+  review_cards?: string | number;
+  open_tickets?: string | number;
 }): CashOutDraft {
   return {
     count_date: input.count_date,
@@ -48,6 +60,11 @@ export function toDraft(input: {
     driver_tips: round2(num(input.driver_tips)),
     cash_out: round2(num(input.cash_out)),
     safe_drop: round2(num(input.safe_drop)),
+    local_purchase: round2(num(input.local_purchase)),
+    single_trays: round2(num(input.single_trays)),
+    large_trays: round2(num(input.large_trays)),
+    review_cards: round2(num(input.review_cards)),
+    open_tickets: round2(num(input.open_tickets)),
   };
 }
 
@@ -55,9 +72,9 @@ export function toDraft(input: {
 export const totalCashIn = (d: CashOutDraft): number =>
   round2(num(d.cash_sale) + num(d.delivery_fees) + num(d.driver_tips));
 
-/** What actually left the drawer: the hand-over plus the safe drop. */
+/** What actually left the drawer: the hand-over plus the safe drop plus local purchases. */
 export const totalDropped = (d: CashOutDraft): number =>
-  round2(num(d.cash_out) + num(d.safe_drop));
+  round2(num(d.cash_out) + num(d.safe_drop) + num(d.local_purchase));
 
 /** Still in the till after the drop — anything other than 0 wants a recount. */
 export const tillLeft = (d: CashOutDraft): number =>
@@ -72,6 +89,11 @@ export const isEmptyDraft = (d: CashOutDraft): boolean =>
     d.driver_tips,
     d.cash_out,
     d.safe_drop,
+    d.local_purchase,
+    d.single_trays,
+    d.large_trays,
+    d.review_cards,
+    d.open_tickets,
   ].every((v) => num(v) === 0);
 
 /** Sums across a history window, for the totals row. */
@@ -85,8 +107,13 @@ export function totalsFor(rows: readonly CashOutDraft[]): CashOutDraft {
       driver_tips: round2(acc.driver_tips + num(r.driver_tips)),
       cash_out: round2(acc.cash_out + num(r.cash_out)),
       safe_drop: round2(acc.safe_drop + num(r.safe_drop)),
+      local_purchase: round2(acc.local_purchase + num(r.local_purchase)),
+      single_trays: round2(acc.single_trays + num(r.single_trays)),
+      large_trays: round2(acc.large_trays + num(r.large_trays)),
+      review_cards: round2(acc.review_cards + num(r.review_cards)),
+      open_tickets: round2(acc.open_tickets + num(r.open_tickets)),
     }),
-    { count_date: "", till_amount: 0, cash_sale: 0, delivery_fees: 0, driver_tips: 0, cash_out: 0, safe_drop: 0 },
+    { count_date: "", till_amount: 0, cash_sale: 0, delivery_fees: 0, driver_tips: 0, cash_out: 0, safe_drop: 0, local_purchase: 0, single_trays: 0, large_trays: 0, review_cards: 0, open_tickets: 0 },
   );
 }
 

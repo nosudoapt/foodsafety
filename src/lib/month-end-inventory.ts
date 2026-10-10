@@ -113,3 +113,25 @@ export function variance(current: number, previous: number): { delta: number; pc
 export function countsByItem(counts: readonly InventoryCount[]): Map<string, number> {
   return new Map(counts.map((c) => [c.item_id, countQty(c.qty)]));
 }
+
+// --- month math ------------------------------------------------------------
+// Closing comes from the count sheet itself:
+//   usage = opening + purchases − closing · food cost % = usage ÷ sales.
+export interface MonthSummary {
+  opening_value: number;
+  purchases: number;
+  sales: number;
+}
+
+/** Food used in the month ($): opening + purchases − closing. Never negative. */
+export function usageValue(opening: number, purchases: number, closing: number): number {
+  return Math.round((Math.max(0, countQty(opening)) + Math.max(0, countQty(purchases)) - Math.max(0, countQty(closing))) * 100) / 100;
+}
+
+/** Food cost % = usage ÷ sales × 100. 0 when sales are 0. One decimal. */
+export function foodCostPct(opening: number, purchases: number, closing: number, sales: number): number {
+  const usage = usageValue(opening, purchases, closing);
+  const s = Math.max(0, countQty(sales));
+  if (s === 0) return 0;
+  return Math.round((usage / s) * 1000) / 10;
+}
