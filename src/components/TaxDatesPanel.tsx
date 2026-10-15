@@ -45,6 +45,7 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
     recurrence: "none",
     notes: "",
   });
+  const [gstFreq, setGstFreq] = useState("quarterly");
 
   const now = today();
 
@@ -71,7 +72,6 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount load
   }, []);
 
   const visible = useMemo(
@@ -125,6 +125,30 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
       return;
     }
     setNotice("Deadline removed");
+    await load();
+  };
+
+  // One-tap presets: GST return on the chosen filing frequency, CRA annual filing.
+  const quickAdd = async (title: string, recurrence: string, due_date: string, notes: string) => {
+    if (readOnly || saving) return;
+    setSaving(true);
+    setError(null);
+    const { error: err } = await supabase.from("corporate_dates").insert({
+      title,
+      category: "tax",
+      due_date,
+      recurrence,
+      notes,
+      created_by: null,
+      location_id: activeLocationId(),
+    });
+    if (err) {
+      setError("Couldn't save — run supabase/schema-tax-dates.sql, then retry.");
+      setSaving(false);
+      return;
+    }
+    setNotice(`Added: ${title}`);
+    setSaving(false);
     await load();
   };
 
@@ -231,6 +255,51 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
             <p className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
               <CalendarPlus className="w-4 h-4 text-red-600" /> Add a deadline
             </p>
+            <div className="mb-4 rounded-xl bg-slate-50 border border-slate-200 p-3 space-y-2">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide">Quick add</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  aria-label="GST filing frequency"
+                  className="font-bold text-slate-900 text-xs bg-white border border-slate-300 rounded-lg px-2 h-8 outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  value={gstFreq}
+                  onChange={(e) => setGstFreq(e.target.value)}
+                >
+                  <option value="monthly">GST · monthly</option>
+                  <option value="quarterly">GST · quarterly</option>
+                  <option value="annual">GST · annually</option>
+                </select>
+                <Button
+                  accent="red"
+                  variant="soft"
+                  disabled={saving}
+                  onClick={() =>
+                    quickAdd(
+                      "GST Return",
+                      gstFreq,
+                      today(),
+                      `GST filing (${gstFreq}) — adjust the date to your period end`,
+                    )
+                  }
+                >
+                  + GST return
+                </Button>
+                <Button
+                  accent="red"
+                  variant="soft"
+                  disabled={saving}
+                  onClick={() =>
+                    quickAdd(
+                      "CRA Annual Tax Filing",
+                      "annual",
+                      today(),
+                      "T2 corporate return — adjust to your year-end + 6 months",
+                    )
+                  }
+                >
+                  + CRA annual filing
+                </Button>
+              </div>
+            </div>
             <div className="space-y-3">
               <label className="block text-sm">
                 <span className="block text-xs font-medium text-slate-500 mb-1">Name *</span>
