@@ -592,8 +592,8 @@ function SheetColumn({
 }) {
   const pullMode = column.mode === "pull";
   const rowClass = pullMode
-    ? "grid grid-cols-[1fr_42px_42px_34px] gap-1"
-    : "grid grid-cols-[1fr_44px_36px_32px_36px_34px] gap-1";
+    ? "grid grid-cols-[1fr_30px_42px_42px_34px] gap-1"
+    : "grid grid-cols-[1fr_30px_44px_36px_32px_36px_34px] gap-1";
   const cellClass =
     "w-full px-1 py-0.5 text-[11px] border border-gray-200 rounded text-gray-900 text-center focus:ring-1 focus:ring-red-500";
 
@@ -615,6 +615,7 @@ function SheetColumn({
             className={`${rowClass} px-3 py-1 bg-gray-50 border-b border-gray-200 text-[10px] font-bold text-gray-500 uppercase`}
           >
             <span>Item</span>
+            <span title="Urgent — flag for the manager">Urg</span>
             {!pullMode && <span>Unit</span>}
             {!pullMode && <span title="Par level">Par</span>}
             <span title="On hand">OH</span>
@@ -685,16 +686,16 @@ function Row({
             <span className="ml-1 text-[10px] font-normal text-gray-400">{item.unit}</span>
           )}
         </span>
-        <input
-          type="checkbox"
-          aria-label={`Urgent: ${item.name}`}
-          title="Urgent"
-          checked={e.urgent}
-          disabled={readOnly}
-          onChange={(ev) => updateEntry(key, "urgent", ev.target.checked)}
-          className="w-3.5 h-3.5 shrink-0 accent-red-600 cursor-pointer disabled:cursor-not-allowed"
-        />
       </span>
+      <input
+        type="checkbox"
+        aria-label={`Urgent: ${item.name}`}
+        title="Urgent"
+        checked={e.urgent}
+        disabled={readOnly}
+        onChange={(ev) => updateEntry(key, "urgent", ev.target.checked)}
+        className="w-3.5 h-3.5 place-self-center accent-red-600 cursor-pointer disabled:cursor-not-allowed"
+      />
 
       {!pullMode && (
         <span className="text-[10px] text-gray-500 truncate">{item.unit}</span>
