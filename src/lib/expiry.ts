@@ -17,6 +17,8 @@ export const COMPLIANCE_TYPES: ComplianceType[] = [
   { value: "health_license",    label: "Health / Food Safety License", icon: "🏥", notifyDays: 60 },
   { value: "business_license",  label: "Business License",             icon: "📋", notifyDays: 60 },
   { value: "business_insurance",label: "Business Insurance",           icon: "🛡️", notifyDays: 60 },
+  { value: "liquor_license",    label: "Liquor License",               icon: "🍷", notifyDays: 60 },
+  { value: "corporation_registry", label: "Corporation Registry Filing", icon: "🏛️", notifyDays: 60 },
   { value: "hood_inspection",   label: "Hood Inspection Sticker",      icon: "💨", notifyDays: 60 },
   { value: "fire_suppression",  label: "Fire Suppression",             icon: "🧯", notifyDays: 60 },
   { value: "pest_control",      label: "Pest Control Report",          icon: "🐜", notifyDays: 30 },
@@ -24,6 +26,16 @@ export const COMPLIANCE_TYPES: ComplianceType[] = [
   { value: "lease_agreement",   label: "Lease Agreement",              icon: "🏢", notifyDays: 180 },
   { value: "food_inspection",   label: "Food Inspection Report",       icon: "🔍", notifyDays: 60 },
   { value: "other",             label: "Other",                        icon: "📎", notifyDays: 60 },
+];
+
+// One-tap presets for the add form — the five licences the client tracks.
+export const COMPLIANCE_PRESETS: readonly string[] = [
+  "business_insurance",
+  "business_license",
+  "health_license",
+  "liquor_license",
+  "corporation_registry",
+  "other",
 ];
 
 export function complianceType(value: string): ComplianceType {

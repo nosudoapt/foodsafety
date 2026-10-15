@@ -10,7 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import { Card, PageHeader, Button, Input, Badge } from "@/components/ui";
 import {
-  DOC_ROUTING_HINT, complianceType, expiryLevel, expiryLabel,
+  DOC_ROUTING_HINT, COMPLIANCE_PRESETS, complianceType, expiryLevel, expiryLabel,
   LEVEL_ACCENT, sortByUrgency, alertsFrom,
 } from "@/lib/expiry";
 import { Plus, Trash2, ShieldCheck, AlertTriangle, Info } from "lucide-react";
@@ -29,6 +29,7 @@ export default function ComplianceRegister({ readOnly = false }: { readOnly?: bo
   const [name, setName] = useState("");
   const [expiry, setExpiry] = useState("");
   const [notes, setNotes] = useState("");
+  const [preset, setPreset] = useState("other");
   const [saving, setSaving] = useState(false);
 
   // Only expiring items — everything without a date lives in Business Documents.
@@ -49,7 +50,7 @@ export default function ComplianceRegister({ readOnly = false }: { readOnly?: bo
     // Expiry is required: a null date would be filtered straight back out.
     if (!name.trim() || !expiry) return;
     setSaving(true);
-    const payload = { doc_type: "other", name: name.trim(), expiry_date: expiry, notes: notes.trim() };
+    const payload = { doc_type: preset, name: name.trim(), expiry_date: expiry, notes: notes.trim() };
     const { data } = await supabase.from("compliance_documents").insert({ ...payload, location_id: activeLocationId() })
       .select("id, doc_type, name, file_name, expiry_date, notes").single();
     setRows((r) => [(data as Doc) ?? { id: crypto.randomUUID(), file_name: null, ...payload } as Doc, ...r]);
@@ -95,6 +96,26 @@ export default function ComplianceRegister({ readOnly = false }: { readOnly?: bo
 
       {!readOnly && (
         <Card className="p-5 animate-scale-in">
+          <div className="flex flex-wrap gap-2 mb-4">
+            {COMPLIANCE_PRESETS.map((p) => {
+              const t = complianceType(p);
+              const active = preset === p;
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPreset(p)}
+                  className={`px-3 h-8 rounded-full text-xs font-semibold border transition-colors ${
+                    active
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  {t.icon} {t.label}
+                </button>
+              );
+            })}
+          </div>
           <form onSubmit={add} className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
             <div>
               <label className="text-xs font-medium text-slate-500">Name</label>
