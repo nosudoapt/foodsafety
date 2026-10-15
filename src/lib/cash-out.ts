@@ -23,6 +23,8 @@ export interface CashOutDraft {
 
 export interface CashOutRow extends CashOutDraft {
   id: string;
+  /** JSON array of ops-photos object paths for local-purchase receipts. */
+  local_receipts?: string | null;
   created_by?: string | null;
   created_at?: string;
 }

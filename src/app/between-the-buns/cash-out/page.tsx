@@ -16,9 +16,11 @@ import {
   totalsFor,
   type CashOutRow,
 } from "@/lib/cash-out";
+import { compressImage, uploadToSupabase } from "@/lib/files";
+import { parsePhotoList, photoSrc, removePhotos } from "@/lib/photos";
 
 const HISTORY_COLS =
-  "id, count_date, till_amount, cash_sale, delivery_fees, driver_tips, cash_out, safe_drop, local_purchase, single_trays, large_trays, review_cards, open_tickets, created_by, created_at";
+  "id, count_date, till_amount, cash_sale, delivery_fees, driver_tips, cash_out, safe_drop, local_purchase, single_trays, large_trays, review_cards, open_tickets, local_receipts, created_by, created_at";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -57,6 +59,9 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createdBy, setCreatedBy] = useState<string | null>(null);
+  // Local-purchase receipt photos (ops-photos object paths) for the open day.
+  const [receipts, setReceipts] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
 
   // Who is at the tablet — stored on the row as created_by.
   useEffect(() => {
@@ -140,6 +145,7 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
             }
           : { till_amount: "", cash_sale: "", delivery_fees: "", driver_tips: "", cash_out: "", safe_drop: "", local_purchase: "", single_trays: "", large_trays: "", review_cards: "", open_tickets: "" },
       );
+      setReceipts(parsePhotoList(row?.local_receipts));
       setError(null);
       setSavedAt(null);
       setLoading(false);
@@ -173,11 +179,12 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
     }
     const { error: insErr } = await supabase.from("cash_outs").insert({
       ...draft,
+      local_receipts: JSON.stringify(receipts),
       location_id: activeLocationId(),
       created_by: createdBy,
     });
     if (insErr) {
-      setError("Couldn't save — run supabase/schema-cash-out.sql and supabase/schema-cash-out-columns.sql, then retry.");
+      setError("Couldn't save — run supabase/schema-cash-out.sql, schema-cash-out-columns.sql and schema-cash-out-receipts.sql, then retry.");
       setSaving(false);
       return;
     }
@@ -189,6 +196,39 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {
     setSavedAt(null);
     setForm((f) => ({ ...f, [key]: e.target.value }));
+  };
+
+  // Receipt photos for the local purchase — compressed on-device, one object
+  // per shot under receipts/{date}/ so several angles fit.
+  const addReceipts = async (files: FileList | null) => {
+    if (!files?.length || readOnly || uploading) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const paths: string[] = [];
+      for (const f of Array.from(files)) {
+        const blob = await compressImage(f);
+        const path = `receipts/${date}/${crypto.randomUUID()}.jpg`;
+        await uploadToSupabase(path, blob);
+        paths.push(path);
+      }
+      setReceipts((r) => [...r, ...paths]);
+      setSavedAt(null);
+    } catch (e) {
+      setError(e instanceof Error ? `Receipt upload failed: ${e.message}` : "Receipt upload failed.");
+    }
+    setUploading(false);
+  };
+
+  const dropReceipt = async (path: string) => {
+    if (readOnly) return;
+    setReceipts((r) => r.filter((p) => p !== path));
+    setSavedAt(null);
+    try {
+      await removePhotos([path]);
+    } catch {
+      // Thumbnail is already gone locally; storage cleanup is best-effort.
+    }
   };
 
   const windowTotals = totalsFor(history);
@@ -265,6 +305,49 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
             ))}
           </div>
 
+          {!readOnly && (
+            <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <label className="block text-xs font-medium text-slate-500 mb-2">
+                Local purchase receipts — photos, as many angles as needed
+              </label>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={uploading || loading}
+                onChange={(e) => {
+                  void addReceipts(e.target.files);
+                  e.target.value = "";
+                }}
+                className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold hover:file:bg-slate-100"
+              />
+              {uploading && <p className="mt-2 text-xs text-slate-400">Uploading…</p>}
+              {receipts.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {receipts.map((p) => (
+                    <span key={p} className="relative inline-block">
+                      <a href={photoSrc(p)} target="_blank" rel="noreferrer">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={photoSrc(p)}
+                          alt="Local purchase receipt"
+                          className="w-16 h-16 rounded-lg border border-slate-200 object-cover bg-white"
+                        />
+                      </a>
+                      <button
+                        aria-label="Remove receipt photo"
+                        onClick={() => void dropReceipt(p)}
+                        className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] leading-none"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="mt-5 grid grid-cols-2 sm:grid-cols-3 gap-3">
             <div className="rounded-xl bg-slate-50 border border-slate-200 px-4 py-3">
               <p className="text-xl font-bold text-slate-900 tabular-nums">{totalCashIn(draft).toFixed(2)}</p>
@@ -332,7 +415,14 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
                 ) : (
                   history.map((r) => (
                     <tr key={r.id} className="border-t border-slate-100">
-                      <td className="px-4 py-2 font-medium text-slate-900">{r.count_date}</td>
+                      <td className="px-4 py-2 font-medium text-slate-900">
+                        {r.count_date}
+                        {parsePhotoList(r.local_receipts).length > 0 && (
+                          <span className="ml-1 text-[10px]" title={`${parsePhotoList(r.local_receipts).length} receipt photo(s)`}>
+                            🧾{parsePhotoList(r.local_receipts).length}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums">{r.till_amount.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{r.cash_sale.toFixed(2)}</td>
                       <td className="px-3 py-2 text-right tabular-nums">{r.delivery_fees.toFixed(2)}</td>
