@@ -60,6 +60,7 @@ function TrainingGuide({ readOnly }: { readOnly: boolean }) {
   // Unsaved video-URL drafts, keyed by topic so switching topics never leaks
   // one topic's draft into another (no effect needed — the key does the reset).
   const [videoDrafts, setVideoDrafts] = useState<Record<string, string>>({});
+  const [uploadingVideo, setUploadingVideo] = useState(false);
 
   const loadTopics = async () => {
     const scope = locationScope();
@@ -233,10 +234,10 @@ function TrainingGuide({ readOnly }: { readOnly: boolean }) {
     await loadSections(selectedId);
   };
 
-  const saveVideo = async () => {
+  const saveVideo = async (explicitUrl?: string) => {
     if (readOnly || !selected) return;
     setError(null);
-    const url = (videoDrafts[selected.id] ?? selected.video_url ?? "").trim();
+    const url = (explicitUrl ?? videoDrafts[selected.id] ?? selected.video_url ?? "").trim();
     const { error: err } = await supabase
       .from("training_topics")
       .update({ video_url: url || null })
@@ -252,6 +253,29 @@ function TrainingGuide({ readOnly }: { readOnly: boolean }) {
     });
     setNotice(url ? "Training video saved" : "Training video removed");
     await loadTopics();
+  };
+
+  // Module video file → training-videos bucket → public URL saved on the topic.
+  const uploadVideoFile = async (file: File | undefined) => {
+    if (!file || readOnly || !selected || uploadingVideo) return;
+    if (file.size > 100 * 1024 * 1024) {
+      setError("Video must be under 100 MB — compress it or paste a YouTube link instead.");
+      return;
+    }
+    setUploadingVideo(true);
+    setError(null);
+    try {
+      const path = `topics/${selected.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: upErr } = await supabase.storage
+        .from("training-videos")
+        .upload(path, file, { contentType: file.type || "video/mp4", upsert: true });
+      if (upErr) throw new Error(upErr.message);
+      const { data } = supabase.storage.from("training-videos").getPublicUrl(path);
+      await saveVideo(data.publicUrl);
+    } catch (e) {
+      setError(e instanceof Error ? `Video upload failed: ${e.message}` : "Video upload failed.");
+    }
+    setUploadingVideo(false);
   };
 
   return (
@@ -427,19 +451,36 @@ function TrainingGuide({ readOnly }: { readOnly: boolean }) {
                         )
                       )}
                       {!readOnly && (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <Input
-                            accent="purple"
-                            placeholder="YouTube or mp4 link…"
-                            value={draft}
-                            onChange={(e) =>
-                              setVideoDrafts((d) => ({ ...d, [selected.id]: e.target.value }))
-                            }
-                            className="grow min-w-[12rem]"
-                          />
-                          <Button accent="purple" variant="soft" onClick={saveVideo} disabled={saving}>
-                            {saving ? "Saving…" : "Save video"}
-                          </Button>
+                        <div className="mt-2 space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                              accent="purple"
+                              placeholder="YouTube or mp4 link…"
+                              value={draft}
+                              onChange={(e) =>
+                                setVideoDrafts((d) => ({ ...d, [selected.id]: e.target.value }))
+                              }
+                              className="grow min-w-[12rem]"
+                            />
+                            <Button accent="purple" variant="soft" onClick={() => saveVideo()} disabled={saving}>
+                              {saving ? "Saving…" : "Save video"}
+                            </Button>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <input
+                              type="file"
+                              accept="video/*"
+                              disabled={uploadingVideo}
+                              onChange={(e) => {
+                                void uploadVideoFile(e.target.files?.[0]);
+                                e.target.value = "";
+                              }}
+                              className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold hover:file:bg-slate-50"
+                            />
+                            {uploadingVideo && (
+                              <span className="text-xs text-slate-400">Uploading module video…</span>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
