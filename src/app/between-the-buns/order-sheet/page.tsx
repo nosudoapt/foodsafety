@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, PageHeader, Button, Input, Badge } from "@/components/ui";
-import { Search, Save, ClipboardList, Check, Flame } from "lucide-react";
+import { Search, Save, ClipboardList, Check } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { BROOKS_ORDER_GUIDE, ORDER_GUIDE_ITEM_COUNT } from "@/lib/brooks-order-guide";
 import { locationScope, activeLocationId } from "@/lib/locations";
@@ -12,7 +12,6 @@ import { buildParMaps, parFor } from "@/lib/par-prefill";
 interface Entry {
   par: number;
   on_hand: number;
-  urgent: boolean;
   /** Prefilled from history, not yet touched — excluded from the live totals. */
   seeded?: boolean;
 }
@@ -23,10 +22,9 @@ interface HistoryRow {
   par: number;
   on_hand: number;
   order_date: string;
-  urgent?: boolean | null;
 }
 
-const EMPTY: Entry = { par: 0, on_hand: 0, urgent: false };
+const EMPTY: Entry = { par: 0, on_hand: 0 };
 
 // ORDER = PAR - ON_HAND (never negative) — same rule as the prep sheet's MAKE.
 const orderQty = (e: Entry) => Math.max(0, (e.par || 0) - (e.on_hand || 0));
@@ -61,7 +59,7 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
     const scope = locationScope();
     let q = supabase
       .from("order_sheets")
-      .select("id, item_name, par, on_hand, urgent, order_date, created_at")
+      .select("id, item_name, par, on_hand, order_date, created_at")
       .order("order_date", { ascending: false })
       .order("created_at", { ascending: false });
     if (scope) q = q.or(scope);
@@ -73,10 +71,10 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
       const past = rows.filter((r) => r.order_date !== t);
       const seed: Record<string, Entry> = {};
       for (const r of todayRows) {
-        seed[r.item_name] = { par: Number(r.par), on_hand: Number(r.on_hand), urgent: !!r.urgent };
+        seed[r.item_name] = { par: Number(r.par), on_hand: Number(r.on_hand) };
       }
       const maps = buildParMaps(
-        past.map((r) => ({ item_name: r.item_name, date: r.order_date, par: r.par, urgent: r.urgent })),
+        past.map((r) => ({ item_name: r.item_name, date: r.order_date, par: r.par })),
         t,
       );
       for (const cat of BROOKS_ORDER_GUIDE) {
@@ -84,7 +82,7 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
           if (seed[it.name]) continue;
           const snap = parFor(maps, it.name);
           if (snap && snap.par > 0) {
-            seed[it.name] = { par: snap.par, on_hand: 0, urgent: snap.urgent, seeded: true };
+            seed[it.name] = { par: snap.par, on_hand: 0, seeded: true };
           }
         }
       }
@@ -93,14 +91,14 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
     });
   }, []);
 
-  function update(name: string, field: keyof Entry, value: string | boolean) {
+  function update(name: string, field: keyof Entry, value: string) {
     if (readOnly) return;
     setSavedAt(null);
     setEntries((prev) => {
       const cur = prev[name] ?? EMPTY;
       const next: Entry = {
         ...cur,
-        [field]: typeof value === "boolean" ? value : Number(value) || 0,
+        [field]: Number(value) || 0,
         seeded: false,
       };
       return { ...prev, [name]: next };
@@ -110,16 +108,15 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
   async function save() {
     if (readOnly || saving) return;
     setSaving(true);
-    // Only persist touched lines (a PAR, an on-hand, or an urgent flag).
+    // Only persist touched lines (a PAR or an on-hand actually entered).
     const rows = BROOKS_ORDER_GUIDE.flatMap((cat) =>
       cat.items
         .map((it) => ({ name: it.name, e: entries[it.name] }))
-        .filter(({ e }) => e && (e.par > 0 || e.on_hand > 0 || e.urgent))
+        .filter(({ e }) => e && (e.par > 0 || e.on_hand > 0))
         .map(({ name, e }) => ({
           item_name: name,
           par: e!.par,
           on_hand: e!.on_hand,
-          urgent: e!.urgent ?? false,
           order_date: today(),
           location_id: activeLocationId(),
         })),
@@ -224,11 +221,10 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
                 </span>
               </div>
               <Card className="overflow-hidden">
-                <div className="grid grid-cols-[1fr_4.5rem_4.5rem_2.5rem_3.5rem] gap-2 px-4 py-2 bg-slate-50 text-[11px] font-bold text-slate-400 uppercase">
+                <div className="grid grid-cols-[1fr_4.5rem_4.5rem_3.5rem] gap-2 px-4 py-2 bg-slate-50 text-[11px] font-bold text-slate-400 uppercase">
                   <span>Item</span>
                   <span className="text-center">PAR</span>
                   <span className="text-center">On hand</span>
-                  <span className="text-center">Urg</span>
                   <span className="text-right">Order</span>
                 </div>
                 <div className="divide-y divide-slate-100">
@@ -237,7 +233,7 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
                     return (
                       <div
                         key={it.name}
-                        className="grid grid-cols-[1fr_4.5rem_4.5rem_2.5rem_3.5rem] gap-2 px-4 py-2.5 items-center"
+                        className="grid grid-cols-[1fr_4.5rem_4.5rem_3.5rem] gap-2 px-4 py-2.5 items-center"
                       >
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-900 truncate">{it.name}</p>
@@ -269,23 +265,6 @@ function OrderSheet({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: b
                             onChange={(ev) => update(it.name, "on_hand", ev.target.value)}
                             placeholder="0"
                             className="text-center px-1 h-9"
-                          />
-                        )}
-                        {readOnly ? (
-                          e.urgent ? (
-                            <span className="flex justify-center" title="Urgent">
-                              <Flame className="w-4 h-4 text-red-500" />
-                            </span>
-                          ) : (
-                            <span className="text-center text-slate-300">—</span>
-                          )
-                        ) : (
-                          <input
-                            type="checkbox"
-                            aria-label={`Urgent: ${it.name}`}
-                            checked={e.urgent}
-                            onChange={(ev) => update(it.name, "urgent", ev.target.checked)}
-                            className="w-4 h-4 accent-red-600 justify-self-center"
                           />
                         )}
                         <span className="text-right tabular-nums font-bold text-red-600">
