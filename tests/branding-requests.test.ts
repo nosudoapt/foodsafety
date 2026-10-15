@@ -14,6 +14,7 @@ import {
   priorityAccent,
   priorityLabel,
   priorityRank,
+  sizesFor,
   sortRequests,
   statusAccent,
   statusCounts,
@@ -32,12 +33,14 @@ const req = (over: Partial<BrandingRequest> & { id: string }): BrandingRequest =
 test("statuses, priorities and categories are a closed set", () => {
   assert.deepEqual([...BRANDING_STATUSES], ["open", "in_review", "in_progress", "done", "declined"]);
   assert.equal(BRANDING_PRIORITIES.length, 4);
-  assert.equal(BRANDING_CATEGORIES.length, 6);
+  assert.equal(BRANDING_CATEGORIES.length, 7);
   assert.equal(isStatus("in_review"), true);
   assert.equal(isStatus("waiting"), false);
   assert.equal(isPriority("urgent"), true);
   assert.equal(isPriority("asap"), false);
-  assert.equal(isCategory("signage"), true);
+  assert.equal(isCategory("uniform"), true);
+  assert.equal(isCategory("caddies"), true);
+  assert.equal(isCategory("signage"), true, "legacy values still accepted");
   assert.equal(isCategory(null), false, "non-strings are rejected");
 });
 
@@ -47,12 +50,21 @@ test("labels and colours read the way the cards do", () => {
   assert.equal(statusLabel("open"), "Open");
   assert.equal(priorityLabel("urgent"), "Urgent");
   assert.equal(categoryLabel("uniform"), "Uniform");
+  assert.equal(categoryLabel("serving_trays"), "Serving trays");
+  assert.equal(categoryLabel("display_board"), "Display board");
   assert.equal(statusAccent("open"), "red");
   assert.equal(statusAccent("done"), "green");
   assert.equal(statusAccent("declined"), "slate");
   assert.equal(priorityAccent("urgent"), "red");
   assert.equal(priorityAccent("normal"), "blue");
   assert.equal(priorityAccent("something_odd"), "slate", "unknown priority falls back");
+});
+
+test("sizes attach to uniforms and trays only", () => {
+  assert.deepEqual([...sizesFor("uniform")], ["S", "M", "L"]);
+  assert.deepEqual([...sizesFor("serving_trays")], ["Small", "Large"]);
+  assert.deepEqual([...sizesFor("hats")], []);
+  assert.deepEqual([...sizesFor("signage")], [], "legacy categories have no sizes");
 });
 
 test("priority ordering runs urgent → low", () => {

@@ -18,6 +18,7 @@ import {
   isStatus,
   priorityAccent,
   priorityLabel,
+  sizesFor,
   statusAccent,
   statusCounts,
   statusLabel,
@@ -25,7 +26,7 @@ import {
 } from "@/lib/branding-requests";
 
 const COLS =
-  "id, title, category, description, priority, status, requested_by, contact_email, file_url, file_name, due_date, location_id, created_at, updated_at";
+  "id, title, category, description, priority, status, requested_by, contact_email, file_url, file_name, size, due_date, location_id, created_at, updated_at";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -70,7 +71,8 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
   const [requester, setRequester] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "",
-    category: "signage",
+    category: "uniform",
+    size: "",
     priority: "normal",
     due_date: "",
     description: "",
@@ -159,6 +161,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
     const { error: err } = await supabase.from("branding_requests").insert({
       title,
       category: isCategory(form.category) ? form.category : "other",
+      size: sizesFor(form.category).includes(form.size) ? form.size : null,
       priority: isPriority(form.priority) ? form.priority : "normal",
       due_date: form.due_date || null,
       description: form.description.trim() || null,
@@ -169,11 +172,11 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
       location_id: activeLocationId(),
     });
     if (err) {
-      setError("Couldn't file the request — run supabase/schema-branding-requests.sql and schema-branding-attachments.sql, then retry.");
+      setError("Couldn't file the request — run supabase/schema-branding-requests.sql, schema-branding-attachments.sql and schema-branding-size.sql, then retry.");
       setSaving(false);
       return;
     }
-    setForm({ title: "", category: "signage", priority: "normal", due_date: "", description: "", contact_email: "" });
+    setForm({ title: "", category: "uniform", size: "", priority: "normal", due_date: "", description: "", contact_email: "" });
     setFile(null);
     setNotice(`Filed: ${title}`);
     setSaving(false);
@@ -259,7 +262,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
             <select
               className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
               value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value, size: "" }))}
             >
               {BRANDING_CATEGORIES.map((c) => (
                 <option key={c} value={c}>
@@ -268,6 +271,25 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
               ))}
             </select>
           </label>
+          {sizesFor(form.category).length > 0 && (
+            <label className="text-sm">
+              <span className="block text-xs font-medium text-slate-500 mb-1">
+                {form.category === "uniform" ? "Uniform size" : "Tray size"}
+              </span>
+              <select
+                className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                value={form.size}
+                onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))}
+              >
+                <option value="">Choose…</option>
+                {sizesFor(form.category).map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="text-sm">
             <span className="block text-xs font-medium text-slate-500 mb-1">Priority</span>
             <select
@@ -369,6 +391,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <Badge accent={priorityAccent(r.priority)}>{priorityLabel(r.priority)}</Badge>
                         <Badge accent={statusAccent(r.status)}>{categoryLabel(r.category)}</Badge>
+                        {r.size && <Badge accent="slate">Size {r.size}</Badge>}
                       </div>
                       {r.description && (
                         <p className="mt-2 text-xs text-slate-500 line-clamp-3">{r.description}</p>

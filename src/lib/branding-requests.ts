@@ -7,8 +7,22 @@ export type BrandingStatus = (typeof BRANDING_STATUSES)[number];
 export const BRANDING_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type BrandingPriority = (typeof BRANDING_PRIORITIES)[number];
 
-export const BRANDING_CATEGORIES = ["signage", "menu", "uniform", "packaging", "digital", "other"] as const;
+export const BRANDING_CATEGORIES = ["uniform", "serving_trays", "hats", "gift_cards", "flyers", "display_board", "caddies"] as const;
 export type BrandingCategory = (typeof BRANDING_CATEGORIES)[number];
+
+// Values saved before the category revamp — still accepted so old cards keep
+// their meaning, but no longer offered in the form.
+const LEGACY_CATEGORIES = ["signage", "menu", "packaging", "digital", "other"] as const;
+
+/** Sizes offered per category: uniforms S–L, serving trays Small/Large. */
+export const BRANDING_SIZES: Record<string, readonly string[]> = {
+  uniform: ["S", "M", "L"],
+  serving_trays: ["Small", "Large"],
+};
+
+export function sizesFor(category: string): readonly string[] {
+  return BRANDING_SIZES[category] ?? [];
+}
 
 /** Work left to do — the order the board columns run in. */
 export const ACTIVE_STATUSES: readonly BrandingStatus[] = ["open", "in_review", "in_progress"];
@@ -22,6 +36,8 @@ export interface BrandingRequest {
   priority: string;
   status: string;
   requested_by?: string | null;
+  /** Size detail — uniform S/M/L or tray Small/Large, otherwise null. */
+  size?: string | null;
   /** Reply-to email for the requester — used by the Email designer button. */
   contact_email?: string | null;
   /** Optional pinned file (base64 data URL) + original name. */
@@ -42,7 +58,11 @@ export function isPriority(v: unknown): v is BrandingPriority {
 }
 
 export function isCategory(v: unknown): v is BrandingCategory {
-  return typeof v === "string" && (BRANDING_CATEGORIES as readonly string[]).includes(v);
+  return (
+    typeof v === "string" &&
+    ((BRANDING_CATEGORIES as readonly string[]).includes(v) ||
+      (LEGACY_CATEGORIES as readonly string[]).includes(v))
+  );
 }
 
 const label = (v: string) => v.charAt(0).toUpperCase() + v.slice(1);
@@ -54,7 +74,16 @@ export const statusLabel = (v: string): string => {
 };
 
 export const priorityLabel = label;
-export const categoryLabel = label;
+
+/** Card badge for a category: Uniform, Serving trays, Display board … */
+export const categoryLabel = (v: string): string => {
+  if (v === "serving_trays") return "Serving trays";
+  if (v === "gift_cards") return "Gift cards";
+  if (v === "display_board") return "Display board";
+  if (v === "caddies") return "Caddies";
+  if (v === "hats") return "Hats";
+  return label(v);
+};
 
 /** Board column / badge colour. */
 export function statusAccent(v: string): "red" | "amber" | "purple" | "green" | "slate" {
