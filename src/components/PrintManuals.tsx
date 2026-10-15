@@ -64,7 +64,11 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
   // Patch 12 — page-level print: the stored PDFs are pulled into the hidden
   // #print-section (one iframe each) and the dialog opens once they've loaded,
   // so "Print / Save PDF" hands over the manuals themselves, not the grid.
+  // The published training guide prints ahead of the PDFs as plain text.
   const [printFiles, setPrintFiles] = useState<{ id: string; title: string; url: string }[]>([]);
+  const [trainingPrint, setTrainingPrint] = useState<
+    { id: string; title: string; category: string; sections: { heading: string; body: string }[] }[] | null
+  >(null);
   const framesLoaded = useRef(0);
   const printWhenReady = useRef(false);
 
@@ -80,14 +84,51 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
         .single();
       if (!error && data?.file_url) files.push({ id: m.id, title: m.title, url: data.file_url });
     }
-    if (files.length === 0) {
-      // Nothing stored as a PDF — print the list itself.
+    // Published training topics ride along so "print all" includes the
+    // training module even though it isn't a stored PDF.
+    let training: { id: string; title: string; category: string; sections: { heading: string; body: string }[] }[] = [];
+    try {
+      const { data: topics } = await supabase
+        .from("training_topics")
+        .select("id, title, category")
+        .eq("published", true)
+        .order("position")
+        .order("title");
+      const { data: sections } = await supabase
+        .from("training_sections")
+        .select("topic_id, position, heading, body")
+        .limit(1000);
+      const byTopic = new Map<string, { heading: string; body: string }[]>();
+      for (const s of (sections ?? []) as { topic_id: string; position: number; heading: string; body: string }[]) {
+        const list = byTopic.get(s.topic_id) ?? [];
+        list.push({ heading: s.heading, body: s.body });
+        byTopic.set(s.topic_id, list);
+      }
+      training = ((topics ?? []) as { id: string; title: string; category: string }[]).map((t) => ({
+        ...t,
+        sections: byTopic.get(t.id) ?? [],
+      }));
+    } catch {
+      training = [];
+    }
+    if (files.length === 0 && training.length === 0) {
+      // Nothing stored as a PDF and no published training — print the list itself.
       window.print();
       return;
     }
     framesLoaded.current = 0;
     printWhenReady.current = true;
+    setTrainingPrint(training);
     setPrintFiles(files);
+    if (files.length === 0) {
+      // Training text renders synchronously — give React a beat, then print.
+      setTimeout(() => {
+        if (printWhenReady.current) {
+          printWhenReady.current = false;
+          window.print();
+        }
+      }, 350);
+    }
   };
 
   const onPrintFrameLoad = () => {
@@ -413,12 +454,23 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
       </div>
       )}
 
-      {/* Print-only surface (Patch 12): the stored manuals themselves, one
-          iframe per PDF. globals.css hides everything outside this box when
-          the page goes to the printer. */}
-      {printFiles.length > 0 && (
-        <div id="print-section" className="hidden print:block">
+      {/* Print-only surface (Patch 12): the training module first, then the
+          stored manuals themselves, one iframe per PDF. globals.css hides
+          everything outside this box when the page goes to the printer. */}
+      {(printFiles.length > 0 || (trainingPrint && trainingPrint.length > 0)) && (
+        <div id="print-section" className="hidden print:block max-w-4xl mx-auto px-4 py-6 text-gray-900">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Procedure Manuals</h1>
+          {(trainingPrint ?? []).map((t) => (
+            <div key={t.id} className="mb-6 break-inside-avoid">
+              <h2 className="text-lg font-bold">{t.title}</h2>
+              {t.sections.map((s, i) => (
+                <div key={i} className="mt-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wide">{s.heading}</h3>
+                  <p className="text-sm whitespace-pre-line">{s.body}</p>
+                </div>
+              ))}
+            </div>
+          ))}
           {printFiles.map((f) => (
             <iframe
               key={f.id}
