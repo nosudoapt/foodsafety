@@ -158,6 +158,8 @@ input::placeholder {
   #print-section * {
     visibility: visible !important;
   }
+  #print-section {
+    position: absolute;
     left: 0;
     top: 0;
     width: 100%;
