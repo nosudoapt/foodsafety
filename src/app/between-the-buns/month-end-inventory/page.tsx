@@ -5,6 +5,7 @@ import { Layers, PackagePlus, Save, Trash2 } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader, StatTile } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
+import { monthDates } from "@/lib/inventory-purchases";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import {
   countQty,
@@ -47,6 +48,8 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
   const [newItem, setNewItem] = useState({ name: "", unit: "ea", unit_cost: "" });
   // Month math — opening + purchases + sales. Closing is the live count total.
   const [summary, setSummary] = useState({ opening_value: "0", purchases: "0", sales: "0" });
+  const [purchases, setPurchases] = useState<any[]>([]);
+  const [purForm, setPurForm] = useState({ type: "gfs", date: "", description: "", amount: "", reference: "", supplier: "GFS" });
 
   const months = useMemo(() => recentMonths(thisMonth(), 12), []);
   const prevKey = prevMonth(month);
@@ -84,6 +87,7 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     setPrevCounts(((pdata ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
     setError(null);
     await loadSummary(key);
+    await loadPurchases(key);
     setLoading(false);
   };
 
@@ -105,6 +109,34 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     } else {
       setSummary({ opening_value: "0", purchases: "0", sales: "0" });
     }
+  };
+
+  const loadPurchases = async (key: string) => {
+    const { data } = await supabase.from("inventory_purchases").select("*").eq("count_month", key).order("purchase_date");
+    setPurchases((data ?? []) as any[]);
+  };
+
+  const addPurchase = async () => {
+    if (readOnly || saving) return;
+    const amount = Number(purForm.amount);
+    if (!purForm.date || !purForm.description.trim() || !Number.isFinite(amount) || amount < 0) {
+      setError("Fill date, description and a valid amount.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    const { error: err } = await supabase.from("inventory_purchases").insert({
+      count_month: month,
+      purchase_date: purForm.date,
+      type: purForm.type,
+      supplier: purForm.type === "gfs" ? (purForm.supplier || "GFS") : null,
+      description: purForm.description.trim(),
+      amount,
+      reference: purForm.reference.trim() || null,
+    });
+    if (err) setError("Couldn't save purchase — run schema-inventory-purchases.sql, then retry.");
+    else { setNotice("Purchase saved"); setPurForm({ ...purForm, description: "", amount: "", reference: "" }); await loadPurchases(month); }
+    setSaving(false);
   };
 
   const saveSummary = async () => {
@@ -355,6 +387,43 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
         </div>
       </Card>
 
+      <Card className="p-4 mb-5">
+        <p className="text-sm font-bold text-slate-900 mb-3">Daily purchases</p>
+        {!readOnly && (
+          <div className="flex flex-wrap items-end gap-2 mb-4">
+            <select className="border rounded-lg px-2 py-1 text-sm" value={purForm.type} onChange={(e) => setPurForm((f) => ({ ...f, type: e.target.value }))}>
+              <option value="gfs">GFS invoice</option>
+              <option value="local">Local purchase</option>
+            </select>
+            <select className="border rounded-lg px-2 py-1 text-sm" value={purForm.date} onChange={(e) => setPurForm((f) => ({ ...f, date: e.target.value }))}>
+              <option value="">Date</option>
+              {monthDates(month).map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+            <Input accent="green" placeholder="Description" value={purForm.description} onChange={(e) => setPurForm((f) => ({ ...f, description: e.target.value }))} />
+            <Input accent="green" type="number" placeholder="Amount" value={purForm.amount} onChange={(e) => setPurForm((f) => ({ ...f, amount: e.target.value }))} />
+            {purForm.type === "gfs" && (
+              <>
+                <Input accent="green" placeholder="Supplier" value={purForm.supplier} onChange={(e) => setPurForm((f) => ({ ...f, supplier: e.target.value }))} />
+                <Input accent="green" placeholder="Invoice ref" value={purForm.reference} onChange={(e) => setPurForm((f) => ({ ...f, reference: e.target.value }))} />
+              </>
+            )}
+            <Button accent="green" onClick={addPurchase} disabled={saving}>Add</Button>
+          </div>
+        )}
+        <div className="text-xs text-slate-500 mb-2">
+          GFS total: {purchases.filter((p) => p.type === "gfs").reduce((s, p) => s + Number(p.amount), 0).toFixed(2)} ·
+          Local total: {purchases.filter((p) => p.type === "local").reduce((s, p) => s + Number(p.amount), 0).toFixed(2)} ·
+          Combined: {purchases.reduce((s, p) => s + Number(p.amount), 0).toFixed(2)}
+        </div>
+        <div className="max-h-64 overflow-y-auto text-sm">
+          {purchases.map((p) => (
+            <div key={p.id} className="border-b py-1 flex justify-between">
+              <span>{p.purchase_date} · {p.description}</span>
+              <span>{Number(p.amount).toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
       <Card className="overflow-hidden mb-5">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
