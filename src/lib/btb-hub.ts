@@ -43,6 +43,7 @@ export interface BtbCard {
 // so there is no second place to keep in sync. Ordered operational → reference
 // → management.
 export const BTB_CARDS: readonly BtbCard[] = [
+  { href: "/between-the-buns/admin", title: "Admin Dashboard", desc: "Assign page access per role.", iconKey: "layoutGrid", accent: "red", feature: "admin_dashboard" },
   { href: "/between-the-buns/prep-list", title: "Daily Prep Sheet", desc: "3-section sheet — Produce, Sauces, Freezer. Par/OH/Make boxes.", iconKey: "layoutGrid", accent: "red", feature: "prep_list" },
   { href: "/between-the-buns/checklists", title: "Opening & Closing", desc: "Open/close duties — Front & Kitchen, ticked per shift.", iconKey: "listChecks", accent: "amber", feature: "checklists" },
   { href: "/between-the-buns/branding-requests", title: "Branding Requests", desc: "Signage, menus, uniforms — file it, marketing works the board.", iconKey: "sparkles", accent: "amber", feature: "branding_requests" },

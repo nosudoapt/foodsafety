@@ -10,6 +10,7 @@ import { BTB_ROLES, type BtbRole } from "./btb-roles";
 // Every BTB surface a role can reach. Slugs match /between-the-buns/<slug>
 // routes (the four reference pages share one "reference" bucket — all-view).
 export const BTB_FEATURES = [
+  "admin_dashboard",
   "prep_list",
   "checklists",
   "cash_out",
@@ -42,7 +43,8 @@ interface Access {
   edit: readonly BtbRole[];
 }
 
-const ALL: readonly BtbRole[] = BTB_ROLES;                            // staff, supervisor, manager, corporate
+const ALL: readonly BtbRole[] = ["staff", "supervisor", "manager", "corporate"]; // admin excluded from normal pages
+const ADMIN_ONLY: readonly BtbRole[] = ["admin"];
 const OPS_EDIT: readonly BtbRole[] = ["staff", "supervisor", "manager"]; // corporate is view-only on ops
 const SUP_UP: readonly BtbRole[] = ["supervisor", "manager", "corporate"]; // supervisor tier and above
 const MGR: readonly BtbRole[] = ["manager", "corporate"];             // management (owners are managers here)
@@ -52,6 +54,7 @@ const CORP: readonly BtbRole[] = ["corporate"];                      // franchis
 // view = who sees the card at all; edit = who can create/edit/delete.
 // edit is always a subset of view. Kept explicit so intent is auditable.
 export const BTB_MATRIX: Record<BtbFeature, Access> = {
+  admin_dashboard:   { view: ADMIN_ONLY, edit: ADMIN_ONLY },
   prep_list:         { view: ALL,    edit: OPS_EDIT },
   // Opening/closing duties — same who as the prep sheet (the checklist used to be a tab on it).
   checklists:        { view: ALL,    edit: OPS_EDIT },
