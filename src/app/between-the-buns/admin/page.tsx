@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import BtbWordmark from "@/components/BtbWordmark";
 
 const ROLES = ["staff", "supervisor", "manager", "corporate"];
@@ -13,15 +13,30 @@ const PAGES = [
 ];
 
 export default function AdminDashboard() {
-  const [access, setAccess] = useState<Record<string, string[]>>(
-    () => Object.fromEntries(ROLES.map((r) => [r, []]))
-  );
+  const [access, setAccess] = useState<Record<string, string[]>>(() => Object.fromEntries(ROLES.map((r) => [r, []])));
 
-  const toggle = (role: string, page: string) => {
+  useEffect(() => {
+    fetch("/api/btb/role-page-access").then((r) => r.json()).then((d) => {
+      const map: Record<string, string[]> = Object.fromEntries(ROLES.map((r) => [r, []]));
+      for (const row of d.rows ?? []) {
+        if (row.allowed && map[row.role]) map[row.role].push(row.page);
+      }
+      setAccess(map);
+    }).catch(() => {});
+  }, []);
+
+  const toggle = async (role: string, page: string) => {
+    const cur = access[role] ?? [];
+    const nextAllowed = !cur.includes(page);
     setAccess((prev) => {
-      const cur = prev[role] ?? [];
-      const next = cur.includes(page) ? cur.filter((p) => p !== page) : [...cur, page];
-      return { ...prev, [role]: next };
+      const c = prev[role] ?? [];
+      const n = nextAllowed ? [...c, page] : c.filter((p) => p !== page);
+      return { ...prev, [role]: n };
+    });
+    await fetch("/api/btb/role-page-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role, page, allowed: nextAllowed }),
     });
   };
 
