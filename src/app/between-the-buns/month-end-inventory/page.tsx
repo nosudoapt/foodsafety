@@ -49,6 +49,7 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
   // Month math — opening + purchases + sales. Closing is the live count total.
   const [summary, setSummary] = useState({ opening_value: "0", purchases: "0", sales: "0" });
   const [purchases, setPurchases] = useState<any[]>([]);
+  const [snapshot, setSnapshot] = useState<any>(null);
   const [purForm, setPurForm] = useState({ type: "gfs", date: "", description: "", amount: "", reference: "", supplier: "GFS" });
 
   const months = useMemo(() => recentMonths(thisMonth(), 12), []);
@@ -88,6 +89,8 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     setError(null);
     await loadSummary(key);
     await loadPurchases(key);
+    const snapRes = await fetch(`/api/btb/inventory-snapshot?month=${key}`);
+    if (snapRes.ok) { const sd = await snapRes.json(); setSnapshot(sd.snapshot ?? null); }
     setLoading(false);
   };
 
@@ -318,6 +321,11 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
         </span>
       </div>
 
+      {snapshot && (
+        <div className="mb-4 rounded-xl bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-800">
+          FINALIZED {monthLabel(month)} — opening {Number(snapshot.opening_value).toFixed(2)} · purchases {Number(snapshot.purchases).toFixed(2)} · closing {Number(snapshot.closing_value).toFixed(2)} · sales {snapshot.sales == null ? "n/a" : Number(snapshot.sales).toFixed(2)} · COGS {snapshot.cogs == null ? "n/a" : Number(snapshot.cogs).toFixed(2)} · Food Cost % {snapshot.food_cost_pct == null ? "n/a" : Number(snapshot.food_cost_pct).toFixed(1)}%
+        </div>
+      )}
       {error && (
         <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
