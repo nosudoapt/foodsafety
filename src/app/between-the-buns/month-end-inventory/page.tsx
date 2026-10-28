@@ -414,6 +414,15 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
               }} disabled={saving}>
                 {saving ? "Finalizing…" : "Finalize month"}
               </Button>
+              <Button accent="amber" onClick={async () => {
+                const reason = window.prompt("Reason for reopening?") || "";
+                setSaving(true);
+                const res = await fetch("/api/btb/inventory-reopen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count_month: month, reason }) });
+                setSaving(false);
+                if (res.ok) { setNotice(`${monthLabel(month)} reopened`); setSnapshot(null); } else setError("Reopen failed (permission/downstream).");
+              }} disabled={saving}>
+                {saving ? "Reopening…" : "Reopen month"}
+              </Button>
             </>
           )}
         </div>
