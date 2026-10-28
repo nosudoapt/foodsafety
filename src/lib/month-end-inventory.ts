@@ -110,6 +110,11 @@ export function variance(current: number, previous: number): { delta: number; pc
 }
 
 /** Counts from a stored month, keyed by item. */
+/** Carry-forward: previous month's closing value becomes next month's opening. */
+export function carryForwardOpening(previousClosing: number): number {
+  return Math.round(Math.max(0, countQty(previousClosing)) * 100) / 100;
+}
+
 export function countsByItem(counts: readonly InventoryCount[]): Map<string, number> {
   return new Map(counts.map((c) => [c.item_id, countQty(c.qty)]));
 }
