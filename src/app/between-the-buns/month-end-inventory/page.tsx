@@ -187,6 +187,18 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     };
   }, [month]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (cancelled) return;
+      const res = await fetch(`/api/btb/inventory-opening?month=${month}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      if (d.opening != null) setSummary((s) => ({ ...s, opening_value: String(d.opening) }));
+    })();
+    return () => { cancelled = true; };
+  }, [month]);
+
   const lines = useMemo(() => toLines(items, counts), [items, counts]);
   const prevQty = useMemo(() => new Map(prevCounts.map((c) => [c.item_id, countQty(c.qty)])), [prevCounts]);
 
