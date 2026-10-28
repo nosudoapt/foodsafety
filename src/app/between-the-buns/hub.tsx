@@ -41,14 +41,16 @@ const ICONS: Record<BtbIconKey, LucideIcon> = {
 // (src/lib/btb-hub.ts) — staff don't see the Order Sheet, everyone else does.
 export default function BtbHub({ role }: { role: BtbRole }) {
   const [dbAllowed, setDbAllowed] = useState<string[] | null>(null);
+  const [loadingAccess, setLoadingAccess] = useState(true);
   useEffect(() => {
+    setLoadingAccess(true);
     fetch("/api/btb/role-page-access").then((r) => r.json()).then((d) => {
       const pages = (d.rows ?? []).filter((x: any) => x.role === role && x.allowed).map((x: any) => x.page);
-      if (pages.length) setDbAllowed(pages);
-    }).catch(() => {});
+      setDbAllowed(pages);
+    }).catch(() => setDbAllowed([])).finally(() => setLoadingAccess(false));
   }, [role]);
   const baseCards = cardsForRole(role);
-  const cards = (dbAllowed && dbAllowed.length) ? baseCards.filter((c) => dbAllowed.includes(c.href.split("/").pop() || "")) : baseCards;
+  const cards = dbAllowed ? baseCards.filter((c) => dbAllowed.includes(c.href.split("/").pop() || "")) : baseCards;
   const hidden = hiddenCardsForRole(role);
 
   // Card search: filters this role's own cards by title or description, so a
@@ -89,7 +91,9 @@ export default function BtbHub({ role }: { role: BtbRole }) {
         />
       </div>
 
-      {visible.length === 0 ? (
+      {loadingAccess ? (
+        <div className="text-center py-10 text-slate-400">Loading access…</div>
+      ) : visible.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
           <p className="text-3xl mb-2">🔍</p>
           <p className="font-semibold text-slate-900">No cards match “{query.trim()}”</p>

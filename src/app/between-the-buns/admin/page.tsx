@@ -14,6 +14,8 @@ const PAGES = [
 
 export default function AdminDashboard() {
   const [access, setAccess] = useState<Record<string, string[]>>(() => Object.fromEntries(ROLES.map((r) => [r, []])));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     fetch("/api/btb/role-page-access").then((r) => r.json()).then((d) => {
@@ -40,12 +42,35 @@ export default function AdminDashboard() {
     });
   };
 
+  const saveAll = async () => {
+    setSaving(true);
+    setSaved(false);
+    for (const role of ROLES) {
+      for (const page of PAGES) {
+        const allowed = (access[role] ?? []).includes(page);
+        await fetch("/api/btb/role-page-access", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role, page, allowed }),
+        });
+      }
+    }
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
       <div className="text-center mb-6 sm:mb-8">
         <BtbWordmark className="text-2xl sm:text-3xl" />
         <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">Admin Dashboard</h1>
         <p className="text-slate-500 mt-1 text-sm sm:text-base">Assign which pages each role can access</p>
+      </div>
+      <div className="flex justify-center mb-4">
+        <button onClick={saveAll} disabled={saving} className="px-4 py-2 rounded-lg bg-[#b65a2e] text-white font-semibold disabled:opacity-50">
+          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
+        </button>
       </div>
       <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
