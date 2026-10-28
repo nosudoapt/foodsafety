@@ -386,6 +386,14 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
               <Button accent="green" onClick={saveSummary} disabled={saving}>
                 {saving ? "Saving…" : "Save month math"}
               </Button>
+              <Button accent="red" onClick={async () => {
+                setSaving(true);
+                const res = await fetch("/api/btb/inventory-finalize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count_month: month, opening_value: countQty(summary.opening_value), closing_value: currentTotal, purchases: countQty(summary.purchases), sales: countQty(summary.sales) }) });
+                setSaving(false);
+                if (res.ok) setNotice(`${monthLabel(month)} finalized`); else setError("Finalize failed (permission/validation).");
+              }} disabled={saving}>
+                {saving ? "Finalizing…" : "Finalize month"}
+              </Button>
             </>
           )}
         </div>
