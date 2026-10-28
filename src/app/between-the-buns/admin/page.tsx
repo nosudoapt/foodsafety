@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import BtbWordmark from "@/components/BtbWordmark";
+
 const BTB_ACCOUNTS = [
   { role: "corporate", email: "corporate@foodsafe.demo", name: "Morgan Blake" },
   { role: "manager", email: "manager@foodsafe.demo", name: "Jordan Patel" },
@@ -29,42 +30,48 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      <div className="text-center mb-8">
-        <BtbWordmark className="text-2xl" />
-        <h1 className="text-3xl font-bold text-slate-900 mt-2">Admin Dashboard</h1>
-        <p className="text-slate-500 mt-1">Manage page access for each user</p>
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
+      <div className="text-center mb-6 sm:mb-8">
+        <BtbWordmark className="text-2xl sm:text-3xl" />
+        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">Admin Dashboard</h1>
+        <p className="text-slate-500 mt-1 text-sm sm:text-base">Manage page access for each user</p>
       </div>
-      <div className="overflow-x-auto bg-white rounded-xl shadow border border-slate-200">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50">
-              <th className="px-4 py-3 text-left font-semibold">Name</th>
-              <th className="px-4 py-3 text-left font-semibold">Role</th>
-              {PAGES.map((p) => (
-                <th key={p} className="px-2 py-3 text-center font-semibold capitalize">{p}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {BTB_ACCOUNTS.map((a) => (
-              <tr key={a.email} className="border-t border-slate-100">
-                <td className="px-4 py-3 font-medium">{a.name}</td>
-                <td className="px-4 py-3 capitalize">{a.role}</td>
+      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 sticky top-0">
+              <tr>
+                <th className="px-4 py-3 text-left font-semibold text-slate-700">Name</th>
+                <th className="px-4 py-3 text-left font-semibold text-slate-700">Role</th>
                 {PAGES.map((p) => (
-                  <td key={p} className="px-2 py-3 text-center">
-                    <input
-                      type="checkbox"
-                      checked={(access[a.email] ?? []).includes(p)}
-                      onChange={() => toggle(a.email, p)}
-                    />
-                  </td>
+                  <th key={p} className="px-2 py-3 text-center font-semibold text-slate-700 capitalize whitespace-nowrap">
+                    {p.replace("-", " ")}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {BTB_ACCOUNTS.map((a, i) => (
+                <tr key={a.email} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
+                  <td className="px-4 py-3 font-medium text-slate-900 whitespace-nowrap">{a.name}</td>
+                  <td className="px-4 py-3 capitalize text-slate-600 whitespace-nowrap">{a.role}</td>
+                  {PAGES.map((p) => (
+                    <td key={p} className="px-2 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        className="w-4 h-4 accent-[#b65a2e] cursor-pointer"
+                        checked={(access[a.email] ?? []).includes(p)}
+                        onChange={() => toggle(a.email, p)}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
+      <p className="mt-6 text-center text-xs text-slate-400">© Between the Buns — Admin</p>
     </div>
   );
 }
