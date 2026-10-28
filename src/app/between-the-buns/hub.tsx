@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BookOpen, Calculator, ClipboardList, LayoutGrid,
   Sparkles, AlertTriangle, Salad, UtensilsCrossed,
@@ -40,7 +40,15 @@ const ICONS: Record<BtbIconKey, LucideIcon> = {
 // The BTB hub. Which cards appear is decided by the signed-in role
 // (src/lib/btb-hub.ts) — staff don't see the Order Sheet, everyone else does.
 export default function BtbHub({ role }: { role: BtbRole }) {
-  const cards = cardsForRole(role);
+  const [dbAllowed, setDbAllowed] = useState<string[] | null>(null);
+  useEffect(() => {
+    fetch("/api/btb/role-page-access").then((r) => r.json()).then((d) => {
+      const pages = (d.rows ?? []).filter((x: any) => x.role === role && x.allowed).map((x: any) => x.page);
+      if (pages.length) setDbAllowed(pages);
+    }).catch(() => {});
+  }, [role]);
+  const baseCards = cardsForRole(role);
+  const cards = dbAllowed ? baseCards.filter((c) => dbAllowed.includes(c.href.split("/").pop() || "")) : baseCards;
   const hidden = hiddenCardsForRole(role);
 
   // Card search: filters this role's own cards by title or description, so a
