@@ -5,9 +5,11 @@ import BtbWordmark from "@/components/BtbWordmark";
 
 const ROLES = ["staff", "supervisor", "manager", "corporate"];
 const PAGES = [
-  "hub", "prep-list", "order-sheet", "cleaning", "vault",
-  "training", "allergens", "recipes", "checklists",
-  "month-end-inventory",
+  "hub", "prep-list", "order-sheet", "cleaning", "vault", "training", "allergens",
+  "recipes", "checklists", "month-end-inventory", "cash-out", "staff-schedule",
+  "tax-dates", "branding-requests", "compliance", "documents", "staff-licenses",
+  "inspections", "franchise-inspection", "marketing", "new-restaurant", "emergency",
+  "protocols", "handbook", "manuals",
 ];
 
 export default function AdminDashboard() {
