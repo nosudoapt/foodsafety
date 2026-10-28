@@ -33,6 +33,7 @@ export const BTB_ACCOUNTS: readonly BtbAccount[] = [
   { role: "manager", email: "manager@foodsafe.demo", name: "Jordan Patel", restaurant: "The Grill House" },
   { role: "supervisor", email: "supervisor@foodsafe.demo", name: "Riley Nguyen", restaurant: "The Grill House" },
   { role: "staff", email: "staff@foodsafe.demo", name: "Sam Rivera", restaurant: "The Grill House" },
+  { role: "admin", email: "admin@foodsafe.demo", name: "Admin User", restaurant: "Grill House Group" },
 ] as const;
 
 export function btbAccountFor(role: string): BtbAccount | undefined {

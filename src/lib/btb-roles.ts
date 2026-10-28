@@ -5,7 +5,7 @@
 // (an owner is a manager for access purposes); "supervisor" sits between staff
 // and manager. "corporate" is franchise HQ (opens new restaurants, sees the
 // corporate franchise report).
-export const BTB_ROLES = ["staff", "supervisor", "manager", "corporate"] as const;
+export const BTB_ROLES = ["staff", "supervisor", "manager", "corporate", "admin"] as const;
 export type BtbRole = (typeof BTB_ROLES)[number];
 
 export function isBtbRole(value: unknown): value is BtbRole {

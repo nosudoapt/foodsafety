@@ -24,7 +24,7 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 // --- 1. BTB's own credential list -------------------------------------------
 
 test("BTB has four role accounts, one per role", () => {
-  assert.deepEqual([...BTB_ROLES], ["staff", "supervisor", "manager", "corporate"]);
+  assert.deepEqual([...BTB_ROLES], ["staff", "supervisor", "manager", "corporate", "admin"]);
   assert.deepEqual([...BTB_ACCOUNTS.map((a) => a.role)].sort(), [...BTB_ROLES].sort());
   for (const account of BTB_ACCOUNTS) {
     assert.ok(isBtbRole(account.role));
