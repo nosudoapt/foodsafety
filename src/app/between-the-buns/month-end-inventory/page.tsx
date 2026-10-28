@@ -125,16 +125,20 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     }
     setSaving(true);
     setError(null);
-    const { error: err } = await supabase.from("inventory_purchases").insert({
-      count_month: month,
-      purchase_date: purForm.date,
-      type: purForm.type,
-      supplier: purForm.type === "gfs" ? (purForm.supplier || "GFS") : null,
-      description: purForm.description.trim(),
-      amount,
-      reference: purForm.reference.trim() || null,
+    const res = await fetch("/api/btb/inventory-purchases", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        count_month: month,
+        purchase_date: purForm.date,
+        type: purForm.type,
+        supplier: purForm.type === "gfs" ? (purForm.supplier || "GFS") : null,
+        description: purForm.description.trim(),
+        amount,
+        reference: purForm.reference.trim() || null,
+      }),
     });
-    if (err) setError("Couldn't save purchase — run schema-inventory-purchases.sql, then retry.");
+    if (!res.ok) setError("Couldn't save purchase — check permissions/schema.");
     else { setNotice("Purchase saved"); setPurForm({ ...purForm, description: "", amount: "", reference: "" }); await loadPurchases(month); }
     setSaving(false);
   };
