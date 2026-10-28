@@ -50,7 +50,7 @@ export default function BtbHub({ role }: { role: BtbRole }) {
     }).catch(() => setDbAllowed([])).finally(() => setLoadingAccess(false));
   }, [role]);
   const baseCards = cardsForRole(role);
-  const cards = dbAllowed ? baseCards.filter((c) => dbAllowed.includes(c.href.split("/").pop() || "")) : baseCards;
+  const cards = (role === "admin" && (!dbAllowed || !dbAllowed.length)) ? baseCards : (dbAllowed ? baseCards.filter((c) => dbAllowed.includes(c.href.split("/").pop() || "")) : baseCards);
   const hidden = hiddenCardsForRole(role);
 
   // Card search: filters this role's own cards by title or description, so a
