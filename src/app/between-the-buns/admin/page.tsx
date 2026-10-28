@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BtbWordmark } from "@/components/BtbWordmark";
+import BtbWordmark from "@/components/BtbWordmark";
 const BTB_ACCOUNTS = [
   { role: "corporate", email: "corporate@foodsafe.demo", name: "Morgan Blake" },
   { role: "manager", email: "manager@foodsafe.demo", name: "Jordan Patel" },
