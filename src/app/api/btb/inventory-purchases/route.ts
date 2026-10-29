@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
-import { supabase } from "@/lib/supabase";
+import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 import { entryAmount, isDuplicateInvoice, type PurchaseEntry } from "@/lib/inventory-purchases";
 
@@ -40,9 +40,11 @@ export async function POST(req: Request) {
   const ref = typeof reference === "string" && reference.trim() ? reference.trim() : null;
   const sup = typeof supplier === "string" && supplier.trim() ? supplier.trim() : type === "gfs" ? "GFS" : null;
 
+  const db = inventoryDb();
+
   // Duplicate-invoice guard for GFS entries that carry a reference.
   if (type === "gfs" && ref) {
-    const { data: existingRows } = await supabase
+    const { data: existingRows } = await db
       .from("inventory_purchases")
       .select("id, type, supplier, reference, purchase_date, amount, description, count_month");
     const entries = (existingRows ?? []) as PurchaseEntry[];
@@ -52,7 +54,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from("inventory_purchases")
     .insert({
       count_month,
@@ -86,7 +88,7 @@ export async function GET(req: Request) {
   const month = searchParams.get("month");
   if (!isMonthKey(month)) return NextResponse.json({ error: "invalid month" }, { status: 400 });
 
-  const { data, error } = await supabase
+  const { data, error } = await inventoryDb()
     .from("inventory_purchases")
     .select("*")
     .eq("count_month", month)

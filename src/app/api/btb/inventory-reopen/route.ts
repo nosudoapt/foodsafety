@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
-import { supabase } from "@/lib/supabase";
+import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 import { persistWithAudit, snapshotRestoreFields, type SnapshotRow } from "@/lib/inventory-audit-persist";
 
@@ -30,9 +30,11 @@ export async function POST(req: Request) {
   const why = typeof reason === "string" ? reason.trim() : "";
   if (!why) return NextResponse.json({ error: "reason required" }, { status: 400 });
 
+  const db = inventoryDb();
+
   // Block if ANY downstream (later) month is finalized — string month keys
   // compare chronologically ('2025-10' > '2025-09').
-  const { data: later } = await supabase
+  const { data: later } = await db
     .from("inventory_month_snapshots")
     .select("count_month")
     .eq("status", "finalized")
@@ -45,7 +47,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("inventory_month_snapshots")
     .select("*")
     .eq("count_month", count_month)
@@ -57,7 +59,7 @@ export async function POST(req: Request) {
   const outcome = await persistWithAudit<SnapshotRow>(count_month, {
     actionLabel: "reopen",
     writeSnapshot: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("inventory_month_snapshots")
         .update({ status: "draft", reopened_by: role, reopened_at: new Date().toISOString(), reopen_reason: why })
         .eq("count_month", count_month)
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
       return { data: (data as SnapshotRow | null) ?? null, error };
     },
     writeAudit: async () => {
-      const { error } = await supabase.from("inventory_audit_log").insert({
+      const { error } = await db.from("inventory_audit_log").insert({
         count_month,
         action: "reopen",
         actor: role,
@@ -79,7 +81,7 @@ export async function POST(req: Request) {
     },
     // Undo the status flip: restore the exact finalized snapshot we read.
     rollback: async () => {
-      const { error } = await supabase
+      const { error } = await db
         .from("inventory_month_snapshots")
         .update(snapshotRestoreFields(prior))
         .eq("count_month", count_month);

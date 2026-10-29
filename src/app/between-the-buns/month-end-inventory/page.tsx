@@ -4,10 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Layers, PackagePlus, Save, Trash2 } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader, StatTile } from "@/components/ui";
-import { supabase } from "@/lib/supabase";
 import { monthDates, monthlyTotal, dailyTotal, type PurchaseEntry } from "@/lib/inventory-purchases";
 import { computeAccounting, nullableAmount } from "@/lib/inventory-accounting";
-import { activeLocationId, locationScope } from "@/lib/locations";
+import { activeLocationId } from "@/lib/locations";
 import {
   countQty,
   monthLabel,
@@ -20,9 +19,6 @@ import {
   type InventoryCount,
   type InventoryItem,
 } from "@/lib/month-end-inventory";
-
-const ITEM_COLS = "id, name, unit, category, unit_cost, position, location_id";
-const COUNT_COLS = "id, item_id, count_month, qty, counted_by";
 
 // Month-end count sheet: pick the closing month, count each item, compare the
 // value against the previous close. Staff read; managers count and edit.
@@ -60,56 +56,50 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
   const months = useMemo(() => recentMonths(thisMonth(), 12), []);
   const prevKey = prevMonth(month);
 
+  // All data access goes through the BTB API routes (server-resolved role +
+  // server-side DB client) — the browser never talks to Supabase directly.
   const loadItems = async () => {
-    const scope = locationScope();
-    let q = supabase.from("inventory_items").select(ITEM_COLS).order("position").order("name");
-    if (scope) q = q.or(scope);
-    const { data, error: err } = await q;
-    if (err) {
-      setError("Couldn't load items — run supabase/schema-month-end-inventory.sql, then reload.");
+    try {
+      const res = await fetch("/api/btb/inventory-items");
+      const d = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(d?.error ? `Couldn't load items — ${d.error}` : "Couldn't load items.");
+        setLoading(false);
+        return;
+      }
+      setItems((d.items ?? []) as InventoryItem[]);
+      setError(null);
+    } catch {
+      setError("Couldn't load items — check the connection and reload.");
       setLoading(false);
-      return;
     }
-    setItems((data ?? []) as InventoryItem[]);
-    setError(null);
   };
 
   const loadCounts = async (key: string) => {
-    const scope = locationScope();
-    let q = supabase.from("inventory_counts").select(COUNT_COLS).eq("count_month", key);
-    if (scope) q = q.or(scope);
-    const { data, error: err } = await q;
-    if (err) {
-      setError("Couldn't load counts — run supabase/schema-month-end-inventory.sql, then reload.");
+    try {
+      const res = await fetch(`/api/btb/inventory-counts?month=${key}`);
+      const d = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(d?.error ? `Couldn't load counts — ${d.error}` : "Couldn't load counts.");
+        setLoading(false);
+        return;
+      }
+      setCounts(((d.counts ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
+      // Previous close, for the variance column.
+      setPrevCounts(((d.prevCounts ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
+      // Food sales rides along on the same request (stored on the summary row).
+      setSummary({ sales: typeof d.sales === "string" ? d.sales : "" });
+      setError(null);
+    } catch {
+      setError("Couldn't load counts — check the connection and reload.");
       setLoading(false);
       return;
     }
-    setCounts(((data ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
-
-    // Previous close, for the variance column.
-    let pq = supabase.from("inventory_counts").select(COUNT_COLS).eq("count_month", prevMonth(key));
-    if (scope) pq = pq.or(scope);
-    const { data: pdata } = await pq;
-    setPrevCounts(((pdata ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
-    setError(null);
-    await loadSummary(key);
     await loadOpening(key);
     await loadPurchases(key);
     const snapRes = await fetch(`/api/btb/inventory-snapshot?month=${key}`);
     if (snapRes.ok) { const sd = await snapRes.json(); setSnapshot(sd.snapshot ?? null); }
     setLoading(false);
-  };
-
-  const loadSummary = async (key: string) => {
-    const scope = locationScope();
-    let q = supabase
-      .from("inventory_month_summary")
-      .select("sales")
-      .eq("count_month", key);
-    if (scope) q = q.or(scope);
-    const { data } = await q;
-    const row = (data?.[0] as { sales: number } | undefined) ?? null;
-    setSummary({ sales: row ? String(Number(row.sales) || 0) : "" });
   };
 
   // Opening inventory: carried forward from the prior month's FINALIZED
@@ -126,8 +116,13 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
   };
 
   const loadPurchases = async (key: string) => {
-    const { data } = await supabase.from("inventory_purchases").select("*").eq("count_month", key).order("purchase_date").order("created_at");
-    setPurchases((data ?? []) as PurchaseEntry[]);
+    try {
+      const res = await fetch(`/api/btb/inventory-purchases?month=${key}`);
+      const d = await res.json().catch(() => null);
+      setPurchases(res.ok ? ((d.purchases ?? []) as PurchaseEntry[]) : []);
+    } catch {
+      setPurchases([]);
+    }
   };
 
   const addPurchase = async () => {
@@ -161,23 +156,16 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     if (readOnly || saving) return;
     setSaving(true);
     setError(null);
-    const scope = locationScope();
-    let del = supabase.from("inventory_month_summary").delete().eq("count_month", month);
-    if (scope) del = del.or(scope);
-    const { error: delErr } = await del;
-    if (!delErr) {
-      // Only food sales are stored here — opening is carried forward and
-      // purchases come from the ledger, so neither is hand-typed any more.
-      const { error: insErr } = await supabase.from("inventory_month_summary").insert({
-        count_month: month,
-        sales: nullableAmount(summary.sales) ?? 0,
-        location_id: activeLocationId(),
-      });
-      if (!insErr) setNotice(`${monthLabel(month)} sales saved`);
-      else setError("Couldn't save sales — run supabase/schema-inventory-summary.sql, then retry.");
-    } else {
-      setError("Couldn't save sales — run supabase/schema-inventory-summary.sql, then retry.");
-    }
+    // Only food sales are stored — opening is carried forward and purchases
+    // come from the ledger, so neither is hand-typed any more.
+    const res = await fetch("/api/btb/inventory-summary", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count_month: month, sales: summary.sales, location_id: activeLocationId() }),
+    });
+    const d = await res.json().catch(() => null);
+    if (res.ok) setNotice(`${monthLabel(month)} sales saved`);
+    else setError(d?.error ? `Couldn't save sales — ${d.error}` : "Couldn't save sales.");
     setSaving(false);
   };
 
@@ -228,33 +216,24 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     if (readOnly || saving) return;
     setSaving(true);
     setError(null);
-    const scope = locationScope();
-    let del = supabase.from("inventory_counts").delete().eq("count_month", month);
-    if (scope) del = del.or(scope);
-    const { error: delErr } = await del;
-    if (delErr) {
-      setError("Couldn't save — run supabase/schema-month-end-inventory.sql, then retry.");
+    // Send every item's live quantity (including zeros) so the server applies
+    // the same rule the page did: store only non-zero counts, replacing the
+    // month's previous rows.
+    const countsPayload = lines.map((l) => ({ item_id: l.item.id, qty: liveQty(l.item.id) }));
+    const res = await fetch("/api/btb/inventory-counts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ count_month: month, counts: countsPayload, location_id: activeLocationId() }),
+    });
+    const d = await res.json().catch(() => null);
+    if (!res.ok) {
+      setError(d?.error ? `Couldn't save — ${d.error}` : "Couldn't save the count sheet.");
       setSaving(false);
       return;
     }
-    const rows = lines
-      .map((l) => ({
-        item_id: l.item.id,
-        count_month: month,
-        qty: liveQty(l.item.id),
-        location_id: activeLocationId(),
-      }))
-      .filter((r) => r.qty > 0);
-    if (rows.length > 0) {
-      const { error: insErr } = await supabase.from("inventory_counts").insert(rows);
-      if (insErr) {
-        setError("Couldn't save — run supabase/schema-month-end-inventory.sql, then retry.");
-        setSaving(false);
-        return;
-      }
-    }
+    const saved = countsPayload.filter((c) => c.qty > 0).length;
     setDraft({});
-    setNotice(`${monthLabel(month)} saved · ${rows.length} counted`);
+    setNotice(`${monthLabel(month)} saved · ${saved} counted`);
     setSaving(false);
     await loadCounts(month);
   };
@@ -268,16 +247,20 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     }
     setSaving(true);
     setError(null);
-    const { error: err } = await supabase.from("inventory_items").insert({
-      name,
-      unit: newItem.unit.trim() || "ea",
-      unit_cost: countQty(newItem.unit_cost),
-      category: null,
-      position: items.length,
-      location_id: activeLocationId(),
+    const res = await fetch("/api/btb/inventory-items", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        unit: newItem.unit,
+        unit_cost: newItem.unit_cost,
+        position: items.length,
+        location_id: activeLocationId(),
+      }),
     });
-    if (err) {
-      setError("Couldn't add the item — run supabase/schema-month-end-inventory.sql, then retry.");
+    const d = await res.json().catch(() => null);
+    if (!res.ok) {
+      setError(d?.error ? `Couldn't add the item — ${d.error}` : "Couldn't add the item.");
       setSaving(false);
       return;
     }
@@ -290,9 +273,10 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
   const removeItem = async (id: string) => {
     if (readOnly) return;
     setError(null);
-    const { error: err } = await supabase.from("inventory_items").delete().eq("id", id);
-    if (err) {
-      setError("Couldn't remove the item — run supabase/schema-month-end-inventory.sql, then retry.");
+    const res = await fetch(`/api/btb/inventory-items?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    const d = await res.json().catch(() => null);
+    if (!res.ok) {
+      setError(d?.error ? `Couldn't remove the item — ${d.error}` : "Couldn't remove the item.");
       return;
     }
     setNotice("Item removed (its counts went too)");

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
-import { supabase } from "@/lib/supabase";
+import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
 import { resolveOpening } from "@/lib/inventory-accounting";
 
@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   if (!isMonthKey(month)) return NextResponse.json({ error: "invalid month" }, { status: 400 });
 
   const pm = prevMonth(month);
-  const { data } = await supabase
+  const { data } = await inventoryDb()
     .from("inventory_month_snapshots")
     .select("closing_value, status, count_month")
     .eq("count_month", pm)

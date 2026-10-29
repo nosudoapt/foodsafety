@@ -1,10 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
-import { supabase } from "@/lib/supabase";
+import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth, toLines, totalValue, type InventoryCount, type InventoryItem } from "@/lib/month-end-inventory";
 import { computeAccounting, safeQty } from "@/lib/inventory-accounting";
 import { persistWithAudit, snapshotRestoreFields, type SnapshotRow } from "@/lib/inventory-audit-persist";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 // Finalize a month: recompute every accounting figure from TRUSTED persisted
 // records (count sheet × item costs, the purchase ledger, and the prior
@@ -20,11 +21,11 @@ const MANAGER_ROLES = ["manager", "admin"];
 
 // Recompute the closing inventory value for a month straight from the stored
 // count sheet: Σ (qty × item.unit_cost). Ignores anything the browser claims.
-async function serverClosingValue(month: string): Promise<number> {
-  const { data: items } = await supabase
+async function serverClosingValue(db: SupabaseClient, month: string): Promise<number> {
+  const { data: items } = await db
     .from("inventory_items")
     .select("id, name, unit, category, unit_cost, position");
-  const { data: counts } = await supabase
+  const { data: counts } = await db
     .from("inventory_counts")
     .select("item_id, qty")
     .eq("count_month", month);
@@ -36,8 +37,8 @@ async function serverClosingValue(month: string): Promise<number> {
 }
 
 // Recompute eligible monthly purchases from the ledger (single source of truth).
-async function serverPurchases(month: string): Promise<number> {
-  const { data } = await supabase
+async function serverPurchases(db: SupabaseClient, month: string): Promise<number> {
+  const { data } = await db
     .from("inventory_purchases")
     .select("amount")
     .eq("count_month", month);
@@ -46,9 +47,9 @@ async function serverPurchases(month: string): Promise<number> {
 }
 
 // Opening inventory = the immediately-preceding month's FINALIZED closing only.
-async function serverOpening(month: string): Promise<number | null> {
+async function serverOpening(db: SupabaseClient, month: string): Promise<number | null> {
   const pm = prevMonth(month);
-  const { data } = await supabase
+  const { data } = await db
     .from("inventory_month_snapshots")
     .select("closing_value, status")
     .eq("count_month", pm)
@@ -67,9 +68,11 @@ export async function POST(req: Request) {
   const { count_month, sales } = body ?? {};
   if (!isMonthKey(count_month)) return NextResponse.json({ error: "invalid month" }, { status: 400 });
 
+  const db = inventoryDb();
+
   // The FULL existing row (not just status): a rollback needs it to restore a
   // reopened draft, or to know there was no prior row at all.
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("inventory_month_snapshots")
     .select("*")
     .eq("count_month", count_month)
@@ -80,9 +83,9 @@ export async function POST(req: Request) {
   const prior = (existing ?? null) as SnapshotRow | null;
 
   // Recompute everything from persisted records — never trust the browser.
-  const closing = await serverClosingValue(count_month);
-  const purchases = await serverPurchases(count_month);
-  const opening = await serverOpening(count_month);
+  const closing = await serverClosingValue(db, count_month);
+  const purchases = await serverPurchases(db, count_month);
+  const opening = await serverOpening(db, count_month);
 
   // Refuse to finalize an empty/invalid month (no counted value at all).
   if (closing <= 0 && purchases <= 0) {
@@ -112,7 +115,7 @@ export async function POST(req: Request) {
   const outcome = await persistWithAudit<SnapshotRow>(count_month, {
     actionLabel: "finalization",
     writeSnapshot: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await db
         .from("inventory_month_snapshots")
         .upsert(row, { onConflict: "count_month" })
         .select()
@@ -120,7 +123,7 @@ export async function POST(req: Request) {
       return { data: (data as SnapshotRow | null) ?? null, error };
     },
     writeAudit: async (written) => {
-      const { error } = await supabase.from("inventory_audit_log").insert({
+      const { error } = await db.from("inventory_audit_log").insert({
         count_month,
         action: "finalize",
         actor: role,
@@ -132,14 +135,14 @@ export async function POST(req: Request) {
     rollback: async () => {
       if (prior) {
         // Re-finalize of a reopened draft: put the draft back exactly.
-        const { error } = await supabase
+        const { error } = await db
           .from("inventory_month_snapshots")
           .update(snapshotRestoreFields(prior))
           .eq("count_month", count_month);
         return { error };
       }
       // First finalize: remove the snapshot we just created.
-      const { error } = await supabase
+      const { error } = await db
         .from("inventory_month_snapshots")
         .delete()
         .eq("count_month", count_month);
