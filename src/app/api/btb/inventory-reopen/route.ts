@@ -3,12 +3,17 @@ import { NextResponse } from "next/server";
 import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
 import { supabase } from "@/lib/supabase";
 import { isMonthKey } from "@/lib/month-end-inventory";
+import { persistWithAudit, snapshotRestoreFields, type SnapshotRow } from "@/lib/inventory-audit-persist";
 
 // Reopen a finalized month so it can be corrected. The original finalized
 // snapshot is NEVER deleted — status flips to 'draft' and who/why is recorded,
 // so history is preserved and the month must be explicitly re-finalized.
 // Manager/Admin only. Blocks if ANY later month is still finalized, because a
 // correction here would silently invalidate downstream accounting.
+//
+// The status flip + audit write go through persistWithAudit: if the audit
+// insert fails, the status flip is rolled back so a month is never silently
+// reopened without its audit trail.
 const MANAGER_ROLES = ["manager", "admin"];
 
 export async function POST(req: Request) {
@@ -47,25 +52,44 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (!existing) return NextResponse.json({ error: "not finalized" }, { status: 404 });
   if (existing.status !== "finalized") return NextResponse.json({ error: "already reopened" }, { status: 409 });
+  const prior = existing as SnapshotRow;
 
-  // Flip to draft — keep the row and its figures for the audit trail.
-  const { data: updated, error } = await supabase
-    .from("inventory_month_snapshots")
-    .update({ status: "draft", reopened_by: role, reopened_at: new Date().toISOString(), reopen_reason: why })
-    .eq("count_month", count_month)
-    .eq("status", "finalized") // guard the transition
-    .select()
-    .single();
-  if (error || !updated) return NextResponse.json({ error: error?.message ?? "reopen failed" }, { status: 500 });
-
-  await supabase.from("inventory_audit_log").insert({
-    count_month,
-    action: "reopen",
-    actor: role,
-    reason: why,
-    snapshot: existing,
-    version: existing.version ?? 1,
+  const outcome = await persistWithAudit<SnapshotRow>(count_month, {
+    actionLabel: "reopen",
+    writeSnapshot: async () => {
+      const { data, error } = await supabase
+        .from("inventory_month_snapshots")
+        .update({ status: "draft", reopened_by: role, reopened_at: new Date().toISOString(), reopen_reason: why })
+        .eq("count_month", count_month)
+        .eq("status", "finalized") // guard the transition
+        .select()
+        .single();
+      return { data: (data as SnapshotRow | null) ?? null, error };
+    },
+    writeAudit: async () => {
+      const { error } = await supabase.from("inventory_audit_log").insert({
+        count_month,
+        action: "reopen",
+        actor: role,
+        reason: why,
+        snapshot: prior,
+        version: prior.version ?? 1,
+      });
+      return { error };
+    },
+    // Undo the status flip: restore the exact finalized snapshot we read.
+    rollback: async () => {
+      const { error } = await supabase
+        .from("inventory_month_snapshots")
+        .update(snapshotRestoreFields(prior))
+        .eq("count_month", count_month);
+      return { error };
+    },
   });
 
-  return NextResponse.json({ ok: true, snapshot: updated });
+  if (!outcome.ok) {
+    return NextResponse.json({ error: outcome.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, snapshot: outcome.snapshot });
 }
