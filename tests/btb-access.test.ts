@@ -70,8 +70,13 @@ test("the login vault is management-tier (manager + corporate), view == edit", (
   }
 });
 
-test("reference pages are all-view, no-edit", () => {
+test("reference pages are all-view, no-edit — except admin, which is walled out", () => {
   for (const r of BTB_ROLES) {
+    if (r === "admin") {
+      // Admin is restricted to the admin dashboard only (commit b8ce4e2).
+      assert.equal(btbCanView("reference", r), false, `admin must not view reference`);
+      continue;
+    }
     assert.equal(btbCanView("reference", r), true, `reference view for ${r}`);
     assert.equal(btbCanEdit("reference", r), false, `reference edit for ${r}`);
   }
@@ -120,8 +125,14 @@ test("in-house inspections are manager-tier (manager + corporate only)", () => {
   }
 });
 
-test("staff cannot reach branding requests; supervisors view, managers edit", () => {
+test("staff cannot reach branding requests; supervisors view, managers edit; admin walled out", () => {
   for (const r of BTB_ROLES) {
+    if (r === "admin") {
+      // Admin sees only the admin dashboard, not operational surfaces.
+      assert.equal(btbCanView("branding_requests", r), false, `branding view for ${r}`);
+      assert.equal(btbCanEdit("branding_requests", r), false, `branding edit for ${r}`);
+      continue;
+    }
     const canView = r !== "staff";
     const canEdit = r === "manager";
     assert.equal(btbCanView("branding_requests", r), canView, `branding view for ${r}`);
@@ -137,6 +148,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 const ROUTE_FEATURE: Record<string, string> = {
+  admin: "admin_dashboard",
   "prep-list": "prep_list",
   checklists: "checklists",
   "cash-out": "cash_out",

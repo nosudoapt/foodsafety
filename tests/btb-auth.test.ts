@@ -117,15 +117,23 @@ test("hub cards are role-gated by the access matrix", () => {
   assert.ok(!management.some((c) => c.href.endsWith("/franchise-inspection")));
   assert.ok(!management.some((c) => c.href.endsWith("/new-restaurant")));
 
-  // Corporate sees every card.
-  assert.equal(corporate.length, BTB_CARDS.length, "corporate sees everything");
-  assert.deepEqual(hiddenCardsForRole("corporate"), []);
+  // Corporate sees every card except the admin dashboard (admin-only).
+  const corpHidden = hiddenCardsForRole("corporate");
+  assert.equal(corporate.length, BTB_CARDS.length - 1, "corporate sees all but one card");
+  assert.deepEqual(corpHidden.map((c) => c.feature), ["admin_dashboard"]);
+  assert.ok(!corporate.some((c) => c.href.endsWith("/admin")), "corporate must not reach the admin dashboard");
 });
 
 test("every role sees most of the hub, and all cards belong to BTB", () => {
   for (const role of BTB_ROLES) {
     const cards = cardsForRole(role);
-    assert.ok(cards.length >= 6, `${role} should see a full-looking hub`);
+    if (role === "admin") {
+      // Admin is deliberately walled into the admin dashboard only.
+      assert.equal(cards.length, 1, "admin sees only the admin dashboard");
+      assert.equal(cards[0].feature, "admin_dashboard");
+    } else {
+      assert.ok(cards.length >= 6, `${role} should see a full-looking hub`);
+    }
     for (const card of cards) {
       assert.ok(card.href.startsWith("/between-the-buns/"), `${card.href} is a BTB route`);
     }

@@ -114,6 +114,26 @@
       "step": 23,
       "file": "seed-demo.sql",
       "description": "Demo accounts + sample rows (RESETS demo data on re-run \u2014 re-apply with --force or --step=23 after editing it)."
+    },
+    {
+      "step": 24,
+      "file": "schema-inventory-purchases.sql",
+      "description": "inventory_purchases \u2014 the daily purchase ledger (GFS invoices + local purchases) that feeds monthly COGS. One source of truth for eligible purchases; unique index blocks duplicate GFS invoice references."
+    },
+    {
+      "step": 25,
+      "file": "schema-inventory-snapshots.sql",
+      "description": "inventory_month_snapshots \u2014 server-written month-end accounting snapshot (opening/purchases/closing/sales/COGS/food-cost %). Rows are never deleted; reopening flips status to 'draft' and records who/why so history is preserved."
+    },
+    {
+      "step": 26,
+      "file": "schema-inventory-audit.sql",
+      "description": "inventory_audit_log \u2014 append-only trail of finalize/reopen/correct actions with a JSONB copy of the figures at action time."
+    },
+    {
+      "step": 27,
+      "file": "schema-role-page-access.sql",
+      "description": "role_page_access \u2014 admin-edited role\u2192page matrix the BTB hub reads to decide which cards each role sees. Admin dashboard writes it."
     }
   ]
 }

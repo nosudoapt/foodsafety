@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import BtbFeatureGate from "@/components/BtbFeatureGate";
 import BtbWordmark from "@/components/BtbWordmark";
 
 const ROLES = ["staff", "supervisor", "manager", "corporate"];
@@ -14,6 +15,16 @@ const PAGES = [
 ];
 
 export default function AdminDashboard() {
+  // Admin-only surface: the gate walls every other role out (defense in depth —
+  // the hub already hides the card, but the URL must not be enough).
+  return (
+    <BtbFeatureGate feature="admin_dashboard" wide>
+      {() => <AdminDashboardBody />}
+    </BtbFeatureGate>
+  );
+}
+
+function AdminDashboardBody() {
   const [access, setAccess] = useState<Record<string, string[]>>(() => Object.fromEntries(ROLES.map((r) => [r, []])));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

@@ -73,6 +73,10 @@ are idempotent (safe to re-run).
 | 20 | `schema-month-end-inventory.sql` | `inventory_items` + `inventory_counts` — the closing count sheet (`count_month` is a `YYYY-MM` key, one row per item per month) with value and variance against the previous close. Retention: 24 months via `purge_inventory_counts()`. |
 | 21 | `schema-branding-requests.sql` | `branding_requests` — signage/menu/uniform/packaging requests on a status board (open → in_review → in_progress → done/declined). Retention: finished requests older than 24 months via `purge_branding_requests()`; open work is never purged. |
 | 22 | `schema-storage-buckets.sql` | Storage buckets `cleaning-photos`, `inspection-photos`, `training-videos` + their policies (upload targets for `uploadToSupabase()` in `src/lib/files.ts`). Existing cleaning/inspection photos stay in `ops-photos` (#9). |
+| 24 | `schema-inventory-purchases.sql` | `inventory_purchases` — the daily purchase ledger (GFS invoices + local purchases) that feeds monthly COGS. One source of truth for eligible purchases; a unique index blocks duplicate GFS invoice references. |
+| 25 | `schema-inventory-snapshots.sql` | `inventory_month_snapshots` — server-written month-end accounting snapshot (opening/purchases/closing/sales/COGS/food-cost %). Rows are never deleted; reopening flips `status` to `draft` and records who/why so history is preserved. |
+| 26 | `schema-inventory-audit.sql` | `inventory_audit_log` — append-only trail of finalize/reopen/correct actions with a JSONB copy of the figures at action time. |
+| 27 | `schema-role-page-access.sql` | `role_page_access` — admin-edited role→page matrix the BTB hub reads to decide which cards each role sees. The Admin Dashboard writes it. |
 
 ## Role set — single source of truth
 

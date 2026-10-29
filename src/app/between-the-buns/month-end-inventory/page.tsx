@@ -5,18 +5,17 @@ import { Layers, PackagePlus, Save, Trash2 } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader, StatTile } from "@/components/ui";
 import { supabase } from "@/lib/supabase";
-import { monthDates } from "@/lib/inventory-purchases";
+import { monthDates, monthlyTotal, dailyTotal, type PurchaseEntry } from "@/lib/inventory-purchases";
+import { computeAccounting, nullableAmount } from "@/lib/inventory-accounting";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import {
   countQty,
-  foodCostPct,
   monthLabel,
   prevMonth,
   recentMonths,
   thisMonth,
   toLines,
   totalValue,
-  usageValue,
   variance,
   type InventoryCount,
   type InventoryItem,
@@ -46,10 +45,16 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [newItem, setNewItem] = useState({ name: "", unit: "ea", unit_cost: "" });
-  // Month math — opening + purchases + sales. Closing is the live count total.
-  const [summary, setSummary] = useState({ opening_value: "0", purchases: "0", sales: "0" });
-  const [purchases, setPurchases] = useState<any[]>([]);
-  const [snapshot, setSnapshot] = useState<any>(null);
+  // Month math. Closing = live count total. Purchases come from the ledger
+  // (single source of truth). Opening is carried forward from the prior
+  // month's FINALIZED snapshot (null = baseline/unavailable). Sales is the one
+  // manually-entered figure, stored on inventory_month_summary.
+  const [summary, setSummary] = useState({ sales: "" });
+  const [openingInfo, setOpeningInfo] = useState<{ opening: number | null; carriedFrom: string | null; baseline: boolean }>({
+    opening: null, carriedFrom: null, baseline: true,
+  });
+  const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
+  const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null);
   const [purForm, setPurForm] = useState({ type: "gfs", date: "", description: "", amount: "", reference: "", supplier: "GFS" });
 
   const months = useMemo(() => recentMonths(thisMonth(), 12), []);
@@ -88,6 +93,7 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     setPrevCounts(((pdata ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
     setError(null);
     await loadSummary(key);
+    await loadOpening(key);
     await loadPurchases(key);
     const snapRes = await fetch(`/api/btb/inventory-snapshot?month=${key}`);
     if (snapRes.ok) { const sd = await snapRes.json(); setSnapshot(sd.snapshot ?? null); }
@@ -98,25 +104,30 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     const scope = locationScope();
     let q = supabase
       .from("inventory_month_summary")
-      .select("opening_value, purchases, sales")
+      .select("sales")
       .eq("count_month", key);
     if (scope) q = q.or(scope);
     const { data } = await q;
-    const row = (data?.[0] as { opening_value: number; purchases: number; sales: number } | undefined) ?? null;
-    if (row) {
-      setSummary({
-        opening_value: String(Number(row.opening_value) || 0),
-        purchases: String(Number(row.purchases) || 0),
-        sales: String(Number(row.sales) || 0),
-      });
-    } else {
-      setSummary({ opening_value: "0", purchases: "0", sales: "0" });
+    const row = (data?.[0] as { sales: number } | undefined) ?? null;
+    setSummary({ sales: row ? String(Number(row.sales) || 0) : "" });
+  };
+
+  // Opening inventory: carried forward from the prior month's FINALIZED
+  // snapshot via the protected API. Never fabricated (null on baseline).
+  const loadOpening = async (key: string) => {
+    try {
+      const res = await fetch(`/api/btb/inventory-opening?month=${key}`);
+      if (!res.ok) return;
+      const d = await res.json();
+      setOpeningInfo({ opening: d.opening ?? null, carriedFrom: d.carriedFrom ?? null, baseline: !!d.baseline });
+    } catch {
+      /* keep previous */
     }
   };
 
   const loadPurchases = async (key: string) => {
-    const { data } = await supabase.from("inventory_purchases").select("*").eq("count_month", key).order("purchase_date");
-    setPurchases((data ?? []) as any[]);
+    const { data } = await supabase.from("inventory_purchases").select("*").eq("count_month", key).order("purchase_date").order("created_at");
+    setPurchases((data ?? []) as PurchaseEntry[]);
   };
 
   const addPurchase = async () => {
@@ -155,17 +166,17 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     if (scope) del = del.or(scope);
     const { error: delErr } = await del;
     if (!delErr) {
+      // Only food sales are stored here — opening is carried forward and
+      // purchases come from the ledger, so neither is hand-typed any more.
       const { error: insErr } = await supabase.from("inventory_month_summary").insert({
         count_month: month,
-        opening_value: countQty(summary.opening_value),
-        purchases: countQty(summary.purchases),
-        sales: countQty(summary.sales),
+        sales: nullableAmount(summary.sales) ?? 0,
         location_id: activeLocationId(),
       });
-      if (!insErr) setNotice(`${monthLabel(month)} month math saved`);
-      else setError("Couldn't save month math — run supabase/schema-inventory-summary.sql, then retry.");
+      if (!insErr) setNotice(`${monthLabel(month)} sales saved`);
+      else setError("Couldn't save sales — run supabase/schema-inventory-summary.sql, then retry.");
     } else {
-      setError("Couldn't save month math — run supabase/schema-inventory-summary.sql, then retry.");
+      setError("Couldn't save sales — run supabase/schema-inventory-summary.sql, then retry.");
     }
     setSaving(false);
   };
@@ -190,18 +201,6 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
     };
   }, [month]);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (cancelled) return;
-      const res = await fetch(`/api/btb/inventory-opening?month=${month}`);
-      if (!res.ok) return;
-      const d = await res.json();
-      if (d.opening != null) setSummary((s) => ({ ...s, opening_value: String(d.opening) }));
-    })();
-    return () => { cancelled = true; };
-  }, [month]);
-
   const lines = useMemo(() => toLines(items, counts), [items, counts]);
   const prevQty = useMemo(() => new Map(prevCounts.map((c) => [c.item_id, countQty(c.qty)])), [prevCounts]);
 
@@ -214,6 +213,16 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
   const previousTotal = totalValue(items.map((item) => ({ item, qty: prevQty.get(item.id) ?? 0 })));
   const valueVar = variance(currentTotal, previousTotal);
   const counted = lines.filter((l) => liveQty(l.item.id) > 0).length;
+
+  // Draft accounting — derived, not hand-typed: opening from carry-forward,
+  // purchases from the ledger, closing from the live count, sales manual.
+  const ledgerPurchases = monthlyTotal(purchases);
+  const acct = computeAccounting({
+    opening: openingInfo.opening,
+    purchases: ledgerPurchases,
+    closing: currentTotal,
+    sales: nullableAmount(summary.sales),
+  });
 
   const save = async () => {
     if (readOnly || saving) return;
@@ -322,8 +331,14 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
       </div>
 
       {snapshot && (
-        <div className="mb-4 rounded-xl bg-green-50 border border-green-100 px-4 py-3 text-sm text-green-800">
-          FINALIZED {monthLabel(month)} — opening {Number(snapshot.opening_value).toFixed(2)} · purchases {Number(snapshot.purchases).toFixed(2)} · closing {Number(snapshot.closing_value).toFixed(2)} · sales {snapshot.sales == null ? "n/a" : Number(snapshot.sales).toFixed(2)} · COGS {snapshot.cogs == null ? "n/a" : Number(snapshot.cogs).toFixed(2)} · Food Cost % {snapshot.food_cost_pct == null ? "n/a" : Number(snapshot.food_cost_pct).toFixed(1)}%
+        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${snapshot.status === "finalized" ? "bg-green-50 border-green-200 text-green-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+          {snapshot.status === "finalized" ? "FINALIZED" : "REOPENED (draft) — correct below, then re-finalize"} {monthLabel(month)}
+          {" — "}opening {Number(snapshot.opening_value).toFixed(2)}
+          {" · "}purchases {Number(snapshot.purchases).toFixed(2)}
+          {" · "}closing {Number(snapshot.closing_value).toFixed(2)}
+          {" · "}sales {snapshot.sales == null ? "n/a" : Number(snapshot.sales).toFixed(2)}
+          {" · "}COGS {snapshot.cogs == null ? "n/a" : Number(snapshot.cogs).toFixed(2)}
+          {" · "}Food Cost % {snapshot.food_cost_pct == null ? "n/a" : `${Number(snapshot.food_cost_pct).toFixed(1)}%`}
         </div>
       )}
       {error && (
@@ -340,53 +355,72 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
         />
         <StatTile label="Items counted" value={`${counted}/${lines.length}`} icon={Layers} accent="slate" />
         <StatTile
-          label="Usage $"
-          value={usageValue(countQty(summary.opening_value), countQty(summary.purchases), currentTotal).toFixed(2)}
+          label="COGS $"
+          value={acct.cogs == null ? "—" : acct.cogs.toFixed(2)}
           icon={Layers}
           accent="amber"
         />
         <StatTile
           label="Food cost %"
-          value={`${foodCostPct(countQty(summary.opening_value), countQty(summary.purchases), currentTotal, countQty(summary.sales)).toFixed(1)}%`}
+          value={acct.foodCostPct == null ? "—" : `${acct.foodCostPct.toFixed(1)}%`}
           icon={Layers}
-          accent="red"
+          accent={acct.flags.suspiciousPct ? "red" : "slate"}
         />
       </div>
+
+      {/* Accounting status — never fabricate a missing figure as zero. */}
+      {acct.status !== "complete" && (
+        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          {acct.status === "empty" && "Nothing entered yet for this month."}
+          {acct.status === "no_opening" && "Opening inventory unavailable — this is the baseline month, or the prior month isn’t finalized yet. COGS and food cost % can’t be computed."}
+          {acct.status === "no_closing" && "Closing count not entered yet — record the count below to compute COGS."}
+          {acct.status === "no_sales" && "Food sales not entered yet — COGS is shown, but food cost % needs sales."}
+          {acct.status === "zero_sales" && "Food sales are $0 — food cost % is undefined (can’t divide by zero)."}
+        </div>
+      )}
+      {acct.flags.negativeCogs && (
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          ⚠ COGS is negative — closing exceeds opening + purchases. Check the count and purchases for this month.
+        </div>
+      )}
+      {openingInfo.baseline && !acct.flags.negativeCogs && acct.status !== "empty" && (
+        <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+          No prior finalized month — opening inventory is treated as the baseline (0.00) for this first period.
+        </div>
+      )}
 
       <Card className="p-4 mb-5">
         <p className="text-sm font-bold text-slate-900 mb-1">Month math — opening, purchases, sales</p>
         <p className="text-xs text-slate-400 mb-3">
-          Closing = Opening + Purchases − Usage · Food cost % = (Opening + Purchases − Closing) ÷ Sales × 100 · Closing is summed automatically from the count below.
+          COGS = Opening + Purchases − Closing · Food cost % = COGS ÷ Sales × 100 · Opening carries forward from the prior finalized month · Purchases come from the ledger · Closing is summed from the count below.
         </p>
         <div className="flex flex-wrap items-end gap-3">
-          <label className="block text-sm w-32">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Opening $</span>
+          <label className="block text-sm w-44">
+            <span className="block text-xs font-medium text-slate-500 mb-1">Opening $ (carried forward)</span>
             <Input
               accent="green"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={summary.opening_value}
-              readOnly={readOnly}
-              onChange={(e) => setSummary((s) => ({ ...s, opening_value: e.target.value }))}
+              type="text"
+              value={openingInfo.opening == null ? "unavailable" : openingInfo.opening.toFixed(2)}
+              readOnly
+              disabled
             />
+            <span className="block text-[11px] text-slate-400 mt-1">
+              {openingInfo.carriedFrom ? `from ${monthLabel(openingInfo.carriedFrom)} finalized close` : "baseline — no prior finalized month"}
+            </span>
           </label>
-          <label className="block text-sm w-32">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Purchases $</span>
+          <label className="block text-sm w-44">
+            <span className="block text-xs font-medium text-slate-500 mb-1">Purchases $ (from ledger)</span>
             <Input
               accent="green"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={summary.purchases}
-              readOnly={readOnly}
-              onChange={(e) => setSummary((s) => ({ ...s, purchases: e.target.value }))}
+              type="text"
+              value={ledgerPurchases.toFixed(2)}
+              readOnly
+              disabled
             />
+            <span className="block text-[11px] text-slate-400 mt-1">{purchases.length} entry(ies) this month</span>
           </label>
           <label className="block text-sm w-32">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Net sales $</span>
+            <span className="block text-xs font-medium text-slate-500 mb-1">Food sales $ (manual)</span>
             <Input
               accent="green"
               type="number"
@@ -400,26 +434,26 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
           </label>
           {!readOnly && (
             <>
-              <Button accent="green" variant="soft" onClick={() => setSummary((s) => ({ ...s, opening_value: previousTotal.toFixed(2) }))}>
-                Use last close ({previousTotal.toFixed(2)})
-              </Button>
               <Button accent="green" onClick={saveSummary} disabled={saving}>
-                {saving ? "Saving…" : "Save month math"}
+                {saving ? "Saving…" : "Save sales"}
               </Button>
               <Button accent="red" onClick={async () => {
                 setSaving(true);
-                const res = await fetch("/api/btb/inventory-finalize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count_month: month, opening_value: countQty(summary.opening_value), closing_value: currentTotal, purchases: countQty(summary.purchases), sales: countQty(summary.sales) }) });
+                const res = await fetch("/api/btb/inventory-finalize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count_month: month, sales: nullableAmount(summary.sales) }) });
                 setSaving(false);
-                if (res.ok) setNotice(`${monthLabel(month)} finalized`); else setError("Finalize failed (permission/validation).");
+                if (res.ok) { setNotice(`${monthLabel(month)} finalized`); await loadCounts(month); }
+                else { const err = await res.json().catch(() => null); setError(err?.error ? `Finalize failed: ${err.error}` : "Finalize failed (permission/validation)."); }
               }} disabled={saving}>
                 {saving ? "Finalizing…" : "Finalize month"}
               </Button>
               <Button accent="amber" onClick={async () => {
-                const reason = window.prompt("Reason for reopening?") || "";
+                const reason = window.prompt("Reason for reopening? (required)") || "";
+                if (!reason.trim()) { setError("Reopen cancelled — a reason is required."); return; }
                 setSaving(true);
-                const res = await fetch("/api/btb/inventory-reopen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count_month: month, reason }) });
+                const res = await fetch("/api/btb/inventory-reopen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count_month: month, reason: reason.trim() }) });
                 setSaving(false);
-                if (res.ok) { setNotice(`${monthLabel(month)} reopened`); setSnapshot(null); } else setError("Reopen failed (permission/downstream).");
+                if (res.ok) { setNotice(`${monthLabel(month)} reopened — correct below, then re-finalize`); await loadCounts(month); }
+                else { const d = await res.json().catch(() => null); setError(d?.error ? `Reopen failed: ${d.error}` : "Reopen failed (permission/downstream)."); }
               }} disabled={saving}>
                 {saving ? "Reopening…" : "Reopen month"}
               </Button>
@@ -451,18 +485,37 @@ function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
             <Button accent="green" onClick={addPurchase} disabled={saving}>Add</Button>
           </div>
         )}
-        <div className="text-xs text-slate-500 mb-2">
-          GFS total: {purchases.filter((p) => p.type === "gfs").reduce((s, p) => s + Number(p.amount), 0).toFixed(2)} ·
-          Local total: {purchases.filter((p) => p.type === "local").reduce((s, p) => s + Number(p.amount), 0).toFixed(2)} ·
-          Combined: {purchases.reduce((s, p) => s + Number(p.amount), 0).toFixed(2)}
+        <div className="text-xs text-slate-500 mb-2 flex flex-wrap gap-3">
+          <span>GFS total: <b className="text-slate-700">{monthlyTotal(purchases, "gfs").toFixed(2)}</b></span>
+          <span>Local total: <b className="text-slate-700">{monthlyTotal(purchases, "local").toFixed(2)}</b></span>
+          <span>Combined: <b className="text-slate-700">{ledgerPurchases.toFixed(2)}</b></span>
         </div>
-        <div className="max-h-64 overflow-y-auto text-sm">
-          {purchases.map((p) => (
-            <div key={p.id} className="border-b py-1 flex justify-between">
-              <span>{p.purchase_date} · {p.description}</span>
-              <span>{Number(p.amount).toFixed(2)}</span>
-            </div>
-          ))}
+        {/* Day-by-day ledger: every date in the month, its entries and total. */}
+        <div className="max-h-72 overflow-y-auto text-sm space-y-2">
+          {monthDates(month).map((d) => {
+            const dayEntries = purchases.filter((p) => p.purchase_date === d);
+            if (dayEntries.length === 0) return null;
+            return (
+              <div key={d} className="rounded-lg border border-slate-100">
+                <div className="flex justify-between px-3 py-1.5 bg-slate-50 text-xs font-semibold text-slate-600">
+                  <span>{d}</span>
+                  <span>day total {dailyTotal(purchases, d).toFixed(2)}</span>
+                </div>
+                {dayEntries.map((p) => (
+                  <div key={p.id} className="border-t px-3 py-1 flex justify-between text-sm">
+                    <span className="text-slate-600">
+                      <span className={`mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${p.type === "gfs" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
+                        {p.type === "gfs" ? `GFS${p.reference ? ` ${p.reference}` : ""}` : "LOCAL"}
+                      </span>
+                      {p.description}
+                    </span>
+                    <span className="tabular-nums">{Number(p.amount).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          {purchases.length === 0 && <p className="text-slate-400 py-4 text-center">No purchases recorded for {monthLabel(month)}.</p>}
         </div>
       </Card>
       <Card className="overflow-hidden mb-5">
