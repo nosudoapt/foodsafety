@@ -1,8 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
+import { BTB_COOKIE } from "@/lib/btb-auth";
+import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { MONTH_END_EDIT_ROLES, parseSummarySave, requireRole } from "@/lib/btb-inventory-api";
+import { requireEditableMonth } from "@/lib/inventory-server-guards";
 import { replaceRows } from "@/lib/persist-replace";
 
 // Food-sales summary — previously saved DIRECTLY from the browser via the anon
@@ -14,15 +16,18 @@ import { replaceRows } from "@/lib/persist-replace";
 
 export async function POST(req: Request) {
   const cookieStore = await cookies();
-  const auth = requireRole(roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
+  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const body = await req.json().catch(() => ({}));
   const parsed = parseSummarySave(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-  const { count_month: month, sales, location_id } = parsed.value;
+  const { count_month: month, sales } = parsed.value;
 
   const db = inventoryDb();
+  const editable = await requireEditableMonth(db, month);
+  if (!editable.ok) return NextResponse.json({ error: editable.error }, { status: editable.status });
+
   const outcome = await replaceRows({
     label: "sales save",
     backup: async () => {
@@ -39,7 +44,7 @@ export async function POST(req: Request) {
     ins: async () => {
       const { data, error } = await db
         .from("inventory_month_summary")
-        .insert({ count_month: month, sales, location_id })
+        .insert({ count_month: month, sales, location_id: null })
         .select("id");
       return { inserted: data?.length ?? 0, error };
     },

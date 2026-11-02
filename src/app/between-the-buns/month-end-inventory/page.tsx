@@ -1,651 +1,277 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Layers, PackagePlus, Save, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, CircleAlert, Layers, LockKeyhole, PackagePlus, Pencil, RefreshCw, Save, Search, Trash2 } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader, StatTile } from "@/components/ui";
 import { monthDates, monthlyTotal, dailyTotal, type PurchaseEntry } from "@/lib/inventory-purchases";
 import { computeAccounting, nullableAmount } from "@/lib/inventory-accounting";
-import { activeLocationId } from "@/lib/locations";
-import {
-  countQty,
-  monthLabel,
-  prevMonth,
-  recentMonths,
-  thisMonth,
-  toLines,
-  totalValue,
-  variance,
-  type InventoryCount,
-  type InventoryItem,
-} from "@/lib/month-end-inventory";
+import { countQty, lineValue, monthLabel, prevMonth, recentMonths, thisMonth, toLines, totalValue, type InventoryItem } from "@/lib/month-end-inventory";
+import { changedInventoryCounts, inventoryCountPayload, loadInventoryMonth, type InventoryMonthData, type InventorySnapshot } from "@/lib/inventory-workspace";
+import { fetchJson, RequestError } from "@/lib/fetch-json";
 
-// Month-end count sheet: pick the closing month, count each item, compare the
-// value against the previous close. Staff read; managers count and edit.
+const emptyItem = { name: "", unit: "ea", unit_cost: "" };
+const emptyPurchase = { type: "gfs", date: "", description: "", amount: "", reference: "", supplier: "GFS" };
+const money = (value: number | null | undefined) => value == null ? "—" : Number(value).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export default function MonthEndInventoryPage() {
-  return (
-    <BtbFeatureGate feature="month_end_inventory">
-      {(readOnly) => <MonthEndInventory readOnly={readOnly} />}
-    </BtbFeatureGate>
-  );
+  return <BtbFeatureGate feature="month_end_inventory">{(readOnly) => <InventoryWorkspace readOnly={readOnly} />}</BtbFeatureGate>;
 }
 
-function MonthEndInventory({ readOnly }: { readOnly: boolean }) {
-  const [items, setItems] = useState<InventoryItem[]>([]);
-  const [counts, setCounts] = useState<InventoryCount[]>([]);
-  const [prevCounts, setPrevCounts] = useState<InventoryCount[]>([]);
+function InventoryWorkspace({ readOnly }: { readOnly: boolean }) {
   const [month, setMonth] = useState(() => prevMonth(thisMonth()));
+  const months = useMemo(() => recentMonths(thisMonth(), 24), []);
+  // A month owns its requests and drafts. An old response cannot populate the
+  // newly selected month, even if it arrives after navigation.
+  return <InventoryMonth key={month} month={month} months={months} onMonthChange={setMonth} readOnly={readOnly} />;
+}
+
+function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: string; months: string[]; onMonthChange: (month: string) => void; readOnly: boolean }) {
+  const [revision, setRevision] = useState(0);
+  const [resource, setResource] = useState<{ revision: number; data: InventoryMonthData | null; error: string } | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const [newItem, setNewItem] = useState({ name: "", unit: "ea", unit_cost: "" });
-  // Month math. Closing = live count total. Purchases come from the ledger
-  // (single source of truth). Opening is carried forward from the prior
-  // month's FINALIZED snapshot (null = baseline/unavailable). Sales is the one
-  // manually-entered figure, stored on inventory_month_summary.
-  const [summary, setSummary] = useState({ sales: "" });
-  const [openingInfo, setOpeningInfo] = useState<{ opening: number | null; carriedFrom: string | null; baseline: boolean }>({
-    opening: null, carriedFrom: null, baseline: true,
-  });
-  const [purchases, setPurchases] = useState<PurchaseEntry[]>([]);
-  const [snapshot, setSnapshot] = useState<Record<string, unknown> | null>(null);
-  const [purForm, setPurForm] = useState({ type: "gfs", date: "", description: "", amount: "", reference: "", supplier: "GFS" });
-
-  const months = useMemo(() => recentMonths(thisMonth(), 12), []);
-  const prevKey = prevMonth(month);
-
-  // All data access goes through the BTB API routes (server-resolved role +
-  // server-side DB client) — the browser never talks to Supabase directly.
-  const loadItems = async () => {
-    try {
-      const res = await fetch("/api/btb/inventory-items");
-      const d = await res.json().catch(() => null);
-      if (!res.ok) {
-        setError(d?.error ? `Couldn't load items — ${d.error}` : "Couldn't load items.");
-        setLoading(false);
-        return;
-      }
-      setItems((d.items ?? []) as InventoryItem[]);
-      setError(null);
-    } catch {
-      setError("Couldn't load items — check the connection and reload.");
-      setLoading(false);
-    }
-  };
-
-  const loadCounts = async (key: string) => {
-    try {
-      const res = await fetch(`/api/btb/inventory-counts?month=${key}`);
-      const d = await res.json().catch(() => null);
-      if (!res.ok) {
-        setError(d?.error ? `Couldn't load counts — ${d.error}` : "Couldn't load counts.");
-        setLoading(false);
-        return;
-      }
-      setCounts(((d.counts ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
-      // Previous close, for the variance column.
-      setPrevCounts(((d.prevCounts ?? []) as InventoryCount[]).map((c) => ({ ...c, qty: countQty(c.qty) })));
-      // Food sales rides along on the same request (stored on the summary row).
-      setSummary({ sales: typeof d.sales === "string" ? d.sales : "" });
-      setError(null);
-    } catch {
-      setError("Couldn't load counts — check the connection and reload.");
-      setLoading(false);
-      return;
-    }
-    await loadOpening(key);
-    await loadPurchases(key);
-    const snapRes = await fetch(`/api/btb/inventory-snapshot?month=${key}`);
-    if (snapRes.ok) { const sd = await snapRes.json(); setSnapshot(sd.snapshot ?? null); }
-    setLoading(false);
-  };
-
-  // Opening inventory: carried forward from the prior month's FINALIZED
-  // snapshot via the protected API. Never fabricated (null on baseline).
-  const loadOpening = async (key: string) => {
-    try {
-      const res = await fetch(`/api/btb/inventory-opening?month=${key}`);
-      if (!res.ok) return;
-      const d = await res.json();
-      setOpeningInfo({ opening: d.opening ?? null, carriedFrom: d.carriedFrom ?? null, baseline: !!d.baseline });
-    } catch {
-      /* keep previous */
-    }
-  };
-
-  const loadPurchases = async (key: string) => {
-    try {
-      const res = await fetch(`/api/btb/inventory-purchases?month=${key}`);
-      const d = await res.json().catch(() => null);
-      setPurchases(res.ok ? ((d.purchases ?? []) as PurchaseEntry[]) : []);
-    } catch {
-      setPurchases([]);
-    }
-  };
-
-  const addPurchase = async () => {
-    if (readOnly || saving) return;
-    const amount = Number(purForm.amount);
-    if (!purForm.date || !purForm.description.trim() || !Number.isFinite(amount) || amount < 0) {
-      setError("Fill date, description and a valid amount.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    const res = await fetch("/api/btb/inventory-purchases", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        count_month: month,
-        purchase_date: purForm.date,
-        type: purForm.type,
-        supplier: purForm.type === "gfs" ? (purForm.supplier || "GFS") : null,
-        description: purForm.description.trim(),
-        amount,
-        reference: purForm.reference.trim() || null,
-      }),
-    });
-    if (!res.ok) setError("Couldn't save purchase — check permissions/schema.");
-    else { setNotice("Purchase saved"); setPurForm({ ...purForm, description: "", amount: "", reference: "" }); await loadPurchases(month); }
-    setSaving(false);
-  };
-
-  const saveSummary = async () => {
-    if (readOnly || saving) return;
-    setSaving(true);
-    setError(null);
-    // Only food sales are stored — opening is carried forward and purchases
-    // come from the ledger, so neither is hand-typed any more.
-    const res = await fetch("/api/btb/inventory-summary", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count_month: month, sales: summary.sales, location_id: activeLocationId() }),
-    });
-    const d = await res.json().catch(() => null);
-    if (res.ok) setNotice(`${monthLabel(month)} sales saved`);
-    else setError(d?.error ? `Couldn't save sales — ${d.error}` : "Couldn't save sales.");
-    setSaving(false);
-  };
+  const [salesDraft, setSalesDraft] = useState<string | null>(null);
+  const [purchase, setPurchase] = useState(emptyPurchase);
+  const [itemForm, setItemForm] = useState(emptyItem);
+  const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [reopenReason, setReopenReason] = useState("");
+  const [saving, setSaving] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [search, setSearch] = useState("");
+  const mutation = useRef<AbortController | null>(null);
+  const loaded = resource?.revision === revision;
+  const data = loaded ? resource.data : null;
+  const loadError = loaded ? resource.error : "";
+  const finalized = data?.snapshot?.status === "finalized";
+  const canEdit = !!data && !readOnly && !finalized;
+  const sales = salesDraft ?? data?.sales ?? "";
+  const countChanges = changedInventoryCounts(data?.counts ?? [], draft);
+  const salesChanged = salesDraft !== null && salesDraft !== data?.sales;
+  const purchaseChanged = !!(purchase.date || purchase.description || purchase.amount || purchase.reference);
+  const itemChanged = !!(itemForm.name || itemForm.unit_cost || itemForm.unit !== "ea");
+  const unsaved = countChanges > 0 || salesChanged || purchaseChanged || itemChanged;
 
   useEffect(() => {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
     let cancelled = false;
-    (async () => {
-      if (!cancelled) await loadItems();
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    void loadInventoryMonth(month, controller.signal)
+      .then((data) => { if (!cancelled) setResource({ revision, data, error: "" }); })
+      .catch(() => { if (!cancelled) setResource({ revision, data: null, error: "The count sheet, purchases or month status couldn’t be loaded. Retry to open this month." }); })
+      .finally(() => window.clearTimeout(timeout));
+    return () => { cancelled = true; controller.abort(); window.clearTimeout(timeout); };
+  }, [month, revision]);
 
+  useEffect(() => () => { mutation.current?.abort(); }, []);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!cancelled) await loadCounts(month);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [month]);
+    if (!unsaved) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
 
-  const lines = useMemo(() => toLines(items, counts), [items, counts]);
-  const prevQty = useMemo(() => new Map(prevCounts.map((c) => [c.item_id, countQty(c.qty)])), [prevCounts]);
-
-  const storedQty = (id: string): number => counts.find((c) => c.item_id === id)?.qty ?? 0;
-  // Draft overrides whatever is stored so typing feels instant.
-  const qtyOf = (id: string): string => (draft[id] !== undefined ? draft[id] : String(storedQty(id)));
-  const liveQty = (id: string): number => (draft[id] !== undefined ? countQty(draft[id]) : storedQty(id));
-
-  const currentTotal = totalValue(items.map((item) => ({ item, qty: liveQty(item.id) })));
-  const previousTotal = totalValue(items.map((item) => ({ item, qty: prevQty.get(item.id) ?? 0 })));
-  const valueVar = variance(currentTotal, previousTotal);
-  const counted = lines.filter((l) => liveQty(l.item.id) > 0).length;
-
-  // Draft accounting — derived, not hand-typed: opening from carry-forward,
-  // purchases from the ledger, closing from the live count, sales manual.
-  const ledgerPurchases = monthlyTotal(purchases);
-  const acct = computeAccounting({
-    opening: openingInfo.opening,
-    purchases: ledgerPurchases,
-    closing: currentTotal,
-    sales: nullableAmount(summary.sales),
-  });
-
-  const save = async () => {
-    if (readOnly || saving) return;
-    setSaving(true);
-    setError(null);
-    // Send every item's live quantity (including zeros) so the server applies
-    // the same rule the page did: store only non-zero counts, replacing the
-    // month's previous rows.
-    const countsPayload = lines.map((l) => ({ item_id: l.item.id, qty: liveQty(l.item.id) }));
-    const res = await fetch("/api/btb/inventory-counts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ count_month: month, counts: countsPayload, location_id: activeLocationId() }),
-    });
-    const d = await res.json().catch(() => null);
-    if (!res.ok) {
-      setError(d?.error ? `Couldn't save — ${d.error}` : "Couldn't save the count sheet.");
-      setSaving(false);
-      return;
-    }
-    const saved = countsPayload.filter((c) => c.qty > 0).length;
-    setDraft({});
-    setNotice(`${monthLabel(month)} saved · ${saved} counted`);
-    setSaving(false);
-    await loadCounts(month);
+  const update = (change: (current: InventoryMonthData) => InventoryMonthData) => {
+    setResource((current) => current?.data ? { ...current, data: change(current.data) } : current);
   };
 
-  const addItem = async () => {
-    if (readOnly || saving) return;
-    const name = newItem.name.trim();
-    if (!name) {
-      setError("Name the item first.");
-      return;
+  async function mutate<T>(action: string, url: string, body: unknown, apply: (response: T) => void, message: string, method = "POST") {
+    if (mutation.current || readOnly || !data) return;
+    const controller = new AbortController();
+    mutation.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 15_000);
+    setSaving(action);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetchJson<T>(url, { method, signal: controller.signal,
+        ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) });
+      if (controller.signal.aborted) return;
+      apply(response);
+      setNotice(message);
+    } catch (cause) {
+      setError(cause instanceof RequestError ? `Couldn’t complete the update: ${cause.message}` : "The update wasn’t confirmed. Your entries are still here. Check your connection and try again.");
+    } finally {
+      window.clearTimeout(timeout);
+      mutation.current = null;
+      setSaving("");
     }
-    setSaving(true);
-    setError(null);
-    const res = await fetch("/api/btb/inventory-items", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name,
-        unit: newItem.unit,
-        unit_cost: newItem.unit_cost,
-        position: items.length,
-        location_id: activeLocationId(),
-      }),
-    });
-    const d = await res.json().catch(() => null);
-    if (!res.ok) {
-      setError(d?.error ? `Couldn't add the item — ${d.error}` : "Couldn't add the item.");
-      setSaving(false);
-      return;
-    }
-    setNewItem({ name: "", unit: "ea", unit_cost: "" });
-    setNotice(`${name} added to the list`);
-    setSaving(false);
-    await loadItems();
+  }
+
+  const saveCounts = () => {
+    if (!canEdit || !data) return;
+    const parsed = inventoryCountPayload(month, data.items, data.counts, draft);
+    if (!parsed.ok) { setError("Enter a valid quantity for every item. Use 0 for none; don’t leave a changed count blank."); return; }
+    const rows = parsed.value.rows.filter((row) => row.qty > 0).map((row) => ({ ...row, count_month: month }));
+    void mutate<{ ok: boolean }>("counts", "/api/btb/inventory-counts", { count_month: month, counts: parsed.value.rows }, (response) => {
+      if (!response.ok) throw new Error("Save not confirmed");
+      update((current) => ({ ...current, counts: rows }));
+      setDraft({});
+    }, `${monthLabel(month)} counts saved.`);
   };
 
-  const removeItem = async (id: string) => {
-    if (readOnly) return;
-    setError(null);
-    const res = await fetch(`/api/btb/inventory-items?id=${encodeURIComponent(id)}`, { method: "DELETE" });
-    const d = await res.json().catch(() => null);
-    if (!res.ok) {
-      setError(d?.error ? `Couldn't remove the item — ${d.error}` : "Couldn't remove the item.");
-      return;
-    }
-    setNotice("Item removed (its counts went too)");
-    await loadItems();
+  const saveSales = () => {
+    if (!canEdit) return;
+    if (sales === "" || !Number.isFinite(Number(sales)) || Number(sales) < 0) { setError("Enter food sales of zero or more before saving."); return; }
+    void mutate<{ ok: boolean }>("sales", "/api/btb/inventory-summary", { count_month: month, sales }, (response) => {
+      if (!response.ok) throw new Error("Save not confirmed");
+      update((current) => ({ ...current, sales: String(countQty(sales)) }));
+      setSalesDraft(null);
+    }, `${monthLabel(month)} food sales saved.`);
   };
 
-  return (
-    <div>
-      <PageHeader
-        title="Month-End Inventory"
-        subtitle="Closing count sheet — value auto-summed, usage and food cost % from month math"
-        action={notice ? <Badge accent="green">{notice}</Badge> : undefined}
-      />
+  const addPurchase = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canEdit) return;
+    if (!purchase.date || !purchase.description.trim() || purchase.amount === "" || !Number.isFinite(Number(purchase.amount)) || Number(purchase.amount) < 0) {
+      setError("Enter a purchase date, description and amount of zero or more."); return;
+    }
+    if (purchase.type === "gfs" && !purchase.reference.trim()) { setError("Enter the GFS invoice reference."); return; }
+    void mutate<{ purchase: PurchaseEntry }>("purchase", "/api/btb/inventory-purchases", {
+      count_month: month, purchase_date: purchase.date, description: purchase.description.trim(), amount: Number(purchase.amount),
+      type: purchase.type, supplier: purchase.type === "gfs" ? purchase.supplier || "GFS" : null, reference: purchase.reference.trim() || null,
+    }, (response) => {
+      if (!response.purchase) throw new Error("Save not confirmed");
+      update((current) => ({ ...current, purchases: [...current.purchases, response.purchase] }));
+      setPurchase(emptyPurchase);
+    }, "Purchase saved to the ledger.");
+  };
 
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <label className="text-sm text-slate-500 flex items-center gap-2">
-          Closing month
-          <select
-            className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            value={month}
-            onChange={(e) => {
-              setDraft({});
-              setMonth(e.target.value);
-            }}
-          >
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {monthLabel(m)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="text-xs text-slate-400">
-          compared with {monthLabel(prevKey)} · counts kept 24 months
-        </span>
-      </div>
+  const saveItem = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!canEdit) return;
+    if (!itemForm.name.trim() || !Number.isFinite(Number(itemForm.unit_cost)) || Number(itemForm.unit_cost) < 0) {
+      setError("Enter an item name and a unit cost of zero or more."); return;
+    }
+    void mutate<{ item: InventoryItem }>("item", `/api/btb/inventory-items${editingItem ? `?id=${encodeURIComponent(editingItem)}` : ""}`, itemForm, (response) => {
+      if (!response.item) throw new Error("Save not confirmed");
+      const item = { ...response.item, unit_cost: Number(response.item.unit_cost) };
+      update((current) => ({ ...current, items: editingItem ? current.items.map((row) => row.id === editingItem ? item : row) : [...current.items, item] }));
+      setItemForm(emptyItem);
+      setEditingItem(null);
+    }, editingItem ? "Inventory item updated." : "Inventory item added.", editingItem ? "PATCH" : "POST");
+  };
 
-      {snapshot && (
-        <div className={`mb-4 rounded-xl border px-4 py-3 text-sm ${snapshot.status === "finalized" ? "bg-green-50 border-green-200 text-green-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
-          {snapshot.status === "finalized" ? "FINALIZED" : "REOPENED (draft) — correct below, then re-finalize"} {monthLabel(month)}
-          {" — "}opening {Number(snapshot.opening_value).toFixed(2)}
-          {" · "}purchases {Number(snapshot.purchases).toFixed(2)}
-          {" · "}closing {Number(snapshot.closing_value).toFixed(2)}
-          {" · "}sales {snapshot.sales == null ? "n/a" : Number(snapshot.sales).toFixed(2)}
-          {" · "}COGS {snapshot.cogs == null ? "n/a" : Number(snapshot.cogs).toFixed(2)}
-          {" · "}Food Cost % {snapshot.food_cost_pct == null ? "n/a" : `${Number(snapshot.food_cost_pct).toFixed(1)}%`}
-        </div>
-      )}
-      {error && (
-        <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
+  const removeItem = (item: InventoryItem) => {
+    if (!canEdit || saving || !window.confirm(`Remove ${item.name}? Its draft counts will also be removed.`)) return;
+    void mutate<{ ok: boolean }>("remove", `/api/btb/inventory-items?id=${encodeURIComponent(item.id)}`, undefined, (response) => {
+      if (!response.ok) throw new Error("Removal not confirmed");
+      update((current) => ({ ...current, items: current.items.filter((row) => row.id !== item.id), counts: current.counts.filter((row) => row.item_id !== item.id), prevCounts: current.prevCounts.filter((row) => row.item_id !== item.id) }));
+      setDraft((current) => { const next = { ...current }; delete next[item.id]; return next; });
+      if (editingItem === item.id) { setEditingItem(null); setItemForm(emptyItem); }
+    }, `${item.name} removed.`, "DELETE");
+  };
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
-        <StatTile label="Closing value" value={currentTotal.toFixed(2)} icon={Layers} accent="green" />
-        <StatTile
-          label={`vs ${monthLabel(prevKey)}`}
-          value={`${valueVar.delta >= 0 ? "+" : ""}${valueVar.delta.toFixed(2)}`}
-          icon={Layers}
-          accent={valueVar.delta < 0 ? "red" : "blue"}
-        />
-        <StatTile label="Items counted" value={`${counted}/${lines.length}`} icon={Layers} accent="slate" />
-        <StatTile
-          label="COGS $"
-          value={acct.cogs == null ? "—" : acct.cogs.toFixed(2)}
-          icon={Layers}
-          accent="amber"
-        />
-        <StatTile
-          label="Food cost %"
-          value={acct.foodCostPct == null ? "—" : `${acct.foodCostPct.toFixed(1)}%`}
-          icon={Layers}
-          accent={acct.flags.suspiciousPct ? "red" : "slate"}
-        />
-      </div>
+  const finalize = () => {
+    if (!canEdit || !data || unsaved) return;
+    void mutate<{ ok: boolean; snapshot: InventorySnapshot }>("finalize", "/api/btb/inventory-finalize", { count_month: month, sales: data.sales }, (response) => {
+      if (!response.ok || response.snapshot?.status !== "finalized") throw new Error("Finalization not confirmed");
+      update((current) => ({ ...current, snapshot: response.snapshot }));
+    }, `${monthLabel(month)} finalized. The saved close is ready to carry forward.`);
+  };
 
-      {/* Accounting status — never fabricate a missing figure as zero. */}
-      {acct.status !== "complete" && (
-        <div className="mb-5 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {acct.status === "empty" && "Nothing entered yet for this month."}
-          {acct.status === "no_opening" && "Opening inventory unavailable — this is the baseline month, or the prior month isn’t finalized yet. COGS and food cost % can’t be computed."}
-          {acct.status === "no_closing" && "Closing count not entered yet — record the count below to compute COGS."}
-          {acct.status === "no_sales" && "Food sales not entered yet — COGS is shown, but food cost % needs sales."}
-          {acct.status === "zero_sales" && "Food sales are $0 — food cost % is undefined (can’t divide by zero)."}
-        </div>
-      )}
-      {acct.flags.negativeCogs && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          ⚠ COGS is negative — closing exceeds opening + purchases. Check the count and purchases for this month.
-        </div>
-      )}
-      {openingInfo.baseline && !acct.flags.negativeCogs && acct.status !== "empty" && (
-        <div className="mb-5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
-          No prior finalized month — opening inventory is treated as the baseline (0.00) for this first period.
-        </div>
-      )}
+  const reopen = (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!finalized || !reopenReason.trim()) return;
+    void mutate<{ ok: boolean; snapshot: InventorySnapshot }>("reopen", "/api/btb/inventory-reopen", { count_month: month, reason: reopenReason.trim() }, (response) => {
+      if (!response.ok || response.snapshot?.status !== "draft") throw new Error("Reopen not confirmed");
+      update((current) => ({ ...current, snapshot: response.snapshot }));
+      setReopenReason("");
+    }, `${monthLabel(month)} reopened. Make your corrections, save and finalize again.`);
+  };
 
-      <Card className="p-4 mb-5">
-        <p className="text-sm font-bold text-slate-900 mb-1">Month math — opening, purchases, sales</p>
-        <p className="text-xs text-slate-400 mb-3">
-          COGS = Opening + Purchases − Closing · Food cost % = COGS ÷ Sales × 100 · Opening carries forward from the prior finalized month · Purchases come from the ledger · Closing is summed from the count below.
-        </p>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="block text-sm w-44">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Opening $ (carried forward)</span>
-            <Input
-              accent="green"
-              type="text"
-              value={openingInfo.opening == null ? "unavailable" : openingInfo.opening.toFixed(2)}
-              readOnly
-              disabled
-            />
-            <span className="block text-[11px] text-slate-400 mt-1">
-              {openingInfo.carriedFrom ? `from ${monthLabel(openingInfo.carriedFrom)} finalized close` : "baseline — no prior finalized month"}
-            </span>
-          </label>
-          <label className="block text-sm w-44">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Purchases $ (from ledger)</span>
-            <Input
-              accent="green"
-              type="text"
-              value={ledgerPurchases.toFixed(2)}
-              readOnly
-              disabled
-            />
-            <span className="block text-[11px] text-slate-400 mt-1">{purchases.length} entry(ies) this month</span>
-          </label>
-          <label className="block text-sm w-32">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Food sales $ (manual)</span>
-            <Input
-              accent="green"
-              type="number"
-              inputMode="decimal"
-              step="0.01"
-              min="0"
-              value={summary.sales}
-              readOnly={readOnly}
-              onChange={(e) => setSummary((s) => ({ ...s, sales: e.target.value }))}
-            />
-          </label>
-          {!readOnly && (
-            <>
-              <Button accent="green" onClick={saveSummary} disabled={saving}>
-                {saving ? "Saving…" : "Save sales"}
-              </Button>
-              <Button accent="red" onClick={async () => {
-                setSaving(true);
-                const res = await fetch("/api/btb/inventory-finalize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count_month: month, sales: nullableAmount(summary.sales) }) });
-                setSaving(false);
-                if (res.ok) { setNotice(`${monthLabel(month)} finalized`); await loadCounts(month); }
-                else { const err = await res.json().catch(() => null); setError(err?.error ? `Finalize failed: ${err.error}` : "Finalize failed (permission/validation)."); }
-              }} disabled={saving}>
-                {saving ? "Finalizing…" : "Finalize month"}
-              </Button>
-              <Button accent="amber" onClick={async () => {
-                const reason = window.prompt("Reason for reopening? (required)") || "";
-                if (!reason.trim()) { setError("Reopen cancelled — a reason is required."); return; }
-                setSaving(true);
-                const res = await fetch("/api/btb/inventory-reopen", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ count_month: month, reason: reason.trim() }) });
-                setSaving(false);
-                if (res.ok) { setNotice(`${monthLabel(month)} reopened — correct below, then re-finalize`); await loadCounts(month); }
-                else { const d = await res.json().catch(() => null); setError(d?.error ? `Reopen failed: ${d.error}` : "Reopen failed (permission/downstream)."); }
-              }} disabled={saving}>
-                {saving ? "Reopening…" : "Reopen month"}
-              </Button>
-            </>
-          )}
-        </div>
-      </Card>
+  const stored = new Map((data?.counts ?? []).map((row) => [row.item_id, row.qty]));
+  const previous = new Map((data?.prevCounts ?? []).map((row) => [row.item_id, row.qty]));
+  const live = (id: string) => draft[id] !== undefined ? countQty(draft[id]) : stored.get(id) ?? 0;
+  const lines = toLines(data?.items ?? [], data?.counts ?? []);
+  const matchingLines = lines.filter(({ item }) => `${item.name} ${item.category ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const total = totalValue(lines.map(({ item }) => ({ item, qty: live(item.id) })));
+  const priorTotal = totalValue(lines.map(({ item }) => ({ item, qty: previous.get(item.id) ?? 0 })));
+  const ledger = monthlyTotal(data?.purchases ?? []);
+  const accounting = computeAccounting({ opening: data?.opening.opening ?? null, purchases: data ? ledger : null, closing: data ? total : null, sales: nullableAmount(sales) });
+  const savedSnapshot = finalized ? data!.snapshot! : null;
+  const closing = savedSnapshot ? Number(savedSnapshot.closing_value) : total;
+  const cogs = savedSnapshot ? savedSnapshot.cogs : accounting.cogs;
+  const costPct = savedSnapshot ? savedSnapshot.food_cost_pct : accounting.foodCostPct;
 
-      <Card className="p-4 mb-5">
-        <p className="text-sm font-bold text-slate-900 mb-3">Daily purchases</p>
-        {!readOnly && (
-          <div className="flex flex-wrap items-end gap-2 mb-4">
-            <select className="border rounded-lg px-2 py-1 text-sm" value={purForm.type} onChange={(e) => setPurForm((f) => ({ ...f, type: e.target.value }))}>
-              <option value="gfs">GFS invoice</option>
-              <option value="local">Local purchase</option>
-            </select>
-            <select className="border rounded-lg px-2 py-1 text-sm" value={purForm.date} onChange={(e) => setPurForm((f) => ({ ...f, date: e.target.value }))}>
-              <option value="">Date</option>
-              {monthDates(month).map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-            <Input accent="green" placeholder="Description" value={purForm.description} onChange={(e) => setPurForm((f) => ({ ...f, description: e.target.value }))} />
-            <Input accent="green" type="number" placeholder="Amount" value={purForm.amount} onChange={(e) => setPurForm((f) => ({ ...f, amount: e.target.value }))} />
-            {purForm.type === "gfs" && (
-              <>
-                <Input accent="green" placeholder="Supplier" value={purForm.supplier} onChange={(e) => setPurForm((f) => ({ ...f, supplier: e.target.value }))} />
-                <Input accent="green" placeholder="Invoice ref" value={purForm.reference} onChange={(e) => setPurForm((f) => ({ ...f, reference: e.target.value }))} />
-              </>
-            )}
-            <Button accent="green" onClick={addPurchase} disabled={saving}>Add</Button>
-          </div>
-        )}
-        <div className="text-xs text-slate-500 mb-2 flex flex-wrap gap-3">
-          <span>GFS total: <b className="text-slate-700">{monthlyTotal(purchases, "gfs").toFixed(2)}</b></span>
-          <span>Local total: <b className="text-slate-700">{monthlyTotal(purchases, "local").toFixed(2)}</b></span>
-          <span>Combined: <b className="text-slate-700">{ledgerPurchases.toFixed(2)}</b></span>
-        </div>
-        {/* Day-by-day ledger: every date in the month, its entries and total. */}
-        <div className="max-h-72 overflow-y-auto text-sm space-y-2">
-          {monthDates(month).map((d) => {
-            const dayEntries = purchases.filter((p) => p.purchase_date === d);
-            if (dayEntries.length === 0) return null;
-            return (
-              <div key={d} className="rounded-lg border border-slate-100">
-                <div className="flex justify-between px-3 py-1.5 bg-slate-50 text-xs font-semibold text-slate-600">
-                  <span>{d}</span>
-                  <span>day total {dailyTotal(purchases, d).toFixed(2)}</span>
-                </div>
-                {dayEntries.map((p) => (
-                  <div key={p.id} className="border-t px-3 py-1 flex justify-between text-sm">
-                    <span className="text-slate-600">
-                      <span className={`mr-2 inline-block rounded px-1.5 py-0.5 text-[10px] font-bold ${p.type === "gfs" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
-                        {p.type === "gfs" ? `GFS${p.reference ? ` ${p.reference}` : ""}` : "LOCAL"}
-                      </span>
-                      {p.description}
-                    </span>
-                    <span className="tabular-nums">{Number(p.amount).toFixed(2)}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-          {purchases.length === 0 && <p className="text-slate-400 py-4 text-center">No purchases recorded for {monthLabel(month)}.</p>}
-        </div>
-      </Card>
-      <Card className="overflow-hidden mb-5">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-                <th className="text-left px-4 py-2 font-bold">Item</th>
-                <th className="text-left px-3 py-2 font-bold">Unit</th>
-                <th className="text-right px-3 py-2 font-bold">Cost</th>
-                <th className="text-right px-3 py-2 font-bold w-28">{monthLabel(month)}</th>
-                <th className="text-right px-3 py-2 font-bold">Value</th>
-                <th className="text-right px-3 py-2 font-bold">vs {monthLabel(prevKey)}</th>
-                <th className="px-3 py-2" />
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                    Loading…
-                  </td>
-                </tr>
-              ) : lines.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
-                    No items yet{readOnly ? "" : " — add your first one below"}.
-                  </td>
-                </tr>
-              ) : (
-                lines.map((l) => {
-                  const qty = liveQty(l.item.id);
-                  const before = prevQty.get(l.item.id);
-                  const d = before === undefined ? null : qty - before;
-                  return (
-                    <tr key={l.item.id} className="border-t border-slate-100">
-                      <td className="px-4 py-2 font-medium text-slate-900">
-                        {l.item.name}
-                        {l.item.category && (
-                          <span className="ml-2 text-[10px] uppercase tracking-wide text-slate-400">
-                            {l.item.category}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-slate-500">{l.item.unit}</td>
-                      <td className="px-3 py-2 text-right tabular-nums text-slate-500">
-                        {l.item.unit_cost.toFixed(2)}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        <input
-                          type="number"
-                          inputMode="decimal"
-                          step="0.01"
-                          min="0"
-                          value={qtyOf(l.item.id)}
-                          readOnly={readOnly}
-                          onChange={(e) => setDraft((d0) => ({ ...d0, [l.item.id]: e.target.value }))}
-                          className="w-24 text-right rounded-lg border border-slate-300 px-2 py-1 tabular-nums focus:ring-2 focus:ring-green-500 focus:border-transparent disabled:bg-slate-50"
-                        />
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {(qty * l.item.unit_cost).toFixed(2)}
-                      </td>
-                      <td className="px-3 py-2 text-right tabular-nums">
-                        {d === null ? (
-                          <span className="text-slate-300">—</span>
-                        ) : (
-                          <span className={d > 0 ? "text-red-600" : d < 0 ? "text-blue-600" : "text-slate-400"}>
-                            {d > 0 ? "+" : ""}
-                            {d.toFixed(2)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {!readOnly && (
-                          <button
-                            aria-label={`Remove ${l.item.name}`}
-                            className="text-slate-300 hover:text-red-600"
-                            onClick={() => removeItem(l.item.id)}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {!readOnly && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="p-4 lg:col-span-2 flex flex-wrap items-end gap-3">
-            <Button accent="green" onClick={save} disabled={saving}>
-              <Save className="w-4 h-4 mr-1 inline" />
-              {saving ? "Saving…" : `Close ${monthLabel(month)}`}
-            </Button>
-            <p className="text-xs text-slate-400">
-              Saves every non-zero count for {monthLabel(month)} and replaces what was there before.
-            </p>
-          </Card>
-          <Card className="p-4">
-            <p className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-              <PackagePlus className="w-4 h-4 text-green-600" /> Add an item
-            </p>
-            <div className="flex flex-wrap items-end gap-2">
-              <label className="block text-sm grow min-w-[8rem]">
-                <span className="block text-xs font-medium text-slate-500 mb-1">Name *</span>
-                <Input
-                  accent="green"
-                  value={newItem.name}
-                  onChange={(e) => setNewItem((n) => ({ ...n, name: e.target.value }))}
-                  placeholder="Sesame buns"
-                />
-              </label>
-              <label className="block text-sm w-20">
-                <span className="block text-xs font-medium text-slate-500 mb-1">Unit</span>
-                <Input
-                  accent="green"
-                  value={newItem.unit}
-                  onChange={(e) => setNewItem((n) => ({ ...n, unit: e.target.value }))}
-                />
-              </label>
-              <label className="block text-sm w-28">
-                <span className="block text-xs font-medium text-slate-500 mb-1">Cost</span>
-                <Input
-                  accent="green"
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  value={newItem.unit_cost}
-                  onChange={(e) => setNewItem((n) => ({ ...n, unit_cost: e.target.value }))}
-                  placeholder="0.00"
-                />
-              </label>
-              <Button accent="green" onClick={addItem} disabled={saving}>
-                Add
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
+  return <div className="inventory-workspace">
+    <PageHeader title="Month-end inventory" subtitle="Count your stock, reconcile purchases and save a clear close for the next month."
+      action={data ? <Badge accent={finalized ? "green" : "purple"}>{finalized ? <LockKeyhole size={13} aria-hidden="true" /> : <Pencil size={13} aria-hidden="true" />}{finalized ? "Finalized" : data.snapshot ? "Reopened draft" : "Draft"}</Badge> : undefined} />
+    <div className="inventory-toolbar">
+      <label className="inventory-month"><span>Closing month</span><select value={month} disabled={!!saving} onChange={(event) => {
+        if (unsaved && !window.confirm("Switch month and discard your unsaved entries?")) return;
+        onMonthChange(event.target.value);
+      }}>{months.map((key) => <option key={key} value={key}>{monthLabel(key)}</option>)}</select></label>
+      <p>Compared with {monthLabel(prevMonth(month))} · company-wide inventory</p>
+      <button className="dash__refresh" aria-label="Refresh inventory" disabled={!!saving || !loaded || unsaved} onClick={() => { setNotice(""); setError(""); setRevision((value) => value + 1); }}><RefreshCw size={17} aria-hidden="true" /></button>
     </div>
-  );
+
+    {notice && <div className="ui-notice inventory-success" role="status"><Check size={18} aria-hidden="true" />{notice}</div>}
+    {error && <div className="ui-notice ui-notice--error" role="alert"><CircleAlert size={18} aria-hidden="true" />{error}</div>}
+    {!loaded ? <div className="ui-empty" role="status"><span className="ui-loader" aria-hidden="true" /><h2>Opening {monthLabel(month)}…</h2><p>Loading the count sheet, ledger and saved month status.</p></div> : !data ? <div className="ui-empty"><CircleAlert size={30} aria-hidden="true" /><h2>Inventory is unavailable</h2><p role="alert">{loadError}</p><Button onClick={() => setRevision((value) => value + 1)}>Retry inventory</Button></div> : <>
+      <section className="inventory-metrics" aria-label="Inventory figures">
+        <StatTile label={finalized ? "Finalized closing value $" : "Closing value $"} value={money(closing)} accent="purple" />
+        <StatTile label="Value vs previous count $" value={data.prevCounts.length ? `${closing - priorTotal >= 0 ? "+" : ""}${money(closing - priorTotal)}` : "—"} />
+        <StatTile label="Items with a count" value={`${lines.filter(({ item }) => live(item.id) > 0).length} / ${lines.length}`} />
+        <StatTile label="COGS $" value={money(cogs)} />
+        <StatTile label="Food cost" value={costPct == null ? "—" : `${Number(costPct).toFixed(1)}%`} />
+      </section>
+      {unsaved && <div className="ui-notice ui-notice--warning" role="status"><Pencil size={18} aria-hidden="true" /><span>You have unsaved entries. Figures preview your changes. Save or clear them before finalizing this month.</span></div>}
+      {readOnly && <div className="ui-notice"><LockKeyhole size={18} aria-hidden="true" />You have read-only access. A manager can update counts and finalize the month.</div>}
+      {!finalized && data.opening.baseline && <div className="ui-notice"><CircleAlert size={18} aria-hidden="true" />No finalized close for {monthLabel(prevMonth(month))}. Opening inventory, COGS and food cost are unavailable for this period.</div>}
+      {!finalized && accounting.flags.negativeCogs && <div className="ui-notice ui-notice--warning"><CircleAlert size={18} aria-hidden="true" />Closing value exceeds opening plus purchases. Review the counts and ledger before finalizing.</div>}
+
+      <section className="dash-panel" aria-labelledby="count-sheet-title">
+        <div className="dash-panel__header"><div><h2 id="count-sheet-title">1. Count your stock</h2><p>{monthLabel(month)} quantities · values calculated from unit costs</p></div><Badge>{countChanges ? `${countChanges} changed` : "Saved quantities"}</Badge></div>
+        <div className="inventory-sectionbar"><label className="dash-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search inventory items</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find an item…" /></label>{canEdit && <Button onClick={saveCounts} disabled={!!saving}><Save size={16} aria-hidden="true" />{saving === "counts" ? "Saving counts…" : "Save counts"}</Button>}</div>
+        <div className="inventory-table" tabIndex={0} role="region" aria-label="Inventory count sheet">
+          <table><caption className="sr-only">Stock quantities and values for {monthLabel(month)}</caption><thead><tr><th scope="col">Item</th><th scope="col">Unit</th><th scope="col">Unit cost $</th><th scope="col">Quantity</th><th scope="col">Value $</th><th scope="col">Quantity change</th>{canEdit && <th scope="col"><span className="sr-only">Item actions</span></th>}</tr></thead>
+            <tbody>{matchingLines.map(({ item }) => {
+              const value = draft[item.id] ?? String(stored.get(item.id) ?? 0);
+              const invalid = value === "" || !Number.isFinite(Number(value)) || Number(value) < 0;
+              const before = previous.get(item.id);
+              return <tr key={item.id}><th scope="row"><strong>{item.name}</strong>{item.category && <small>{item.category}</small>}</th><td>{item.unit}</td><td>{money(item.unit_cost)}</td><td><Input type="number" inputMode="decimal" step="0.01" min="0" aria-label={`Quantity for ${item.name}`} aria-invalid={invalid} value={value} readOnly={!canEdit} disabled={!!saving} onChange={(event) => { setNotice(""); setDraft((current) => ({ ...current, [item.id]: event.target.value })); }} />{invalid && <small className="inventory-field-error">Enter 0 or more</small>}</td><td>{invalid ? "—" : money(lineValue(live(item.id), item.unit_cost))}</td><td>{before === undefined || invalid ? "—" : `${live(item.id) - before > 0 ? "+" : ""}${countQty(value) - before}`}</td>{canEdit && <td><div className="inventory-row-actions"><button disabled={!!saving} aria-label={`Edit ${item.name}`} onClick={() => { setEditingItem(item.id); setItemForm({ name: item.name, unit: item.unit, unit_cost: String(item.unit_cost) }); document.getElementById("inventory-item-form")?.scrollIntoView({ block: "center" }); document.getElementById("inventory-item-name")?.focus(); }}><Pencil size={16} aria-hidden="true" /></button><button disabled={!!saving} aria-label={`Remove ${item.name}`} onClick={() => removeItem(item)}><Trash2 size={16} aria-hidden="true" /></button></div></td>}</tr>;
+            })}</tbody></table>
+        </div>
+        {!matchingLines.length && <div className="ui-empty"><Layers size={26} aria-hidden="true" /><h3>{search ? "No matching items" : "No inventory items yet"}</h3><p>{search ? "Try another item name." : readOnly ? "Items added by your manager will appear here." : "Add an item below to start the count sheet."}</p></div>}
+        {canEdit && <div className="inventory-savebar"><span role="status">{countChanges ? `${countChanges} unsaved ${countChanges === 1 ? "quantity" : "quantities"}` : "Counts are up to date"}</span>{countChanges > 0 && <Button variant="ghost" disabled={!!saving} onClick={() => setDraft({})}>Reset counts</Button>}<Button disabled={!!saving} onClick={saveCounts}><Save size={16} aria-hidden="true" />{saving === "counts" ? "Saving counts…" : "Save counts"}</Button></div>}
+      </section>
+
+      {canEdit && <details className="inventory-item" open={editingItem ? true : undefined}>
+        <summary><PackagePlus size={18} aria-hidden="true" />{editingItem ? "Edit inventory item" : "Add an inventory item"}</summary>
+        <form id="inventory-item-form" onSubmit={saveItem}><fieldset disabled={!!saving} className="inventory-form-grid">
+          <label className="inventory-field inventory-field--wide">Item name<Input id="inventory-item-name" required maxLength={200} value={itemForm.name} onChange={(event) => setItemForm((current) => ({ ...current, name: event.target.value }))} placeholder="Sesame buns" /></label>
+          <label className="inventory-field">Unit<Input maxLength={40} value={itemForm.unit} onChange={(event) => setItemForm((current) => ({ ...current, unit: event.target.value }))} /></label>
+          <label className="inventory-field">Unit cost $<Input type="number" min="0" step="0.01" inputMode="decimal" value={itemForm.unit_cost} onChange={(event) => setItemForm((current) => ({ ...current, unit_cost: event.target.value }))} placeholder="0.00" /></label>
+          <Button type="submit" disabled={!!saving}>{saving === "item" ? "Saving item…" : editingItem ? "Save item" : "Add item"}</Button>
+          {itemChanged && <Button variant="ghost" disabled={!!saving} onClick={() => { setItemForm(emptyItem); setEditingItem(null); }}>Clear item form</Button>}
+        </fieldset></form>
+      </details>}
+
+      <section className="dash-panel" aria-labelledby="purchases-title"><div className="dash-panel__header"><div><h2 id="purchases-title">2. Reconcile purchases</h2><p>Daily invoices and local purchases for {monthLabel(month)}</p></div><Badge>{data.purchases.length} {data.purchases.length === 1 ? "entry" : "entries"}</Badge></div>
+        <div className="inventory-purchase-totals"><span>GFS <strong>${money(monthlyTotal(data.purchases, "gfs"))}</strong></span><span>Local <strong>${money(monthlyTotal(data.purchases, "local"))}</strong></span><span>Total <strong>${money(ledger)}</strong></span></div>
+        {canEdit && <form onSubmit={addPurchase} className="inventory-purchase-form"><fieldset disabled={!!saving} className="inventory-form-grid">
+          <label className="inventory-field">Purchase type<select value={purchase.type} onChange={(event) => setPurchase((current) => ({ ...current, type: event.target.value }))}><option value="gfs">GFS invoice</option><option value="local">Local purchase</option></select></label>
+          <label className="inventory-field">Purchase date<select required value={purchase.date} onChange={(event) => setPurchase((current) => ({ ...current, date: event.target.value }))}><option value="">Choose a date</option>{monthDates(month).map((day) => <option key={day} value={day}>{day}</option>)}</select></label>
+          <label className="inventory-field inventory-field--wide">Description<Input required maxLength={500} value={purchase.description} onChange={(event) => setPurchase((current) => ({ ...current, description: event.target.value }))} placeholder="Weekly stock delivery" /></label>
+          <label className="inventory-field">Amount $<Input required type="number" step="0.01" min="0" inputMode="decimal" value={purchase.amount} onChange={(event) => setPurchase((current) => ({ ...current, amount: event.target.value }))} /></label>
+          {purchase.type === "gfs" && <><label className="inventory-field">Supplier<Input maxLength={200} value={purchase.supplier} onChange={(event) => setPurchase((current) => ({ ...current, supplier: event.target.value }))} /></label><label className="inventory-field">Invoice reference<Input required maxLength={200} value={purchase.reference} onChange={(event) => setPurchase((current) => ({ ...current, reference: event.target.value }))} /></label></>}
+          <Button type="submit" disabled={!!saving}>{saving === "purchase" ? "Saving purchase…" : "Add purchase"}</Button>{purchaseChanged && <Button variant="ghost" disabled={!!saving} onClick={() => setPurchase(emptyPurchase)}>Clear purchase</Button>}
+        </fieldset></form>}
+        <div className="inventory-ledger">{monthDates(month).map((day) => {
+          const entries = data.purchases.filter((row) => row.purchase_date === day);
+          return entries.length ? <section key={day}><div className="inventory-ledger__day"><h3>{new Date(`${day}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</h3><strong>${money(dailyTotal(data.purchases, day))}</strong></div>{entries.map((row, index) => <div className="inventory-ledger__entry" key={row.id ?? index}><Badge accent={row.type === "gfs" ? "purple" : "slate"}>{row.type === "gfs" ? "GFS" : "Local"}</Badge><span>{row.description}{row.reference && <small>Invoice {row.reference}</small>}</span><strong>${money(Number(row.amount))}</strong></div>)}</section> : null;
+        })}{!data.purchases.length && <div className="ui-empty"><h3>No purchases recorded</h3><p>Saved invoices and local purchases for this month will appear here.</p></div>}</div>
+      </section>
+
+      <Card className="inventory-close"><div className="dash-section__head"><div><h2>3. Review the month’s close</h2><p>{finalized ? "This finalized snapshot is the saved accounting record." : "Save sales, review the figures, then finalize your saved records."}</p></div></div>
+        <div className="inventory-close__figures"><div><span>Opening $</span><strong>{money(data.opening.baseline ? null : savedSnapshot ? savedSnapshot.opening_value : data.opening.opening)}</strong><small>{data.opening.carriedFrom ? `From ${monthLabel(data.opening.carriedFrom)}` : "No prior finalized close"}</small></div><div><span>Purchases $</span><strong>{money(savedSnapshot ? savedSnapshot.purchases : ledger)}</strong><small>From the purchase ledger</small></div><div><span>Closing $</span><strong>{money(closing)}</strong><small>{finalized ? "Finalized count value" : countChanges ? "Preview · unsaved counts" : "Saved count value"}</small></div><label className="inventory-field">Food sales $<Input type="number" step="0.01" min="0" inputMode="decimal" readOnly={!canEdit} disabled={!!saving} value={savedSnapshot ? savedSnapshot.sales ?? "" : sales} onChange={(event) => { setNotice(""); setSalesDraft(event.target.value); }} placeholder="Not entered" /><small>{salesChanged ? "Unsaved sales" : "Manual sales figure"}</small></label></div>
+        <p className="inventory-formula">COGS = Opening + Purchases − Closing · Food cost = COGS ÷ Sales × 100</p>
+        {!finalized && (accounting.status === "no_sales" || accounting.status === "zero_sales") && <p className="inventory-help">{accounting.status === "zero_sales" ? "Food sales are $0. Food cost percentage is unavailable." : "Enter food sales to calculate the food cost percentage."}</p>}
+        {canEdit && <div className="inventory-close__actions"><Button variant="ghost" onClick={saveSales} disabled={!!saving || !salesChanged}>{saving === "sales" ? "Saving sales…" : "Save sales"}</Button>{salesChanged && <Button variant="ghost" disabled={!!saving} onClick={() => setSalesDraft(null)}>Reset sales</Button>}<Button disabled={!!saving || unsaved || (total <= 0 && ledger <= 0)} onClick={finalize}><LockKeyhole size={16} aria-hidden="true" />{saving === "finalize" ? "Finalizing…" : "Finalize month"}</Button><p>{unsaved ? "Save or clear all entries before finalizing." : "Finalizing locks this month and carries its closing value into the next month."}</p></div>}
+        {finalized && !readOnly && <form className="inventory-reopen" onSubmit={reopen}><label className="inventory-field">Reason for reopening<Input required maxLength={1000} disabled={!!saving} value={reopenReason} onChange={(event) => setReopenReason(event.target.value)} placeholder="Describe the correction needed" /></label><Button type="submit" variant="ghost" disabled={!!saving || !reopenReason.trim()}>{saving === "reopen" ? "Reopening…" : "Reopen month"}</Button></form>}
+      </Card>
+      <p className="dash__provenance">Inventory is shared across the BTB company. Counts are retained for 24 months. Finalized figures come from the saved snapshot; unavailable opening inventory remains “—”.</p>
+    </>}
+  </div>;
 }

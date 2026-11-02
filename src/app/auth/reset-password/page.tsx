@@ -3,87 +3,132 @@
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
+import { ArrowLeft, ArrowRight, CircleCheck, Mail } from "lucide-react";
+import { AuthShell, Alert, Field } from "@/components/auth/AuthShell";
+import "@/app/auth.css";
 
 export default function ResetPassword() {
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [touched, setTouched] = useState(false);
+
+  const emailError =
+    touched && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+      ? "Enter the email on your account."
+      : undefined;
 
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched(true);
+    if (loading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return;
     setLoading(true);
     setError("");
-    setMessage("");
 
-    const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`,
-    });
+    try {
+    const { error: authError } = await supabase.auth.resetPasswordForEmail(
+      email.trim(),
+      { redirectTo: `${window.location.origin}/auth/callback?flow=recovery` }
+    );
 
     if (authError) {
-      setError(authError.message);
+      const m = authError.message.toLowerCase();
+      setError(
+        m.includes("rate limit") || m.includes("too many")
+          ? "Too many reset requests. Wait a few minutes, then try again."
+          : authError.message
+      );
     } else {
-      setMessage("Check your email for the reset link.");
+      setSent(true);
     }
-
-    setLoading(false);
+    } catch {
+      setError("Couldn’t send the reset email. Check your connection and try again.");
+    } finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-block">
-            <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            </div>
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Reset Password</h1>
-          <p className="text-gray-600 mt-1">Enter your email to reset</p>
-        </div>
+    <AuthShell title="Back to your day, in a few steps." description="Request a link, choose a new password, and return to your restaurant workspace." points={["Use the email on your account", "Follow the latest reset link", "Choose a new password to continue"]}>
+      {sent ? (
+        <>
+          <p className="ax__eyebrow">Check your inbox</p>
+          <h1 className="ax__title">Reset link sent</h1>
+          <p className="ax__sub">
+            If an account exists for <strong style={{ color: "var(--ink)" }}>{email}</strong>,
+            a reset link is on its way. Use the latest email to continue.
+          </p>
 
-        <form onSubmit={handleReset} className="bg-white rounded-2xl shadow-lg p-8 space-y-4">
-          {message && (
-            <div className="bg-green-50 text-green-600 p-3 rounded-lg text-sm">
-              {message}
+          <div className="ax__form">
+            <div className="alert alert--ok">
+              <CircleCheck size={15} strokeWidth={2.2} />
+              <span>
+                Nothing arrived? Check the spam folder, then try again in a
+                minute.
+              </span>
             </div>
-          )}
 
-          {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 bg-white"
-              placeholder="you@example.com"
-              required
-            />
+            <button
+              type="button"
+              className="btn btn--quiet"
+              onClick={() => {
+                setSent(false);
+                setTouched(false);
+              }}
+            >
+              <ArrowLeft size={15} strokeWidth={2.2} /> Use a different email
+            </button>
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
-          >
-            {loading ? "Sending..." : "Send Reset Link"}
-          </button>
-
-          <p className="text-center text-sm text-gray-600">
-            <Link href="/auth/sign-in" className="text-green-600 font-semibold hover:underline">
-              Back to Sign In
-            </Link>
+          <p className="foot">
+            <Link href="/auth/sign-in">Back to sign in</Link>
           </p>
-        </form>
-      </div>
-    </div>
+        </>
+      ) : (
+        <>
+          <p className="ax__eyebrow">Password help</p>
+          <h1 className="ax__title">Reset your password</h1>
+          <p className="ax__sub">
+            Enter the email on your account and we&apos;ll send a link to set a
+            new password.
+          </p>
+
+          <form className="ax__form" onSubmit={handleReset} noValidate>
+            {error && <Alert kind="error">{error}</Alert>}
+
+            <Field label="Email" error={emailError} icon={<Mail size={15} strokeWidth={1.9} />}>
+              {(props) => (
+                <input
+                  {...props}
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => setTouched(true)}
+                  autoComplete="email"
+                  placeholder="you@restaurant.com"
+                  required
+                />
+              )}
+            </Field>
+
+            <button type="submit" className="btn btn--primary" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="btn__spinner" aria-hidden />
+                  Sending…
+                </>
+              ) : (
+                <>
+                  Send reset link <ArrowRight size={16} strokeWidth={2.2} />
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="foot">
+            <Link href="/auth/sign-in">Back to sign in</Link>
+          </p>
+        </>
+      )}
+    </AuthShell>
   );
 }

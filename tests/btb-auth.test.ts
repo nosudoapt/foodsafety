@@ -85,8 +85,9 @@ test("tampered, legacy and role-less session values are rejected", () => {
   assert.equal(roleFromSession("wizard.btb-dev-session-token"), null);
   assert.equal(roleFromSession("manager.wrong-token"), null);
   assert.equal(tokenValid("manager.wrong-token"), false);
-  // the role half decides the role, the secret half decides validity
-  assert.equal(roleFromSession(sessionValueFor("manager").replace(/^manager/, "staff")), "staff");
+  // Regression: changing only the role prefix must NOT escalate/downgrade a
+  // signed cookie; the signature binds the cookie to exactly one role.
+  assert.equal(roleFromSession(sessionValueFor("manager").replace(/^manager/, "staff")), null);
 });
 
 // --- 3. hub cards really differ per role ------------------------------------
@@ -201,7 +202,7 @@ test("BTB and the green demo do not link to each other", () => {
     const hrefs = [...source.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
     for (const href of hrefs) {
       assert.ok(
-        href.startsWith("/between-the-buns"),
+        href.startsWith("/between-the-buns") || href.startsWith("#"),
         `${file} must not link out to ${href}`
       );
     }

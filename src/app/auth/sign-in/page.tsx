@@ -1,132 +1,152 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { DemoRoleButtons } from "@/components/DemoRolePicker";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowRight, Mail } from "lucide-react";
+import {
+  AuthShell,
+  Alert,
+  Field,
+  PasswordField,
+} from "@/components/auth/AuthShell";
+import { DemoPanel } from "@/components/auth/DemoPanel";
+import { safeNextPath } from "@/lib/auth-redirect";
+import "@/app/auth.css";
+
+// Turns Supabase's terse auth errors into something a person can act on.
+function friendlyAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("invalid login credentials")) {
+    return "That email and password don't match. Check both, or reset your password.";
+  }
+  if (m.includes("email not confirmed")) {
+    return "Confirm your email first — we sent you a link when you signed up.";
+  }
+  if (m.includes("too many requests") || m.includes("rate limit")) {
+    return "Too many attempts. Wait a minute, then try again.";
+  }
+  if (m.includes("network") || m.includes("fetch")) {
+    return "Couldn't reach the server. Check your connection and try again.";
+  }
+  return message;
+}
 
 export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [touched, setTouched] = useState<{ email: boolean; password: boolean }>({
+    email: false,
+    password: false,
+  });
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
+  const emailError =
+    touched.email && !email.trim()
+      ? "Enter the email you signed up with."
+      : touched.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+        ? "That doesn't look like an email address."
+        : undefined;
+  const passwordError =
+    touched.password && !password ? "Enter your password." : undefined;
+  const canSubmit = email.trim().length > 0 && password.length > 0 && !emailError;
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched({ email: true, password: true });
+    if (!canSubmit || loading) return;
     setLoading(true);
     setError("");
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return;
-    }
-
-    // Honor the ?next= redirect the auth guard set; only allow same-site paths.
-    const next = new URLSearchParams(window.location.search).get("next");
-    const dest = next && next.startsWith("/") ? next : "/dashboard";
-    router.push(dest);
-    setLoading(false);
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (authError) { setError(friendlyAuthError(authError.message)); return; }
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.replace(safeNextPath(next));
+      router.refresh();
+    } catch {
+      setError("Couldn’t reach the server. Check your connection and try again.");
+    } finally { setLoading(false); }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-green-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <Link href="/" className="inline-block">
-            <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            </div>
-          </Link>
-          <h1 className="text-2xl font-bold text-gray-900">Welcome Back</h1>
-          <p className="text-gray-600 mt-1">Sign in to your account</p>
-        </div>
+    <AuthShell>
+      <p className="ax__eyebrow">Welcome back</p>
+      <h1 className="ax__title">Sign in to your workspace</h1>
+      <p className="ax__sub">
+        Your logs, your vault and every site you run — one register.
+      </p>
 
-        <form onSubmit={handleSignIn} className="bg-white rounded-2xl shadow-lg p-8 space-y-4">
-          {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">
-              {error}
-            </div>
-          )}
+      <form className="ax__form" onSubmit={handleSignIn} noValidate>
+        <Suspense><ConfirmationNotice /></Suspense>
+        {error && <Alert kind="error">{error}</Alert>}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+        <Field label="Email" error={emailError} icon={<Mail size={15} strokeWidth={1.9} />}>
+          {(props) => (
             <input
+              {...props}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 bg-white"
-              placeholder="you@example.com"
+              onBlur={() => setTouched((t) => ({ ...t, email: true }))}
+              autoComplete="email"
+              placeholder="you@restaurant.com"
               required
             />
-          </div>
+          )}
+        </Field>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-gray-900 bg-white"
-              placeholder="••••••••"
-              required
-            />
-          </div>
+        <PasswordField
+          label="Password"
+          value={password}
+          onChange={setPassword}
+          error={passwordError}
+          autoComplete="current-password"
+        />
 
-          <div className="text-right">
-            <Link href="/auth/reset-password" className="text-sm text-green-600 hover:underline">
-              Forgot password?
-            </Link>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50"
-          >
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-
-          <p className="text-center text-sm text-gray-600">
-            Don&apos;t have an account?{" "}
-            <Link href="/auth/sign-up" className="text-green-600 font-semibold hover:underline">
-              Create Account
-            </Link>
-          </p>
-        </form>
-
-        <div className="mt-5 bg-white rounded-2xl shadow-lg p-6 animate-fade-in">
-          <div className="flex items-center justify-between gap-3 mb-1">
-            <h2 className="font-bold text-gray-900">Try a demo role</h2>
-            <Link href="/demo" className="text-sm font-semibold text-green-600 hover:underline">
-              Details
-            </Link>
-          </div>
-          <p className="mb-4 text-sm text-gray-500">
-            See exactly what each role can do — no signup needed.
-          </p>
-          <DemoRoleButtons />
+        <div className="row-between">
+          <Link href="/auth/reset-password" className="link">
+            Forgot password?
+          </Link>
         </div>
 
-        <p className="mt-5 text-center text-sm text-gray-500">
-          Signing in for{" "}
-          <Link
-            href="/between-the-buns/login"
-            className="font-semibold text-red-600 hover:underline"
-          >
-            Between the Buns?
-          </Link>
-        </p>
-      </div>
-    </div>
+        <button type="submit" className="btn btn--primary" disabled={loading}>
+          {loading ? (
+            <>
+              <span className="btn__spinner" aria-hidden />
+              Signing in…
+            </>
+          ) : (
+            <>
+              Sign in <ArrowRight size={16} strokeWidth={2.2} />
+            </>
+          )}
+        </button>
+      </form>
+
+      <DemoPanel />
+
+      <p className="foot">
+        New to FoodSafe?{" "}
+        <Link href="/auth/sign-up?trial=1">Start a 30-day trial</Link>
+      </p>
+
+      <div className="divider">or</div>
+      <p className="foot" style={{ marginTop: 0 }}>
+        Signing in for{" "}
+        <Link href="/between-the-buns/login" style={{ color: "var(--muted-2)" }}>
+          Between the Buns
+        </Link>
+        ?
+      </p>
+    </AuthShell>
   );
+}
+
+function ConfirmationNotice() {
+  const params = useSearchParams();
+  return params.get("error") === "confirmation" ? <Alert kind="error">The confirmation link couldn’t be verified. Use the latest email, or try signing in to your confirmed account.</Alert> : null;
 }

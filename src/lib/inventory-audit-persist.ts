@@ -7,15 +7,11 @@
 // so a finalize could return ok:true while writing NO audit row — silent
 // snapshot/audit inconsistency.
 //
-// WHY NOT A Postgres RPC: a SECURITY DEFINER function doing both writes
-// atomically would have to be granted to the `anon` role to be callable by the
-// current client (there is no server-only service-role key yet — see
-// src/lib/supabase.ts). Anything granted to `anon` can be invoked directly by
-// anyone holding the anon key, bypassing the BTB cookie role check in the
-// route. That is strictly LESS safe, not more. Once a service-role server
-// client exists (see deploy/stage-c-*.sql), swap these two calls for a single
-// RPC granted only to service_role. Until then we make failure LOUD and
-// compensate, and we never claim atomicity.
+// WHY NOT CLAIM ATOMICITY: PostgREST still sends these as two independent
+// requests. The routes now use a server-only service-role client, so a future
+// service-role-only RPC can make the pair truly atomic; this prototype keeps
+// the smaller compensating-write design. Failure is LOUD, rollback is checked,
+// and tests cover both audit failure and rollback failure.
 //
 // Contract of persistWithAudit:
 //   * the audit write's error IS checked;

@@ -8,6 +8,13 @@
 export const BTB_ROLES = ["staff", "supervisor", "manager", "corporate", "admin"] as const;
 export type BtbRole = (typeof BTB_ROLES)[number];
 
+/** Company register key used by the operational schema and overview counts. */
+export const BTB_RESTAURANT = "Between the Buns";
+
+export const BTB_ROLE_LABELS: Record<BtbRole, string> = {
+  staff: "Staff", supervisor: "Supervisor", manager: "Manager", corporate: "Corporate", admin: "Administrator",
+};
+
 export function isBtbRole(value: unknown): value is BtbRole {
   return typeof value === "string" && (BTB_ROLES as readonly string[]).includes(value);
 }

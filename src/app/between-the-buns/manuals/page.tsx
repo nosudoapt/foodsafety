@@ -4,7 +4,7 @@ import PrintManuals from "@/components/PrintManuals";
 export default function Page() {
   return (
     <BtbFeatureGate feature="manuals">
-      {(readOnly) => <PrintManuals readOnly={readOnly} />}
+      {(readOnly) => <PrintManuals application="btb" readOnly={readOnly} />}
     </BtbFeatureGate>
   );
 }

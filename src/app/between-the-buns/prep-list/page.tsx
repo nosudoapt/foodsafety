@@ -24,6 +24,7 @@ import {
   type PrepSavePayload,
 } from "@/lib/offline-queue";
 import { buildParMaps, parFor } from "@/lib/par-prefill";
+import { btbToday } from "@/lib/btb-team";
 
 interface PrepEntry {
   par: string;
@@ -73,9 +74,9 @@ export default function PrepListPage() {
 }
 
 function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boolean }) {
-  const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(btbToday);
   const [day, setDay] = useState(() =>
-    new Date().toLocaleDateString("en-US", { weekday: "long" })
+    new Date(`${date}T12:00:00`).toLocaleDateString("en-US", { weekday: "long" })
   );
   const [prepData, setPrepData] = useState<PrepData>({});
   const [savedLists, setSavedLists] = useState<SavedPrepList[]>([]);

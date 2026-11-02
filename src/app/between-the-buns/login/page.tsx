@@ -2,124 +2,67 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Lock } from "lucide-react";
+import { ArrowRight, ClipboardCheck, Layers, Mail, ShieldCheck } from "lucide-react";
+import BtbWordmark from "@/components/BtbWordmark";
+import { Alert, Field, PasswordField } from "@/components/auth/AuthShell";
+import { BTB_ROLE_LABELS, isBtbRole } from "@/lib/btb-roles";
+import { safeNextPath } from "@/lib/auth-redirect";
+import { fetchJson, RequestError } from "@/lib/fetch-json";
+import "@/app/auth.css";
 
-interface PublicInfo {
-  accounts?: { role: string; email: string; name: string }[];
-  passwordHint?: string | null;
-}
+interface PublicInfo { authenticated?: boolean; accounts?: { role: string; email: string; name: string }[]; passwordHint?: string | null }
 
-// Standalone Between the Buns sign-in. Deliberately self-contained — no link
-// back to the green FoodSafe demo. Checked against BTB's own credential list,
-// one shared store password, cookie session.
 export default function BtbLogin() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [info, setInfo] = useState<PublicInfo>({});
+  const [infoError, setInfoError] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [submitted, setSubmitted] = useState(false);
   const router = useRouter();
+  const emailError = submitted && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? "Enter your team account email." : undefined;
+  const passwordError = submitted && !password ? "Enter your workspace password." : undefined;
 
-  // Account chips + (default-only) password hint, served by /api/btb/me.
   useEffect(() => {
-    fetch("/api/btb/me")
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((data: PublicInfo) => setInfo(data))
-      .catch(() => setInfo({}));
-  }, []);
+    let cancelled = false;
+    void fetchJson<PublicInfo>("/api/btb/me").then((data) => {
+      if (!cancelled) { setInfo(data); setInfoError(false); }
+    }).catch(() => { if (!cancelled) setInfoError(true); });
+    return () => { cancelled = true; };
+  }, [revision]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmitted(true);
+    if (loading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || !password) return;
     setLoading(true);
     setError("");
-    const res = await fetch("/api/btb/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    if (!res.ok) {
-      setError("Incorrect email or password.");
-      setLoading(false);
-      return;
-    }
-    const next = new URLSearchParams(window.location.search).get("next");
-    const dest = next && next.startsWith("/between-the-buns") ? next : "/between-the-buns";
-    router.push(dest);
-    router.refresh();
+    try {
+      await fetchJson("/api/btb/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
+      const next = new URLSearchParams(window.location.search).get("next");
+      router.replace(safeNextPath(next, "/between-the-buns", "/between-the-buns"));
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof RequestError ? cause.status === 401 ? "Your email and password don’t match. Check your details and try again." : cause.message : "Couldn’t reach the workspace. Check your connection and try again.");
+    } finally { setLoading(false); }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full">
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
-            <span className="text-white font-bold text-xl">BTB</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">Between the Buns</h1>
-          <p className="text-slate-600 mt-1">Staff sign-in</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-lg p-8 space-y-4">
-          {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm">{error}</div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              autoComplete="username"
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-slate-900 bg-white"
-              placeholder="manager@foodsafe.demo"
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent text-slate-900 bg-white"
-              placeholder="••••••••"
-              required
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-red-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <Lock className="w-4 h-4" />
-            {loading ? "Signing in..." : "Sign In"}
-          </button>
-
-          {info.accounts && info.accounts.length > 0 && (
-            <div className="pt-2 border-t border-slate-100">
-              <p className="text-xs font-semibold text-slate-500 mb-2">
-                Pick an account {info.passwordHint ? `— password ${info.passwordHint}` : ""}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {info.accounts.map((a) => (
-                  <button
-                    key={a.role}
-                    type="button"
-                    onClick={() => setEmail(a.email)}
-                    className="text-xs font-semibold px-2.5 py-1.5 rounded-lg bg-red-50 text-red-700 hover:bg-red-100 transition-colors"
-                  >
-                    {a.name} · {a.role}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </form>
-      </div>
-    </div>
-  );
+  return <div className="ax btb-auth">
+    <main className="ax__main"><div className="ax__top"><div className="btb-auth__brand"><BtbWordmark className="text-xl" /><span>Team workspace · powered by FoodSafe</span></div></div><div className="ax__body"><div className="ax__card">
+      <p className="ax__eyebrow">Between the Buns</p><h1 className="ax__title">A good day starts here.</h1><p className="ax__sub">Use your individual employee email and password. Your shift checks and training are saved under your name.</p>
+      <form className="ax__form" onSubmit={handleSubmit} noValidate>
+        {error && <Alert kind="error">{error}</Alert>}
+        <Field label="Team email" error={emailError} icon={<Mail size={16} aria-hidden="true" />}>{(props) => <input {...props} type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@restaurant.com" />}</Field>
+        <PasswordField label="Workspace password" value={password} onChange={setPassword} error={passwordError} autoComplete="current-password" />
+        <button className="btn btn--primary" type="submit" disabled={loading}>{loading ? <><span className="btn__spinner" aria-hidden="true" />Signing in…</> : <>Open my workspace<ArrowRight size={17} aria-hidden="true" /></>}</button>
+      </form>
+      {info.authenticated && <p className="foot"><a href="/between-the-buns">Continue with your current session</a></p>}
+      {!!info.accounts?.length && <details className="btb-auth__accounts"><summary>Shared workspace accounts</summary><p>Individual employee sign-in is required to record daily checks and training.</p><div>{info.accounts.map((account) => <button key={account.role} type="button" aria-pressed={email === account.email} onClick={() => setEmail(account.email)}><strong>{isBtbRole(account.role) ? BTB_ROLE_LABELS[account.role] : account.role}</strong><span>{account.name}</span></button>)}</div>{info.passwordHint && <p className="btb-auth__hint">Development workspace password: <code>{info.passwordHint}</code></p>}</details>}
+      {infoError && <p className="foot" role="status">Account shortcuts couldn’t load. You can enter your email above. <button className="link" onClick={() => setRevision((value) => value + 1)}>Try again</button></p>}
+      <p className="foot">Need your account details? Ask your restaurant manager.</p>
+    </div></div></main>
+    <aside className="ax__aside"><div className="ax__aside-inner btb-auth__story"><p className="dash-focus__label">One team. A little more clarity.</p><h2>Everything for the shift.<br /><em>Room to focus.</em></h2><p>A workspace that follows your responsibilities, from the first opening check to the month-end close.</p><ul><li><ClipboardCheck size={21} aria-hidden="true" /><span><strong>Start with the essentials</strong>Prep, checklists and cleaning, ready for the day.</span></li><li><Layers size={21} aria-hidden="true" /><span><strong>Keep the bigger picture close</strong>Stock, people, records and renewals in one place.</span></li><li><ShieldCheck size={21} aria-hidden="true" /><span><strong>A view that fits your role</strong>Clear tools and access for every member of the team.</span></li></ul></div></aside>
+  </div>;
 }

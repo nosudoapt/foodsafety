@@ -31,6 +31,7 @@ export async function getProfileContext(): Promise<ProfileContext | null> {
     .from("profiles")
     .select("restaurant_name, email")
     .eq("id", user.id)
+    .abortSignal(AbortSignal.timeout(12_000))
     .single();
 
   if (error || !data) return null;

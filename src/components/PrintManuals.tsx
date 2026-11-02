@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getProfileContext } from "@/lib/profile";
 import { downloadDataUrl, fileToDataUrl, formatFileSize, printDataUrl } from "@/lib/files";
+import { fetchJson } from "@/lib/fetch-json";
+import type { TrainingManual } from "@/lib/training";
 import PrintButton from "@/components/PrintButton";
 
 interface Manual {
@@ -48,10 +50,11 @@ function toManual(row: ManualRow): Manual {
 
 const MANUAL_COLUMNS = "id, title, description, file_name, file_size, category, created_at";
 
-export default function PrintManuals({ readOnly = false }: { readOnly?: boolean }) {
+export default function PrintManuals({ application, readOnly = false }: { application: "btb" | "foodsafe"; readOnly?: boolean }) {
   const [manuals, setManuals] = useState<Manual[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState("");
 
   const [showUpload, setShowUpload] = useState(false);
@@ -66,76 +69,57 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
   // so "Print / Save PDF" hands over the manuals themselves, not the grid.
   // The published training guide prints ahead of the PDFs as plain text.
   const [printFiles, setPrintFiles] = useState<{ id: string; title: string; url: string }[]>([]);
-  const [trainingPrint, setTrainingPrint] = useState<
-    { id: string; title: string; category: string; sections: { heading: string; body: string }[] }[] | null
-  >(null);
+  const [trainingPrint, setTrainingPrint] = useState<TrainingManual[] | null>(null);
   const framesLoaded = useRef(0);
   const printWhenReady = useRef(false);
 
+  const finishPrint = () => {
+    printWhenReady.current = false;
+    window.print();
+    setPrinting(false);
+  };
+
   const printAll = async () => {
+    if (loading || printing) return;
+    setPrinting(true);
     setError("");
-    const pdfs = manuals.filter((m) => m.fileName.toLowerCase().endsWith(".pdf"));
-    const files: { id: string; title: string; url: string }[] = [];
-    for (const m of pdfs) {
-      const { data, error } = await supabase
-        .from("print_manuals")
-        .select("file_url")
-        .eq("id", m.id)
-        .single();
-      if (!error && data?.file_url) files.push({ id: m.id, title: m.title, url: data.file_url });
-    }
-    // Published training topics ride along so "print all" includes the
-    // training module even though it isn't a stored PDF.
-    let training: { id: string; title: string; category: string; sections: { heading: string; body: string }[] }[] = [];
+    setTrainingPrint(null);
+    setPrintFiles([]);
+    printWhenReady.current = false;
     try {
-      const { data: topics } = await supabase
-        .from("training_topics")
-        .select("id, title, category")
-        .eq("published", true)
-        .order("position")
-        .order("title");
-      const { data: sections } = await supabase
-        .from("training_sections")
-        .select("topic_id, position, heading, body")
-        .limit(1000);
-      const byTopic = new Map<string, { heading: string; body: string }[]>();
-      for (const s of (sections ?? []) as { topic_id: string; position: number; heading: string; body: string }[]) {
-        const list = byTopic.get(s.topic_id) ?? [];
-        list.push({ heading: s.heading, body: s.body });
-        byTopic.set(s.topic_id, list);
+      const endpoint = application === "btb" ? "/api/btb/training/print" : "/api/manuals/training";
+      const { training } = await fetchJson<{ training: TrainingManual[] }>(endpoint);
+      const pdfs = manuals.filter((m) => m.fileName.toLowerCase().endsWith(".pdf"));
+      const files: { id: string; title: string; url: string }[] = [];
+      for (const m of pdfs) {
+        const { data, error } = await supabase.from("print_manuals").select("file_url")
+          .eq("id", m.id).abortSignal(AbortSignal.timeout(15_000)).single();
+        if (error || !data?.file_url) throw new Error(`“${m.title}” could not be loaded. Please try printing again.`);
+        files.push({ id: m.id, title: m.title, url: data.file_url });
       }
-      training = ((topics ?? []) as { id: string; title: string; category: string }[]).map((t) => ({
-        ...t,
-        sections: byTopic.get(t.id) ?? [],
-      }));
-    } catch {
-      training = [];
-    }
-    if (files.length === 0 && training.length === 0) {
-      // Nothing stored as a PDF and no published training — print the list itself.
-      window.print();
-      return;
-    }
-    framesLoaded.current = 0;
-    printWhenReady.current = true;
-    setTrainingPrint(training);
-    setPrintFiles(files);
-    if (files.length === 0) {
-      // Training text renders synchronously — give React a beat, then print.
-      setTimeout(() => {
-        if (printWhenReady.current) {
-          printWhenReady.current = false;
-          window.print();
-        }
-      }, 350);
+      if (files.length === 0 && training.length === 0) {
+        // No published content or stored PDFs — print the list itself.
+        finishPrint();
+        return;
+      }
+      framesLoaded.current = 0;
+      printWhenReady.current = true;
+      setTrainingPrint(training);
+      setPrintFiles(files);
+      if (files.length === 0) {
+        // Let React render the complete guide before opening the dialog.
+        setTimeout(() => { if (printWhenReady.current) finishPrint(); }, 350);
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Manuals could not be prepared. Please try printing again.");
+      setPrinting(false);
     }
   };
 
   const onPrintFrameLoad = () => {
     framesLoaded.current += 1;
     if (printWhenReady.current && framesLoaded.current >= printFiles.length) {
-      printWhenReady.current = false;
-      window.print();
+      finishPrint();
     }
   };
 
@@ -154,6 +138,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
     load();
     return () => {
       cancelled = true;
+      printWhenReady.current = false;
     };
   }, []);
 
@@ -259,7 +244,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <PrintButton onClick={printAll} />
+          <PrintButton onClick={printAll} disabled={loading || printing} label={printing ? "Preparing manuals…" : "Print / Save PDF"} />
           {!readOnly && (
             <button
               onClick={() => setShowUpload(true)}
@@ -272,7 +257,7 @@ export default function PrintManuals({ readOnly = false }: { readOnly?: boolean 
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+        <div role="alert" className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
           {error}
         </div>
       )}

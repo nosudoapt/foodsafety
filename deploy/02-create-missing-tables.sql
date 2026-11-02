@@ -4,7 +4,7 @@
 --   25  inventory_month_snapshots  (supabase/schema-inventory-snapshots.sql)
 --   26  inventory_audit_log        (supabase/schema-inventory-audit.sql)
 --
--- Run AFTER 01-preflight.sql shows both tables ABSENT (or provably
+-- Run AFTER 01b-compact-preflight.sql shows both tables ABSENT (or provably
 -- compatible). Creates ONLY these two tables — no DROP, no TRUNCATE, no
 -- ALTER of any existing table. `role_page_access` (67 rows) and every
 -- existing inventory table are untouched. Safe to re-run after a failure.

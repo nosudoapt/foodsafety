@@ -2,14 +2,16 @@
 // FoodSafe demo. Deliberately not Supabase: BTB is a different business with
 // its own shared store-tablet login, and must stay decoupled from the demo.
 //
-// Four role accounts share one password (the emails happen to match the green
-// demo's for convenience — they are checked here, against this list, and never
-// against Supabase). The session cookie carries the role so the hub can show
-// each job its own cards.
+// Five shared role accounts remain available for store-wide access. Individual
+// employee credentials are verified through BTB's server-only tables, independent
+// of Supabase Auth. Signed personal cookies bind the employee and credential
+// version; protected requests re-check the account through ./btb-api.
 //
 // SERVER-ONLY: this module holds the password and session token. Client code
 // must import ./btb-roles instead (see the guard test in tests/btb-auth.test.ts).
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { BTB_ROLES, isBtbRole, type BtbRole } from "./btb-roles";
+import { isEmployeeRole, isUuid, isVersion, type EmployeeRole } from "./btb-team";
 
 export { BTB_ROLES, isBtbRole };
 export type { BtbRole };
@@ -18,6 +20,7 @@ export const BTB_COOKIE = "btb_session";
 
 // Cookie lifetime for a signed-in store tablet (30 days).
 export const BTB_COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+export const BTB_EMPLOYEE_MAX_AGE = 60 * 60 * 12;
 
 export interface BtbAccount {
   role: BtbRole;
@@ -40,30 +43,45 @@ export function btbAccountFor(role: string): BtbAccount | undefined {
   return BTB_ACCOUNTS.find((a) => a.role === role);
 }
 
-// Shared password for all four BTB accounts (one store password, as chosen).
-// Same value as the green demo's DEMO_PASSWORD, so owner@… + admin1234 works
-// on whichever sign-in page you use. Override with BTB_PASSWORD; the default
-// matches the login screen's hint and supabase/seed-demo.sql.
+// Shared password for the five role workspaces. Development has a local default;
+// production requires BTB_PASSWORD. Individual accounts use their own hashes.
 export function btbPassword(): string {
-  return process.env.BTB_PASSWORD || "admin1234";
+  const configured = process.env.BTB_PASSWORD?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new BtbConfigurationError("BTB_PASSWORD is not configured in the server environment.");
+  }
+  return "admin1234";
 }
 
 // True only while the default password is in use — lets the login screen show
 // the hint without ever leaking a password that has been overridden.
 export function btbPasswordIsDefault(): boolean {
-  return !process.env.BTB_PASSWORD;
+  return process.env.NODE_ENV !== "production" && !process.env.BTB_PASSWORD;
 }
 
 export function btbSessionToken(): string {
-  return process.env.BTB_SESSION_TOKEN || "btb-dev-session-token";
+  const configured = process.env.BTB_SESSION_TOKEN?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV === "production") {
+    throw new BtbConfigurationError("BTB_SESSION_TOKEN is not configured in the server environment.");
+  }
+  return "btb-dev-session-token";
+}
+
+/** Configuration failures are safe to surface as a generic 503 at login. */
+export class BtbConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "BtbConfigurationError";
+  }
 }
 
 // Constant-time-ish equality to avoid trivially leaking length/early-exit.
 function safeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let diff = 0;
-  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return diff === 0;
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }
 
 // Returns the signed-in account, or null. Credentials are matched against
@@ -76,22 +94,50 @@ export function accountForCredentials(email: string, password: string): BtbAccou
   return account ?? null;
 }
 
-// Cookie value is "<role>.<server-side token>" — the role is only ever
-// trusted because the token half is secret (BTB_SESSION_TOKEN, server-side).
+// Cookie value is "<role>.<HMAC(role)>". The server secret itself is NEVER put
+// in the cookie. A staff cookie therefore cannot be escalated by replacing the
+// role prefix with "manager" — the signature no longer matches.
+function sessionSignature(role: BtbRole): string {
+  return createHmac("sha256", btbSessionToken()).update(`btb-session:${role}`).digest("hex");
+}
+
 export function sessionValueFor(role: BtbRole): string {
-  return `${role}.${btbSessionToken()}`;
+  return `${role}.${sessionSignature(role)}`;
 }
 
 export function roleFromSession(value: string | undefined | null): BtbRole | null {
   if (!value) return null;
+  if (value.startsWith("employee.")) return employeeClaimsFromSession(value)?.role ?? null;
   const dot = value.indexOf(".");
   if (dot <= 0) return null; // also rejects the old, role-less token format
   const role = value.slice(0, dot);
   const token = value.slice(dot + 1);
   if (!isBtbRole(role)) return null;
-  return safeEqual(token, btbSessionToken()) ? role : null;
+  return safeEqual(token, sessionSignature(role)) ? role : null;
 }
 
 export function tokenValid(value: string | undefined | null): boolean {
   return roleFromSession(value) !== null;
+}
+
+export interface EmployeeSessionClaims { id: string; role: EmployeeRole; version: number; expires: number }
+
+/** The signature binds the employee, role, credential version and expiry. */
+export function employeeSessionValueFor(employee: Omit<EmployeeSessionClaims, "expires">, now = Date.now()): string {
+  const payload = Buffer.from(JSON.stringify({ ...employee, expires: Math.floor(now / 1000) + BTB_EMPLOYEE_MAX_AGE })).toString("base64url");
+  const signature = createHmac("sha256", btbSessionToken()).update(`btb-employee:${payload}`).digest("hex");
+  return `employee.${payload}.${signature}`;
+}
+
+export function employeeClaimsFromSession(value: string | undefined | null, now = Date.now()): EmployeeSessionClaims | null {
+  if (!value || value.length > 1024) return null;
+  const [prefix, payload, signature, extra] = value.split(".");
+  if (prefix !== "employee" || !payload || !signature || extra) return null;
+  const expected = createHmac("sha256", btbSessionToken()).update(`btb-employee:${payload}`).digest("hex");
+  if (!safeEqual(signature, expected)) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString()) as EmployeeSessionClaims;
+    if (!isUuid(claims.id) || !isEmployeeRole(claims.role) || !isVersion(claims.version) || !Number.isInteger(claims.expires) || claims.expires <= Math.floor(now / 1000)) return null;
+    return claims;
+  } catch { return null; }
 }

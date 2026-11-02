@@ -2,6 +2,9 @@
   "name": "foodsafety",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "next dev -p 5001",
     "build": "next build",
@@ -11,7 +14,9 @@
     "db:migrate:dry": "node scripts/migrate.mjs --dry-run",
     "db:migrate:status": "node scripts/migrate.mjs --status",
     "db:migrate:step": "node scripts/migrate.mjs --step",
-    "test": "rm -rf .test-dist && tsc -p tsconfig.test.json && node --test .test-dist/tests/ tests/*.test.mjs"
+    "verify:inventory-security": "node scripts/verify-inventory-security.mjs",
+    "test": "rm -rf .test-dist && tsc -p tsconfig.test.json && node --test .test-dist/tests/*.test.js tests/*.test.mjs",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
@@ -21,15 +26,19 @@
     "next": "16.3.5",
     "postgres": "^3.4.9",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.14",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
+    "pdfjs-dist": "^6.5.438",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

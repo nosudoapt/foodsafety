@@ -3,13 +3,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Phase 5 — the Training Guide prints: a PrintButton in the header, the
-// interactive UI marked print:hidden, and a hidden #print-section that holds
-// the whole guide (search results respected) so "Save as PDF" gets real content.
+// Published training prints from API-loaded content; browser PDF tests cover
+// pagination and complete text, including modules that are not selected.
 
 const ROOT = join(__dirname, "../..");
 const source = readFileSync(join(ROOT, "src/app/between-the-buns/training-guide/page.tsx"), "utf8");
 const button = readFileSync(join(ROOT, "src/components/PrintButton.tsx"), "utf8");
+const styles = readFileSync(join(ROOT, "src/app/btb-operations.css"), "utf8");
 
 test("the guide ships a Print / Save PDF button", () => {
   assert.ok(source.includes('import PrintButton from "@/components/PrintButton"'));
@@ -19,8 +19,8 @@ test("the guide ships a Print / Save PDF button", () => {
 
 test("interactive chrome is hidden from printouts", () => {
   assert.ok(
-    /<div className="print:hidden">/.test(source),
-    "the search/list/detail UI must be wrapped in print:hidden",
+    styles.includes(".training-screen { display: none !important; }"),
+    "interactive training screens are hidden in print media",
   );
 });
 
@@ -28,17 +28,14 @@ test("#print-section holds the whole guide, not just the open topic", () => {
   const start = source.indexOf('id="print-section"');
   assert.ok(start > -1, "a #print-section is required by the print pattern");
   const section = source.slice(start);
-  assert.ok(section.includes("hidden print:block"), "print section must be screen-hidden");
-  assert.ok(section.includes("visibleTopics"), "print must cover every topic that matches the search");
-  assert.ok(section.includes("allSections"), "print must include all sections, not only the selected one");
-  assert.ok(section.includes("parseBody"), "section bodies must render paragraphs + checklists");
+  assert.ok(styles.includes(".training-print { display: none; }"), "print section must be screen-hidden");
+  assert.ok(section.includes("data.topics.filter((item) => item.published)"), "print includes the complete published guide");
+  assert.ok(section.includes("data.sections.filter"), "print includes sections for each module");
+  assert.ok(section.includes("TrainingBody"), "section bodies render paragraphs + checklists");
   assert.ok(section.includes("categoryLabel"), "print groups topics by category");
 });
 
-test("the section-wide flat load feeds both search and print", () => {
-  assert.ok(
-    source.includes('from("training_sections").select(SECTION_COLS).limit(1000)'),
-    "loadTopics must fetch full section rows once for search + print",
-  );
-  assert.ok(source.includes("setAllSections(flat)"));
+test("training uses the verified API instead of browser table access", () => {
+  assert.ok(source.includes('useBtbData<TrainingData>("/api/btb/training")'));
+  assert.ok(!source.includes("supabase.from("));
 });

@@ -1,43 +1,40 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
-import Sidebar from "@/components/Sidebar";
+import { useEffect } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/AuthContext";
+import AdminShell from "@/components/admin/AdminShell";
+import { isRole } from "@/lib/roles";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const [loading, setLoading] = useState(true);
+  const { user, loading, profileLoading, role, displayName, restaurantName, reloadProfile } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    const checkUser = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-      if (!session) {
-        router.push("/auth/sign-in");
-      } else {
-        setLoading(false);
-      }
-    };
+    if (!loading && !user) router.replace(`/auth/sign-in?next=${encodeURIComponent(pathname)}`);
+  }, [loading, user, router, pathname]);
 
-    checkUser();
-  }, [router]);
-
-  if (loading) {
+  if (loading || !user || profileLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
+      <div className="workspace-loading" role="status">
+        <span className="ui-loader" aria-hidden="true" />
+        <p>Opening your workspace…</p>
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Sidebar />
-      <div className="lg:ml-64 pt-16 lg:pt-0">
-        <main className="p-4 lg:p-8">{children}</main>
-      </div>
+  if (!isRole(role)) return (
+    <div className="workspace-loading">
+      <h1>Let’s reconnect your workspace.</h1>
+      <p>Your profile could not be loaded. Try reconnecting.</p>
+      <button className="ui-button" onClick={reloadProfile}>Try again</button>
     </div>
+  );
+
+  return (
+    <AdminShell profile={{ role, full_name: displayName, restaurant_name: restaurantName, email: user.email || "" }}>
+      {children}
+    </AdminShell>
   );
 }

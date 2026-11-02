@@ -5,7 +5,7 @@
 //
 // Secret-free: imported by client components (the hub, the page wrappers), never
 // by ./btb-auth. Relative import only (no "@/") so tests can compile it.
-import { BTB_ROLES, type BtbRole } from "./btb-roles";
+import type { BtbRole } from "./btb-roles";
 
 // Every BTB surface a role can reach. Slugs match /between-the-buns/<slug>
 // routes (the four reference pages share one "reference" bucket — all-view).
@@ -15,6 +15,9 @@ export const BTB_FEATURES = [
   "checklists",
   "cash_out",
   "staff_schedule",
+  "employees",
+  "loyalty_rewards",
+  "licence_reminders",
   "tax_dates",
   "training_guide",
   "month_end_inventory",
@@ -49,6 +52,7 @@ const OPS_EDIT: readonly BtbRole[] = ["staff", "supervisor", "manager"]; // corp
 const SUP_UP: readonly BtbRole[] = ["supervisor", "manager", "corporate"]; // supervisor tier and above
 const MGR: readonly BtbRole[] = ["manager", "corporate"];             // management (owners are managers here)
 const MGR_ONLY: readonly BtbRole[] = ["manager"];                    // store-level edit; corporate is oversight-only
+const SHIFT_LEADS: readonly BtbRole[] = ["supervisor", "manager"];
 const CORP: readonly BtbRole[] = ["corporate"];                      // franchise HQ only
 
 // view = who sees the card at all; edit = who can create/edit/delete.
@@ -60,8 +64,11 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   checklists:        { view: ALL,    edit: OPS_EDIT },
   // End-of-day money: everyone may read the count, only the store manager writes it.
   cash_out:          { view: ALL,    edit: MGR_ONLY },
-  // Roster + shifts: everyone reads the week, only managers post or remove.
-  staff_schedule:    { view: ALL,    edit: MGR_ONLY },
+  // Supervisors and managers coordinate the team and opening/closing coverage.
+  staff_schedule:    { view: ALL,    edit: SHIFT_LEADS },
+  employees:         { view: SUP_UP, edit: SHIFT_LEADS },
+  loyalty_rewards:   { view: ALL,    edit: [] },
+  licence_reminders: { view: MGR,    edit: MGR },
   // Deadlines are read-only for the team; managers own the calendar entries.
   tax_dates:         { view: ALL,    edit: MGR_ONLY },
   // SOP library: everyone reads published topics; only managers draft/publish.
@@ -71,7 +78,7 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   // Staff are walled out entirely; supervisors read the board and only
   // managers move cards through it or delete them.
   branding_requests: { view: SUP_UP, edit: MGR_ONLY }, // staff walled out — marketing board
-  order_sheet:       { view: SUP_UP, edit: MGR_ONLY }, // supervisor+corporate view; manager edits
+  order_sheet:       { view: SUP_UP, edit: SHIFT_LEADS },
   cleaning_schedule: { view: ALL,    edit: OPS_EDIT },
   reference:         { view: ALL,    edit: [] },
   emergency:         { view: ALL,    edit: MGR_ONLY },

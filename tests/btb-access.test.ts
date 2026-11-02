@@ -103,7 +103,7 @@ test("the manager tier edits the shared compliance/admin surfaces; staff & super
 
 test("supervisor sits between staff and manager", () => {
   // Sees the management operational surfaces (view), but cannot edit them…
-  for (const f of ["order_sheet", "compliance", "documents", "staff_licenses"] as const) {
+  for (const f of ["compliance", "documents", "staff_licenses"] as const) {
     assert.equal(btbCanView(f, "supervisor"), true, `supervisor views ${f}`);
     assert.equal(btbCanEdit(f, "supervisor"), false, `supervisor must not edit ${f}`);
   }
@@ -112,7 +112,7 @@ test("supervisor sits between staff and manager", () => {
     assert.equal(btbCanView(f, "supervisor"), false, `supervisor must not view ${f}`);
   }
   // Still does the shop-floor edits staff do.
-  for (const f of ["prep_list", "cleaning_schedule"] as const) {
+  for (const f of ["prep_list", "cleaning_schedule", "employees", "staff_schedule", "order_sheet"] as const) {
     assert.equal(btbCanEdit(f, "supervisor"), true, `supervisor edits ${f}`);
   }
 });
@@ -153,6 +153,9 @@ const ROUTE_FEATURE: Record<string, string> = {
   checklists: "checklists",
   "cash-out": "cash_out",
   "staff-schedule": "staff_schedule",
+  employees: "employees",
+  "loyalty-rewards": "loyalty_rewards",
+  "licence-reminders": "licence_reminders",
   "tax-dates": "tax_dates",
   "training-guide": "training_guide",
   "month-end-inventory": "month_end_inventory",
@@ -177,6 +180,7 @@ const ROUTE_FEATURE: Record<string, string> = {
 // nothing; login is the auth screen itself.
 const UNGATED_ROUTES = new Set([
   "login",
+  "account", // Authenticated by the workspace; the API requires an individual account.
   "menu",
   "allergen-chart",
   "gluten-free",

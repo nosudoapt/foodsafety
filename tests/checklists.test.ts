@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { BTB_CARDS } from "../src/lib/btb-hub";
 import { btbCanEdit, btbCanView } from "../src/lib/btb-access";
 import { BTB_ROLES } from "../src/lib/btb-roles";
+import { canonicalCheckItems } from "../src/lib/btb-operations";
+import { checkDraftKey, parseCheckDraft, previewChecks } from "../src/lib/btb-check-drafts";
 
 // The Opening/Closing checklist used to be the middle tab of the prep sheet.
 // These tests pin the split: it lives at /between-the-buns/checklists behind
@@ -17,20 +19,34 @@ const pageSource = readFileSync(PAGE, "utf8");
 const prepSource = readFileSync(PREP, "utf8");
 
 test("checklists page is gated on its own feature", () => {
-  assert.match(pageSource, /<BtbFeatureGate feature="checklists">/);
+  assert.match(pageSource, /<BtbFeatureGate feature="checklists"/);
 });
 
-test("checklists page renders both Opening and Closing cards", () => {
-  assert.match(pageSource, /Opening Checklist/);
-  assert.match(pageSource, /Closing Checklist/);
-  assert.match(pageSource, /defaultOpeningItems/);
-  assert.match(pageSource, /defaultClosingItems/);
+test("opening and closing templates retain every duty and saved attribution", () => {
+  for (const type of ["opening", "closing"] as const) {
+    const items = canonicalCheckItems(type);
+    assert.equal(items.length, 20);
+    const saved = [{ ...items[0], text: "outdated label", completed: true, completed_by: "employee-1", completed_by_name: "Taylor" }];
+    const loaded = canonicalCheckItems(type, saved);
+    assert.equal(loaded.length, 20);
+    assert.equal(loaded[0].text, items[0].text);
+    assert.equal(loaded[0].completed_by_name, "Taylor");
+    assert.equal(loaded[1].completed, false);
+  }
 });
 
-test("the localStorage key format is unchanged so existing device ticks carry over", () => {
-  assert.match(pageSource, /foodsafety\.prep_checklist\.\$\{date\}\.\$\{type\}/);
-  // No new key namespace — same one the old tab wrote.
-  assert.ok(!pageSource.includes("foodsafety.checklists."), "do not introduce a new key");
+test("drafts are isolated by employee, day and shift, without attributing old shared ticks", () => {
+  const key = checkDraftKey("alice", "2026-11-01", "opening");
+  assert.notEqual(key, checkDraftKey("bob", "2026-11-01", "opening"));
+  assert.notEqual(key, checkDraftKey("alice", "2026-11-02", "opening"));
+  assert.notEqual(key, checkDraftKey("alice", "2026-11-01", "closing"));
+  assert.equal(parseCheckDraft('{"o1":true}', "opening"), null);
+  const draft = { version: 2, changes: { o1: true }, notes: "Opening handover" };
+  assert.deepEqual(parseCheckDraft(JSON.stringify(draft), "opening"), draft);
+  assert.equal(parseCheckDraft(JSON.stringify(draft), "closing"), null);
+  const preview = previewChecks("opening", [], draft, "Alice");
+  assert.equal(preview[0].completed_by, null);
+  assert.equal(preview[0].completed_by_name, "Alice · not saved");
 });
 
 test("the prep sheet no longer carries the checklist tab", () => {

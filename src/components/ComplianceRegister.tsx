@@ -1,172 +1,158 @@
 "use client";
 
-// Compliance & Renewals — the flat list of everything that has an expiry date.
-// Split from Business Documents (plain files, expiry_date IS NULL): the query
-// below filters `expiry_date IS NOT NULL`, so the two views can never overlap.
-// No dropdowns (client request): new entries default doc_type "other", which
-// carries the generic 60-day reminder window in lib/expiry.ts.
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { Check, CircleAlert, Info, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
-import { activeLocationId, locationScope } from "@/lib/locations";
-import { Card, PageHeader, Button, Input, Badge } from "@/components/ui";
+import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
+import Modal from "@/components/Modal";
 import {
   DOC_ROUTING_HINT, COMPLIANCE_PRESETS, complianceType, expiryLevel, expiryLabel,
   LEVEL_ACCENT, sortByUrgency, alertsFrom,
 } from "@/lib/expiry";
-import { Plus, Trash2, ShieldCheck, AlertTriangle, Info } from "lucide-react";
 
 interface Doc {
   id: string;
   doc_type: string;
   name: string;
   file_name: string | null;
-  expiry_date: string | null;
+  expiry_date: string;
   notes: string;
 }
 
-export default function ComplianceRegister({ readOnly = false }: { readOnly?: boolean }) {
+const COLUMNS = "id, doc_type, name, file_name, expiry_date, notes";
+
+export default function ComplianceRegister({ readOnly = false, restaurant: fixedRestaurant, showHeader = true }: {
+  readOnly?: boolean; restaurant?: string; showHeader?: boolean;
+}) {
+  const auth = useAuth();
+  const restaurant = fixedRestaurant ?? auth.restaurantName;
+  // BTB's independent company register never inherits a FoodSafe site selection.
+  const locationId = fixedRestaurant ? null : auth.locationId;
+  const scopeLabel = fixedRestaurant ?? auth.locations.find((site) => site.id === locationId)?.name ?? "Location unavailable";
+  return <RenewalWorkspace key={`${restaurant}:${locationId}`} {...{ readOnly, restaurant, locationId, scopeLabel, showHeader }} companyWide={!!fixedRestaurant} />;
+}
+
+function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, companyWide, showHeader }: {
+  readOnly: boolean; restaurant: string; locationId: string | null; scopeLabel: string; companyWide: boolean; showHeader: boolean;
+}) {
   const [rows, setRows] = useState<Doc[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [error, setError] = useState("");
+  const [formError, setFormError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [attentionOnly, setAttentionOnly] = useState(false);
+  const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [expiry, setExpiry] = useState("");
   const [notes, setNotes] = useState("");
   const [preset, setPreset] = useState("other");
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const formId = useId();
 
-  // Only expiring items — everything without a date lives in Business Documents.
-  // Scoped to the active site so the dashboard's Expiring Documents tile counts
-  // exactly what this list shows.
   useEffect(() => {
-    const scope = locationScope();
-    let q = supabase
-      .from("compliance_documents")
-      .select("id, doc_type, name, file_name, expiry_date, notes")
-      .not("expiry_date", "is", null);
-    if (scope) q = q.or(scope);
-    q.then(({ data }) => data && setRows(data as Doc[]));
-  }, []);
+    let cancelled = false;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 12_000);
+    (async () => {
+      try {
+        if (!restaurant || (!companyWide && !locationId)) throw new Error("Choose a connected location to view its renewal register.");
+        let query = supabase.from("compliance_documents").select(COLUMNS)
+          .eq("restaurant_name", restaurant).not("expiry_date", "is", null);
+        if (locationId) query = query.eq("location_id", locationId);
+        const { data, error } = await query.order("expiry_date").abortSignal(controller.signal);
+        if (error) throw new Error("Your renewal register couldn’t be loaded. Please try again.");
+        if (!cancelled) { setRows((data ?? []) as Doc[]); setLoadError(""); }
+      } catch (cause) {
+        if (!cancelled) setLoadError(cause instanceof Error ? cause.message : "Your renewal register is unavailable.");
+      } finally {
+        window.clearTimeout(timeout);
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; controller.abort(); window.clearTimeout(timeout); };
+  }, [companyWide, locationId, restaurant, revision]);
 
-  async function add(e: React.FormEvent) {
-    e.preventDefault();
-    // Expiry is required: a null date would be filtered straight back out.
-    if (!name.trim() || !expiry) return;
-    setSaving(true);
-    const payload = { doc_type: preset, name: name.trim(), expiry_date: expiry, notes: notes.trim() };
-    const { data } = await supabase.from("compliance_documents").insert({ ...payload, location_id: activeLocationId() })
-      .select("id, doc_type, name, file_name, expiry_date, notes").single();
-    setRows((r) => [(data as Doc) ?? { id: crypto.randomUUID(), file_name: null, ...payload } as Doc, ...r]);
-    setName(""); setExpiry(""); setNotes("");
-    setSaving(false);
+  async function add(event: React.FormEvent) {
+    event.preventDefault();
+    if (readOnly || saving || !name.trim() || !expiry || !restaurant || (!companyWide && !locationId)) return;
+    setSaving(true); setFormError(""); setNotice("");
+    try {
+      const { data, error } = await supabase.from("compliance_documents").insert({
+        restaurant_name: restaurant, doc_type: preset, name: name.trim(), expiry_date: expiry,
+        notes: notes.trim(), location_id: locationId,
+      }).select(COLUMNS).abortSignal(AbortSignal.timeout(15_000)).single();
+      if (error || !data) throw new Error("The renewal wasn’t saved. Your details are still here; please try again.");
+      setRows((current) => [...current, data as Doc]);
+      setNotice(`${name.trim()} added to the renewal register.`);
+      setName(""); setExpiry(""); setNotes(""); setOpen(false); setAttentionOnly(false);
+    } catch (cause) {
+      setFormError(cause instanceof Error ? cause.message : "The renewal couldn’t be saved.");
+    } finally { setSaving(false); }
   }
 
-  async function remove(id: string) {
-    setRows((r) => r.filter((x) => x.id !== id));
-    await supabase.from("compliance_documents").delete().eq("id", id);
+  async function remove(row: Doc) {
+    if (readOnly || deletingId || !confirm(`Delete the renewal for “${row.name}”?`)) return;
+    setDeletingId(row.id); setError(""); setNotice("");
+    try {
+      let query = supabase.from("compliance_documents").delete().eq("id", row.id).eq("restaurant_name", restaurant);
+      if (locationId) query = query.eq("location_id", locationId);
+      const { data, error } = await query.select("id").abortSignal(AbortSignal.timeout(15_000)).single();
+      if (error || !data) throw new Error("The renewal wasn’t deleted. It is still in the register; please try again.");
+      setRows((current) => current.filter((item) => item.id !== row.id));
+      setNotice(`${row.name} removed from the register.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The renewal couldn’t be deleted.");
+    } finally { setDeletingId(null); }
   }
 
-  // Sort by urgency (expired first) and surface the ones that need attention.
-  const sorted = sortByUrgency(rows, (r) => r.doc_type, (r) => r.expiry_date);
-  const alerts = alertsFrom(rows, (r) => r.doc_type, (r) => r.expiry_date);
+  const sorted = sortByUrgency(rows, (row) => row.doc_type, (row) => row.expiry_date);
+  const alerts = alertsFrom(rows, (row) => row.doc_type, (row) => row.expiry_date);
+  const visible = attentionOnly ? alerts : sorted;
+  const actions = <div className="ui-actions">
+    <Badge accent={loading || loadError || !rows.length ? "slate" : alerts.length ? "amber" : "green"}>{loading ? "Loading renewals…" : loadError ? "Status unavailable" : !rows.length ? "No renewals yet" : alerts.length ? `${alerts.length} need attention` : "All current"}</Badge>
+    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
+  </div>;
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Compliance & Renewals"
-        subtitle="Items with Expiry & Renewal Dates"
-        action={<Badge accent={alerts.length ? "red" : "green"}>{alerts.length ? `${alerts.length} need attention` : "All current"}</Badge>}
-      />
-
-      <p className="text-xs text-slate-500 -mt-3 flex items-start gap-1.5">
-        <Info className="w-3.5 h-3.5 shrink-0 mt-px text-slate-400" />
-        <span>{DOC_ROUTING_HINT}</span>
-      </p>
-
-      {alerts.length > 0 && (
-        <Card className="p-4 bg-red-50 border-red-200 animate-fade-in">
-          <div className="flex items-center gap-2 text-red-700 font-semibold text-sm mb-2">
-            <AlertTriangle className="w-4 h-4" /> Action needed
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {alerts.map((r) => {
-              const l = expiryLevel(r.expiry_date, complianceType(r.doc_type).notifyDays);
-              return <Badge key={r.id} accent={LEVEL_ACCENT[l]}>{complianceType(r.doc_type).icon} {r.name} · {expiryLabel(r.expiry_date)}</Badge>;
-            })}
-          </div>
-        </Card>
-      )}
-
-      {!readOnly && (
-        <Card className="p-5 animate-scale-in">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {COMPLIANCE_PRESETS.map((p) => {
-              const t = complianceType(p);
-              const active = preset === p;
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPreset(p)}
-                  className={`px-3 h-8 rounded-full text-xs font-semibold border transition-colors ${
-                    active
-                      ? "bg-slate-900 text-white border-slate-900"
-                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  {t.icon} {t.label}
-                </button>
-              );
-            })}
-          </div>
-          <form onSubmit={add} className="grid grid-cols-2 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
-            <div>
-              <label className="text-xs font-medium text-slate-500">Name</label>
-              <Input accent="red" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. City Health Permit" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-slate-500">Expiry</label>
-              <Input accent="red" type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} />
-            </div>
-            <Button type="submit" accent="red" disabled={saving || !name.trim() || !expiry} className="h-[46px]"><Plus className="w-4 h-4" /> Add</Button>
-          </form>
-        </Card>
-      )}
-
-      <div>
-        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
-          Items with Expiry &amp; Renewal Dates
-        </p>
-        {sorted.length === 0 && (
-          <Card className="p-10 text-center text-slate-400">
-            <ShieldCheck className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            No items with an expiry date yet.
-          </Card>
-        )}
-        <div className="space-y-2 stagger">
-          {sorted.map((r) => {
-            const t = complianceType(r.doc_type);
-            const l = expiryLevel(r.expiry_date, t.notifyDays);
-            return (
-              <Card key={r.id} className="p-4 flex items-center gap-4" hover>
-                <span className="text-2xl shrink-0">{t.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-slate-900 text-sm truncate">{r.name}</p>
-                  <p className="text-xs text-slate-500 truncate">
-                    {r.expiry_date}
-                    {r.notes && ` · ${r.notes}`}
-                  </p>
-                </div>
-                <Badge accent={LEVEL_ACCENT[l]}>{expiryLabel(r.expiry_date)}</Badge>
-                {readOnly ? (
-                  <span className="w-9" />
-                ) : (
-                  <button onClick={() => remove(r.id)} className="p-2 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50 transition">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+  return <div className="compliance-workspace">
+    {showHeader ? <PageHeader title="Compliance & Renewals" subtitle="Licences, permits and agreements — with the next renewal always in view." action={actions} /> : <div className="dash-section__head"><div><h2>Renewal register</h2><p>Licences, permits and agreements for {scopeLabel}.</p></div>{actions}</div>}
+    <p className="document-hint"><Info size={17} aria-hidden="true" /><span>{DOC_ROUTING_HINT}</span></p>
+    {notice && <div className="ui-notice ui-notice--success" role="status"><Check size={18} aria-hidden="true" />{notice}</div>}
+    {error && <div className="ui-notice ui-notice--error" role="alert"><CircleAlert size={18} aria-hidden="true" />{error}</div>}
+    {loading ? <Card className="ui-empty"><span className="ui-loader" aria-hidden="true" /><p role="status">Loading your renewal dates…</p></Card> : loadError ? (
+      <Card className="ui-empty"><CircleAlert size={30} aria-hidden="true" /><h2>Renewals are unavailable</h2><p role="alert">{loadError}</p><Button variant="ghost" onClick={() => { setLoading(true); setRevision((value) => value + 1); }}>Retry renewals</Button></Card>
+    ) : <>
+      <div className="document-toolbar">
+        <div className="dash__segmented" role="group" aria-label="Filter renewals"><button aria-pressed={!attentionOnly} onClick={() => setAttentionOnly(false)}>All renewals · {rows.length}</button><button aria-pressed={attentionOnly} onClick={() => setAttentionOnly(true)}>Needs attention · {alerts.length}</button></div>
+        <p>{scopeLabel} · {readOnly ? "View only" : "Shared renewal register"}</p>
       </div>
-    </div>
-  );
+      {visible.length === 0 ? <Card className="ui-empty"><ShieldCheck size={32} aria-hidden="true" /><h2>{attentionOnly ? "No renewals need attention" : "Keep your next renewal in sight"}</h2><p>{attentionOnly ? "Your saved renewals are outside their reminder windows." : "Add an expiry date to start tracking a licence, permit or agreement."}</p></Card> : (
+        <div className="space-y-3">{visible.map((row) => {
+          const type = complianceType(row.doc_type);
+          const level = expiryLevel(row.expiry_date, type.notifyDays);
+          return <article key={row.id} className="ui-card compliance-row" aria-label={row.name}>
+            <span className={`ui-icon ui-tone--${LEVEL_ACCENT[level]}`}><ShieldCheck size={21} aria-hidden="true" /></span>
+            <div className="compliance-row__body"><h3>{row.name}</h3><p>{type.label} · {new Date(`${row.expiry_date}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>{row.notes && <p>{row.notes}</p>}</div>
+            <Badge accent={LEVEL_ACCENT[level]}>{expiryLabel(row.expiry_date)}</Badge>
+            {!readOnly && <button disabled={!!deletingId} onClick={() => remove(row)} className="ui-iconbutton ui-iconbutton--danger" aria-label={`Delete ${row.name}`}><Trash2 size={17} aria-hidden="true" /></button>}
+          </article>;
+        })}</div>
+      )}
+    </>}
+    {!readOnly && <Modal open={open} title="Add renewal" description="Choose a type and expiry date. The register highlights it when the reminder window begins." busy={saving} onClose={() => setOpen(false)}>
+      <form onSubmit={add}>
+        {formError && <div className="ui-notice ui-notice--error" role="alert">{formError}</div>}
+        <fieldset disabled={saving} className="ui-form-stack">
+          <div><span className="block text-sm font-medium text-gray-600 mb-2" id={`${formId}-type`}>Renewal type</span><div className="ui-actions" role="group" aria-labelledby={`${formId}-type`}>{COMPLIANCE_PRESETS.map((value) => <Button key={value} variant={preset === value ? "soft" : "ghost"} aria-pressed={preset === value} onClick={() => setPreset(value)}>{complianceType(value).label}</Button>)}</div></div>
+          <label htmlFor={`${formId}-name`}>Name<Input id={`${formId}-name`} data-modal-autofocus required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Food premises licence" /></label>
+          <label htmlFor={`${formId}-expiry`}>Expiry date<Input id={`${formId}-expiry`} type="date" required value={expiry} onChange={(event) => setExpiry(event.target.value)} /><small>Reminder window: {complianceType(preset).notifyDays} days before expiry.</small></label>
+          <label htmlFor={`${formId}-notes`}>Notes <span>(optional)</span><Input id={`${formId}-notes`} maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Renewal contact or reference" /></label>
+        </fieldset>
+        <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={saving || !name.trim() || !expiry}>{saving ? "Saving renewal…" : "Save renewal"}</Button></div>
+      </form>
+    </Modal>}
+  </div>;
 }

@@ -2,9 +2,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   MONTH_END_EDIT_ROLES,
+  isDateInMonth,
   isUuid,
+  nextSnapshotVersion,
   parseCountSave,
   parseNewItem,
+  parseOptionalSales,
   parseSummarySave,
   requireRole,
   MAX_COUNT_ROWS,
@@ -17,6 +20,7 @@ import {
 
 const ALL = ["staff", "supervisor", "manager", "corporate", "admin"];
 const UUID = "3f1d2a4c-9b8e-4f70-a1c2-3d4e5f607182";
+const UUID_2 = "4f1d2a4c-9b8e-4f70-a1c2-3d4e5f607183";
 
 test("requireRole: no role → 401", () => {
   const r = requireRole(null, MONTH_END_EDIT_ROLES);
@@ -62,25 +66,34 @@ test("isUuid accepts v4-ish ids and rejects junk", () => {
 // Count-sheet save validation
 // ---------------------------------------------------------------------------
 
-test("parseCountSave: valid payload passes with clamped quantities", () => {
+test("parseCountSave: valid payload passes and rounds quantities", () => {
   const p = parseCountSave({
     count_month: "2026-08",
     counts: [
       { item_id: UUID, qty: 3 },
-      { item_id: UUID, qty: "-4" },   // negative → 0 (safeQty)
-      { item_id: UUID, qty: "junk" }, // junk → 0
+      { item_id: UUID_2, qty: "4.126" },
     ],
-    location_id: null,
   });
   assert.equal(p.ok, true);
   if (p.ok) {
     assert.equal(p.value.count_month, "2026-08");
-    assert.equal(p.value.rows.length, 3);
+    assert.equal(p.value.rows.length, 2);
     assert.equal(p.value.rows[0].qty, 3);
-    assert.equal(p.value.rows[1].qty, 0);
-    assert.equal(p.value.rows[2].qty, 0);
-    assert.equal(p.value.location_id, null);
+    assert.equal(p.value.rows[1].qty, 4.13);
   }
+});
+
+test("parseCountSave: negative/junk/missing quantities are rejected, never zeroed", () => {
+  for (const qty of [-1, "-4", "junk", "", null, undefined]) {
+    assert.equal(parseCountSave({ count_month: "2026-08", counts: [{ item_id: UUID, qty }] }).ok, false);
+  }
+});
+
+test("parseCountSave: duplicate item ids are rejected before replacement", () => {
+  assert.equal(parseCountSave({
+    count_month: "2026-08",
+    counts: [{ item_id: UUID, qty: 1 }, { item_id: UUID, qty: 2 }],
+  }).ok, false);
 });
 
 test("parseCountSave: invalid month rejected", () => {
@@ -99,9 +112,9 @@ test("parseCountSave: oversized payload rejected", () => {
   assert.equal(parseCountSave({ count_month: "2026-08", counts }).ok, false);
 });
 
-test("parseCountSave: non-uuid location_id rejected, uuid accepted", () => {
+test("parseCountSave: location-scoped month-end writes are explicitly rejected", () => {
   assert.equal(parseCountSave({ count_month: "2026-08", counts: [], location_id: "evil" }).ok, false);
-  assert.equal(parseCountSave({ count_month: "2026-08", counts: [], location_id: UUID }).ok, true);
+  assert.equal(parseCountSave({ count_month: "2026-08", counts: [], location_id: UUID }).ok, false);
 });
 
 // ---------------------------------------------------------------------------
@@ -120,6 +133,7 @@ test("parseSummarySave: junk sales rejected (never silently zero from garbage)",
   assert.equal(parseSummarySave({ count_month: "2026-08", sales: "abc" }).ok, false);
   assert.equal(parseSummarySave({ count_month: "2026-08", sales: NaN }).ok, false);
   assert.equal(parseSummarySave({ count_month: "2026-08", sales: Infinity }).ok, false);
+  assert.equal(parseSummarySave({ count_month: "2026-08", sales: -1 }).ok, false);
 });
 
 test("parseSummarySave: invalid month rejected", () => {
@@ -130,14 +144,20 @@ test("parseSummarySave: invalid month rejected", () => {
 // Add-item validation
 // ---------------------------------------------------------------------------
 
-test("parseNewItem: mirrors the old page insert (unit default, cost clamp)", () => {
-  const p = parseNewItem({ name: "  Sesame buns  ", unit: "", unit_cost: "-3" });
+test("parseNewItem: trims name, defaults unit, and accepts blank cost as zero", () => {
+  const p = parseNewItem({ name: "  Sesame buns  ", unit: "", unit_cost: "" });
   assert.equal(p.ok, true);
   if (p.ok) {
     assert.equal(p.value.name, "Sesame buns");
     assert.equal(p.value.unit, "ea");
-    assert.equal(p.value.unit_cost, 0); // negative → 0, as countQty did before
+    assert.equal(p.value.unit_cost, 0);
     assert.equal(p.value.position, null);
+  }
+});
+
+test("parseNewItem: invalid/negative costs are rejected, never silently zeroed", () => {
+  for (const unit_cost of ["junk", -1, "-0.01", Infinity]) {
+    assert.equal(parseNewItem({ name: "buns", unit_cost }).ok, false);
   }
 });
 
@@ -152,4 +172,26 @@ test("parseNewItem: position must be a non-negative integer to be honoured", () 
   assert.equal(p.ok && p.value.position, 7);
   const q = parseNewItem({ name: "buns", position: -1 });
   assert.equal(q.ok && q.value.position, null);
+});
+
+test("purchase dates must be real calendar dates inside the selected month", () => {
+  assert.equal(isDateInMonth("2026-02-28", "2026-02"), true);
+  assert.equal(isDateInMonth("2024-02-29", "2024-02"), true);
+  assert.equal(isDateInMonth("2026-02-29", "2026-02"), false);
+  assert.equal(isDateInMonth("2026-02-31", "2026-02"), false);
+  assert.equal(isDateInMonth("2026-03-01", "2026-02"), false);
+});
+
+test("optional finalize sales preserves blank as null and rejects bad money", () => {
+  assert.deepEqual(parseOptionalSales(""), { ok: true, value: null });
+  assert.deepEqual(parseOptionalSales("12000.126"), { ok: true, value: 12000.13 });
+  assert.equal(parseOptionalSales(-1).ok, false);
+  assert.equal(parseOptionalSales("junk").ok, false);
+});
+
+test("snapshot versions start at 1 and increment on every re-finalization", () => {
+  assert.equal(nextSnapshotVersion(null), 1);
+  assert.equal(nextSnapshotVersion({ version: 1 }), 2);
+  assert.equal(nextSnapshotVersion({ version: 4 }), 5);
+  assert.equal(nextSnapshotVersion({ version: "bad" }), 2);
 });

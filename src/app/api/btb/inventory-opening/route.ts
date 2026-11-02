@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
+import { BTB_COOKIE } from "@/lib/btb-auth";
+import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
 import { resolveOpening } from "@/lib/inventory-accounting";
@@ -11,7 +12,7 @@ import { resolveOpening } from "@/lib/inventory-accounting";
 // month, never a fabricated baseline. Any signed-in role may read.
 export async function GET(req: Request) {
   const cookieStore = await cookies();
-  const role = roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
+  const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
@@ -19,11 +20,12 @@ export async function GET(req: Request) {
   if (!isMonthKey(month)) return NextResponse.json({ error: "invalid month" }, { status: 400 });
 
   const pm = prevMonth(month);
-  const { data } = await inventoryDb()
+  const { data, error } = await inventoryDb()
     .from("inventory_month_snapshots")
     .select("closing_value, status, count_month")
     .eq("count_month", pm)
     .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const resolved = resolveOpening(
     data && data.status === "finalized"

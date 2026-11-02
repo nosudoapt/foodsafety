@@ -2,9 +2,10 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OWNER_TIER_ROLES } from "@/lib/roles";
-import { BTB_COOKIE, roleFromSession, btbAccountFor } from "@/lib/btb-auth";
+import { BTB_COOKIE } from "@/lib/btb-auth";
+import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
 import { btbCanView } from "@/lib/btb-access";
-import { isBtbRole } from "@/lib/btb-roles";
+import { BTB_RESTAURANT, isBtbRole } from "@/lib/btb-roles";
 
 const OWNER = OWNER_TIER_ROLES as string[];
 
@@ -43,7 +44,7 @@ export async function requireVaultSession(): Promise<VaultAuthResult> {
     // btb-access) is authorized; DB access uses the anon client (login_vault RLS
     // is public on the BTB demo — see supabase/schema-btb-public.sql). Any other
     // BTB role is refused.
-    const btbRole = roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
+    const btbRole = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
     if (btbRole && isBtbRole(btbRole) && btbCanView("vault", btbRole)) {
       return {
         ok: true,
@@ -51,7 +52,7 @@ export async function requireVaultSession(): Promise<VaultAuthResult> {
           supabase,
           userId: `btb-${btbRole}`,
           role: btbRole,
-          restaurantName: btbAccountFor(btbRole)?.restaurant || "Between the Buns",
+          restaurantName: BTB_RESTAURANT,
         },
       };
     }

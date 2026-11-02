@@ -1,6 +1,7 @@
 // Bump the version whenever the offline shell must be purged — old cache
 // entries otherwise keep serving a stale layout (activate deletes the rest).
-const CACHE_NAME = 'foodsafe-v3';
+const CACHE_NAME = 'foodsafe-v4';
+const LOCALHOST = ['localhost', '127.0.0.1', '[::1]'].includes(self.location.hostname);
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icons/icon-192.png',
@@ -8,6 +9,10 @@ const STATIC_ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
+  if (LOCALHOST) {
+    self.skipWaiting();
+    return;
+  }
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(STATIC_ASSETS);
@@ -21,12 +26,14 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => name.startsWith('foodsafe-') && (LOCALHOST || name !== CACHE_NAME))
           .map((name) => caches.delete(name))
       );
+    }).then(async () => {
+      await self.clients.claim();
+      if (LOCALHOST) await self.registration.unregister();
     })
   );
-  self.clients.claim();
 });
 
 // Strategy: never cache APIs or cross-origin (Supabase) traffic; pages are
@@ -34,6 +41,7 @@ self.addEventListener('activate', (event) => {
 // fallback); hashed /_next/static assets are cache-first since their URLs
 // change on every build.
 self.addEventListener('fetch', (event) => {
+  if (LOCALHOST) return;
   if (event.request.method !== 'GET') return;
 
   const url = new URL(event.request.url);

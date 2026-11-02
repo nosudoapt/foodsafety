@@ -9,10 +9,10 @@
 // MGR_ONLY, so writes require manager/admin while reads need any valid role.
 
 import { isMonthKey } from "./month-end-inventory";
-import { safeQty } from "./inventory-accounting";
 
 /** Edit roles for month_end_inventory (mirrors btb-access.ts MGR_ONLY). */
 export const MONTH_END_EDIT_ROLES = ["manager", "admin"] as const;
+export const INVENTORY_READ_ROLES = ["staff", "supervisor", "manager", "corporate", "admin"] as const;
 
 export interface AuthDenied {
   ok: false;
@@ -40,11 +40,29 @@ export function isUuid(v: unknown): v is string {
   return typeof v === "string" && UUID_RE.test(v);
 }
 
-/** Accept a UUID or null/absent; anything else is invalid. */
-function parseLocationId(v: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
-  if (v === undefined || v === null || v === "") return { ok: true, value: null };
-  if (isUuid(v)) return { ok: true, value: v };
-  return { ok: false, error: "invalid location_id" };
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+function parseNonNegativeNumber(value: unknown, label: string, max: number): Parsed<number> {
+  if (value === "" || value === null || value === undefined) {
+    return { ok: false, error: `${label} required` };
+  }
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > max) {
+    return { ok: false, error: `invalid ${label}` };
+  }
+  return { ok: true, value: round2(n) };
+}
+
+/**
+ * This prototype has one company-wide snapshot per month (count_month is the
+ * snapshot primary key), so partial location-scoped writes would make the UI
+ * totals disagree with finalization. Reject rather than silently mixing sites.
+ */
+function rejectLocationScope(body: Record<string, unknown>): Parsed<null> {
+  if (body.location_id !== undefined && body.location_id !== null && body.location_id !== "") {
+    return { ok: false, error: "location-scoped month-end inventory is not supported" };
+  }
+  return { ok: true, value: null };
 }
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -56,40 +74,44 @@ export interface CountSaveRow {
 export interface CountSave {
   count_month: string;
   rows: CountSaveRow[];
-  location_id: string | null;
 }
 
 /** Upper bound so a hostile payload can't insert an unbounded row set. */
 export const MAX_COUNT_ROWS = 2000;
 
 /**
- * Validate a count-sheet save: month key, item ids, quantities (junk/negative
- * → 0 via safeQty, same rule the UI used), optional location.
+ * Validate a count-sheet save: month key, unique item ids, and finite,
+ * non-negative quantities. Invalid input is rejected — it is never converted
+ * to zero, because this endpoint replaces the whole month.
  */
 export function parseCountSave(body: unknown): Parsed<CountSave> {
   const b = (body ?? {}) as Record<string, unknown>;
   if (!isMonthKey(b.count_month)) return { ok: false, error: "invalid month" };
 
-  const loc = parseLocationId(b.location_id);
-  if (!loc.ok) return loc;
+  const location = rejectLocationScope(b);
+  if (!location.ok) return location;
 
   const raw = b.counts;
   if (!Array.isArray(raw)) return { ok: false, error: "counts must be an array" };
   if (raw.length > MAX_COUNT_ROWS) return { ok: false, error: "too many count rows" };
 
   const rows: CountSaveRow[] = [];
+  const seen = new Set<string>();
   for (const entry of raw) {
     const r = (entry ?? {}) as Record<string, unknown>;
     if (!isUuid(r.item_id)) return { ok: false, error: "invalid item_id" };
-    rows.push({ item_id: r.item_id, qty: safeQty(r.qty) });
+    if (seen.has(r.item_id)) return { ok: false, error: "duplicate item_id" };
+    seen.add(r.item_id);
+    const qty = parseNonNegativeNumber(r.qty, "quantity", 9_999_999_999.99);
+    if (!qty.ok) return qty;
+    rows.push({ item_id: r.item_id, qty: qty.value });
   }
-  return { ok: true, value: { count_month: b.count_month, rows, location_id: loc.value } };
+  return { ok: true, value: { count_month: b.count_month, rows } };
 }
 
 export interface SummarySave {
   count_month: string;
   sales: number;
-  location_id: string | null;
 }
 
 /**
@@ -101,18 +123,16 @@ export function parseSummarySave(body: unknown): Parsed<SummarySave> {
   const b = (body ?? {}) as Record<string, unknown>;
   if (!isMonthKey(b.count_month)) return { ok: false, error: "invalid month" };
 
-  const loc = parseLocationId(b.location_id);
-  if (!loc.ok) return loc;
+  const location = rejectLocationScope(b);
+  if (!location.ok) return location;
 
   const raw = b.sales;
-  const sales = raw === undefined || raw === null || raw === "" ? 0 : safeQty(raw);
-  if (typeof raw === "string" && raw.trim() !== "" && !Number.isFinite(Number(raw))) {
-    return { ok: false, error: "invalid sales" };
-  }
-  if (typeof raw === "number" && !Number.isFinite(raw)) return { ok: false, error: "invalid sales" };
-  if (sales < 0) return { ok: false, error: "invalid sales" };
+  const parsedSales = raw === undefined || raw === null || raw === ""
+    ? { ok: true as const, value: 0 }
+    : parseNonNegativeNumber(raw, "sales", Number.MAX_SAFE_INTEGER);
+  if (!parsedSales.ok) return parsedSales;
 
-  return { ok: true, value: { count_month: b.count_month, sales, location_id: loc.value } };
+  return { ok: true, value: { count_month: b.count_month, sales: parsedSales.value } };
 }
 
 export interface NewItem {
@@ -120,7 +140,6 @@ export interface NewItem {
   unit: string;
   unit_cost: number;
   position: number | null;
-  location_id: string | null;
 }
 
 export const MAX_NAME_LEN = 200;
@@ -134,13 +153,41 @@ export function parseNewItem(body: unknown): Parsed<NewItem> {
   if (name.length > MAX_NAME_LEN) return { ok: false, error: "name too long" };
 
   const unit = typeof b.unit === "string" && b.unit.trim() ? b.unit.trim() : "ea";
-  const unitCost = safeQty(b.unit_cost); // junk/negative → 0, as before
+  if (unit.length > 40) return { ok: false, error: "unit too long" };
 
-  const loc = parseLocationId(b.location_id);
-  if (!loc.ok) return loc;
+  const rawCost = b.unit_cost;
+  const parsedCost = rawCost === undefined || rawCost === null || rawCost === ""
+    ? { ok: true as const, value: 0 }
+    : parseNonNegativeNumber(rawCost, "unit cost", 99_999_999.99);
+  if (!parsedCost.ok) return parsedCost;
+
+  const location = rejectLocationScope(b);
+  if (!location.ok) return location;
 
   const position =
     typeof b.position === "number" && Number.isInteger(b.position) && b.position >= 0 ? b.position : null;
 
-  return { ok: true, value: { name, unit, unit_cost: unitCost, position, location_id: loc.value } };
+  return { ok: true, value: { name, unit, unit_cost: parsedCost.value, position } };
+}
+
+/** Optional manual sales input used by finalization; blank really means null. */
+export function parseOptionalSales(value: unknown): Parsed<number | null> {
+  if (value === undefined || value === null || value === "") return { ok: true, value: null };
+  return parseNonNegativeNumber(value, "sales", Number.MAX_SAFE_INTEGER);
+}
+
+/** Strict calendar-date validation for purchase dates. */
+export function isDateInMonth(date: unknown, month: unknown): date is string {
+  if (typeof date !== "string" || !isMonthKey(month) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  if (date.slice(0, 7) !== month) return false;
+  const [year, mon, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, mon - 1, day));
+  return parsed.getUTCFullYear() === year && parsed.getUTCMonth() === mon - 1 && parsed.getUTCDate() === day;
+}
+
+/** First finalization is v1; every correction/re-finalization increments it. */
+export function nextSnapshotVersion(prior: { version?: unknown } | null): number {
+  if (!prior) return 1;
+  const current = Number(prior.version);
+  return Number.isInteger(current) && current >= 1 ? current + 1 : 2;
 }

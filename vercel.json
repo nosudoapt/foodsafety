@@ -1,0 +1,5 @@
+{
+  "crons": [
+    { "path": "/api/cron/btb-licence-reminders", "schedule": "0 15 * * *" }
+  ]
+}

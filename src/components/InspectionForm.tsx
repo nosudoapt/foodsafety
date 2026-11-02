@@ -349,15 +349,17 @@ const ratingColors: Record<string, string> = {
 export default function InspectionForm({
   type,
   readOnly = false,
+  initialDate,
 }: {
   type: InspectionType;
   readOnly?: boolean;
+  initialDate?: string;
 }) {
   const cfg = CONFIG[type];
   const [sections, setSections] = useState<InspectionSection[]>(() => seed(cfg.sections));
   const [inspectorName, setInspectorName] = useState("");
   const [inspectorRole, setInspectorRole] = useState(cfg.roles[0]);
-  const [inspectionDate, setInspectionDate] = useState(new Date().toISOString().split("T")[0]);
+  const [inspectionDate, setInspectionDate] = useState(() => initialDate ?? new Date().toISOString().split("T")[0]);
   const [strengths, setStrengths] = useState("");
   const [improvements, setImprovements] = useState("");
   const [actionItems, setActionItems] = useState<string[]>([""]);

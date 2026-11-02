@@ -24,6 +24,13 @@ export interface TrainingSection {
   body: string;
 }
 
+export interface TrainingManual {
+  id: string;
+  title: string;
+  category: string;
+  sections: Pick<TrainingSection, "heading" | "body">[];
+}
+
 export function isTrainingCategory(v: unknown): v is TrainingCategory {
   return typeof v === "string" && (TRAINING_CATEGORIES as readonly string[]).includes(v);
 }

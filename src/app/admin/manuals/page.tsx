@@ -1,5 +1,5 @@
 "use client";
 import PrintManuals from "@/components/PrintManuals";
 export default function Page() {
-  return <PrintManuals />;
+  return <PrintManuals application="foodsafe" />;
 }

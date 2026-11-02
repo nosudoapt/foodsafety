@@ -80,7 +80,7 @@ FROM unnest(ARRAY['profiles','equipment','temperature_records','daily_checks',
 WHERE to_regclass('public.' || t) IS NULL;
 
 -- 3.10 Step 24 equivalence: inventory_purchases shape (expect the partial
---      unique index and the 14-column table).
+--      unique index and the 13-column table).
 SELECT indexname FROM pg_indexes
 WHERE schemaname='public' AND tablename='inventory_purchases'
 ORDER BY 1;

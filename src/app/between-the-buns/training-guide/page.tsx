@@ -1,626 +1,155 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { BookOpen, CheckSquare, FilePlus2, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { ArrowDown, ArrowUp, BookOpen, Check, Pencil, Plus, Save, Search, Send, Trash2 } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
+import Modal from "@/components/Modal";
 import PrintButton from "@/components/PrintButton";
-import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
-import { supabase } from "@/lib/supabase";
-import { activeLocationId, locationScope } from "@/lib/locations";
-import {
-  TRAINING_CATEGORIES,
-  categoryLabel,
-  groupByCategory,
-  isTrainingCategory,
-  matchesQuery,
-  nextPosition,
-  orderedSections,
-  parseBody,
-  totalMinutes,
-  type TrainingSection,
-  type TrainingTopic,
-} from "@/lib/training";
+import { Badge, Button, Input, PageHeader, TabList } from "@/components/ui";
+import { IndividualLoginNotice, LoadState, jsonRequest, messageOf } from "@/components/btb/Feedback";
+import { useBtbData } from "@/components/btb/useBtbData";
+import { TrainingProgressTable, TrainingStatusBadge } from "@/components/btb/TrainingProgress";
+import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
+import { fetchJson } from "@/lib/fetch-json";
+import { TRAINING_CATEGORIES, categoryLabel, orderedSections, parseBody, type TrainingSection } from "@/lib/training";
+import { trainingStatus, type BtbTrainingTopic, type TrainingData, type TrainingRecord } from "@/lib/btb-training";
+import { isVersion } from "@/lib/btb-team";
 
-const TOPIC_COLS = "id, title, category, est_minutes, published, position, created_by, location_id, video_url";
-const SECTION_COLS = "id, topic_id, position, heading, body";
-
-/** YouTube watch/shorts URL → embed URL; anything else plays as-is. */
-function videoEmbed(url: string): { kind: "youtube" | "file"; src: string } | null {
-  const u = (url ?? "").trim();
-  if (!u) return null;
-  const yt = u.match(/(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/);
-  if (yt) return { kind: "youtube", src: `https://www.youtube.com/embed/${yt[1]}` };
-  return { kind: "file", src: u };
+export default function TrainingPage() {
+  return <BtbFeatureGate feature="training_guide" wide>{(readOnly) => <TrainingWorkspace readOnly={readOnly} />}</BtbFeatureGate>;
 }
 
-// The SOP library. Staff read published topics; managers draft, publish and
-// reorder them. Sections are plain text — paragraphs plus "- " checklist lines.
-export default function TrainingGuidePage() {
-  return (
-    <BtbFeatureGate feature="training_guide">
-      {(readOnly) => <TrainingGuide readOnly={readOnly} />}
-    </BtbFeatureGate>
-  );
-}
-
-function TrainingGuide({ readOnly }: { readOnly: boolean }) {
-  const [topics, setTopics] = useState<TrainingTopic[]>([]);
-  const [sections, setSections] = useState<TrainingSection[]>([]);
-  const [allSections, setAllSections] = useState<TrainingSection[]>([]);
-  const [bodies, setBodies] = useState<Record<string, string>>({});
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+function TrainingWorkspace({ readOnly }: { readOnly: boolean }) {
+  const { identity } = useBtbWorkspace();
+  const { data, loading, error, reload, update } = useBtbData<TrainingData>("/api/btb/training");
+  const teamView = identity && ["manager", "supervisor", "corporate"].includes(identity.role);
+  const [tab, setTab] = useState<"library" | "team">(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "team" ? "team" : "library");
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState("");
+  const [editing, setEditing] = useState<BtbTrainingTopic | "new" | null>(null);
+  const [reviewing, setReviewing] = useState<TrainingRecord | null>(null);
+  const [notice, setNotice] = useState("");
+  const visible = data?.topics.filter((topic) => `${topic.title} ${categoryLabel(topic.category)} ${data.sections.filter((section) => section.topic_id === topic.id).map((section) => `${section.heading} ${section.body}`).join(" ")}`.toLowerCase().includes(query.toLowerCase())) ?? [];
+  const topic = visible.find((topic) => topic.id === selected) ?? visible[0];
+  const pending = data?.records.filter((record) => record.status === "pending" && data.topics.some((topic) => topic.id === record.topic_id && topic.published && topic.revision === record.topic_revision)) ?? [];
+  const savedRecord = (record: TrainingRecord) => update((current) => ({ ...current, records: [...current.records.filter((item) => item.id !== record.id), record] }));
+  const activeTab = teamView ? tab : "library";
+  return <div className="ops-workspace"><div className="training-screen ops-workspace"><PageHeader title="Training & progress" subtitle="Learn the routines. Practise the work. Get your manager’s approval." action={<div className="ui-actions"><PrintButton label="Print guide" />{!readOnly && <Button onClick={() => setEditing("new")} disabled={!data}><Plus size={18} />New module</Button>}</div>} />
+    {teamView && <TabList id="training" label="Training workspace" value={tab} onChange={setTab} tabs={[{ id: "library", label: "Training library" }, { id: "team", label: "Team progress" }]} />}
+    {notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
+    <LoadState loading={loading} error={error} onRetry={reload} />
+    {data && activeTab === "library" && <div className="ops-workspace" role={teamView ? "tabpanel" : undefined} id="training-panel-library" aria-labelledby={teamView ? "training-tab-library" : undefined}>
+      {!identity?.employeeId && <IndividualLoginNotice next="/between-the-buns/training-guide" />}
+      <label className="dash-search training-search"><Search size={17} /><span className="sr-only">Search training modules</span><input type="search" placeholder="Search modules and instructions" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+      <div className="training-layout"><nav className="training-library" aria-label="Training modules">{visible.map((item) => <button key={item.id} aria-current={item.id === topic?.id ? "true" : undefined} onClick={() => setSelected(item.id)}><span className="training-library__title">{item.title}</span><span className="ops-meta">{categoryLabel(item.category)} · {item.est_minutes} min</span>{item.published ? identity?.employeeId && <TrainingStatusBadge status={trainingStatus(data.records.find((record) => record.employee_id === identity.employeeId && record.topic_id === item.id), item)} /> : <Badge accent="amber">Draft</Badge>}</button>)}{!visible.length && <div className="ui-empty"><BookOpen size={28} /><h2>{query ? "No matching modules" : "Your library starts here"}</h2><p>{query ? "Try another title or instruction." : "A manager can create and publish the first training module."}</p></div>}</nav>
+      {topic && <TrainingLesson key={`${topic.id}:${topic.revision}`} topic={topic} sections={orderedSections(data.sections.filter((section) => section.topic_id === topic.id))} record={data.records.find((record) => record.employee_id === identity?.employeeId && record.topic_id === topic.id)} onSaved={savedRecord} onReload={reload} onEdit={readOnly ? undefined : () => setEditing(topic)} />}</div>
+    </div>}
+    {data && activeTab === "team" && <div role="tabpanel" id="training-panel-team" aria-labelledby="training-tab-team" className="ops-workspace"><div className="ops-section-heading"><h2>Employee completion</h2><Badge accent="purple">{pending.length} awaiting manager</Badge></div><TrainingProgressTable data={data} ownId={identity?.employeeId} onReview={!readOnly ? setReviewing : undefined} />
+      {!!pending.length && <section className="ops-workspace"><h2 className="training-subheading">Awaiting manager approval</h2><div className="training-review-queue">{pending.map((record) => <article key={record.id}><div><h3>{data.employees.find((employee) => employee.id === record.employee_id)?.name ?? "Employee"}</h3><p>{data.topics.find((topic) => topic.id === record.topic_id)?.title}</p><span className="ops-meta">Submitted {record.submitted_at?.slice(0, 10)}</span></div>{!readOnly ? <Button variant="soft" disabled={record.employee_id === identity?.employeeId} onClick={() => setReviewing(record)}>{record.employee_id === identity?.employeeId ? "Another manager must review" : "Review training"}</Button> : <TrainingStatusBadge status="pending" />}</article>)}</div></section>}
+    </div>}
+    {editing && <TrainingEditor key={editing === "new" ? "new" : editing.id} topic={editing === "new" ? null : editing} sections={editing === "new" ? [] : orderedSections(data?.sections.filter((section) => section.topic_id === editing.id) ?? [])} onClose={() => setEditing(null)} onSaved={(topic, sections) => { update((current) => ({ ...current, topics: [...current.topics.filter((item) => item.id !== topic.id), topic].sort((a, b) => a.position - b.position), sections: [...current.sections.filter((section) => section.topic_id !== topic.id), ...sections] })); setEditing(null); setSelected(topic.id); setNotice(`“${topic.title}” saved${topic.published ? " and published" : " as a draft"}.`); }} />}
+    {reviewing && data && <TrainingReviewForm record={reviewing} data={data} onClose={() => setReviewing(null)} onSaved={(record) => { savedRecord(record); setReviewing(null); setNotice(record.status === "approved" ? "Training approved. The employee’s progress is updated." : "Feedback sent. The employee can revisit and resubmit this module."); reload(); }} />}
+  </div>
+  {data && <div id="print-section" className="training-print"><h1>Between the Buns · Training guide</h1>{data.topics.filter((item) => item.published).map((item) => <section key={item.id}><h2>{item.title}</h2><p>{categoryLabel(item.category)} · {item.est_minutes} minutes · revision {item.revision}</p>{orderedSections(data.sections.filter((section) => section.topic_id === item.id)).map((section) => <div key={section.id}><h3>{section.heading}</h3><TrainingBody body={section.body} /></div>)}</section>)}</div>}
+  </div>;
+}
+
+function TrainingBody({ body }: { body: string }) {
+  const parsed = parseBody(body);
+  return <div className="training-body">{parsed.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}{!!parsed.checklist.length && <ul>{parsed.checklist.map((item, index) => <li key={index}>{item}</li>)}</ul>}</div>;
+}
+
+function TrainingVideo({ url, title }: { url: string; title: string }) {
+  let youtube = "";
+  try { const parsed = new URL(url); if (["youtube.com", "www.youtube.com", "m.youtube.com"].includes(parsed.hostname)) youtube = parsed.searchParams.get("v") ?? parsed.pathname.split("/")[2] ?? ""; if (parsed.hostname === "youtu.be") youtube = parsed.pathname.slice(1); } catch { return null; }
+  return youtube && /^[\w-]+$/.test(youtube) ? <iframe className="training-video" src={`https://www.youtube-nocookie.com/embed/${youtube}`} title={`${title} training video`} allowFullScreen loading="lazy" /> : <video className="training-video" src={url} controls preload="metadata" aria-label={`${title} training video`} />;
+}
+
+interface TrainingDraft { version: number; sections: string[]; reviewed: boolean; notes: string }
+function TrainingLesson({ topic, sections, record, onEdit, onSaved, onReload }: { topic: BtbTrainingTopic; sections: TrainingSection[]; record?: TrainingRecord; onEdit?: () => void; onSaved: (record: TrainingRecord) => void; onReload: () => void }) {
+  const { identity } = useBtbWorkspace();
+  const storageKey = `btb:training:v2:${identity?.employeeId}:${topic.id}:${topic.revision}`;
+  const [draft, setDraft] = useState<TrainingDraft | null>(() => {
+    if (!identity?.employeeId) return null;
+    try { const value = JSON.parse(localStorage.getItem(storageKey) ?? "null"); return value && isVersion(value.version) && typeof value.reviewed === "boolean" && typeof value.notes === "string" && Array.isArray(value.sections) && value.sections.every((id: string) => sections.some((section) => section.id === id)) ? value : null; } catch { return null; }
+  });
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const [newTopic, setNewTopic] = useState({ title: "", category: "food_safety", est_minutes: "5" });
-  const [newSection, setNewSection] = useState({ heading: "", body: "" });
-  // Unsaved video-URL drafts, keyed by topic so switching topics never leaks
-  // one topic's draft into another (no effect needed — the key does the reset).
-  const [videoDrafts, setVideoDrafts] = useState<Record<string, string>>({});
-  const [uploadingVideo, setUploadingVideo] = useState(false);
-
-  const loadTopics = async () => {
-    const scope = locationScope();
-    let q = supabase.from("training_topics").select(TOPIC_COLS).order("position").order("title");
-    if (scope) q = q.or(scope);
-    const { data, error: err } = await q;
-    if (err) {
-      setError("Couldn't load the guide — run supabase/schema-training.sql, then reload.");
-      setLoading(false);
-      return;
-    }
-    const all = ((data ?? []) as TrainingTopic[]).filter((t) => (readOnly ? t.published : true));
-    setTopics(all);
-    // One cheap pass over every section so the search box reaches inside topics
-    // and the print sheet can print the whole guide, not just the open topic.
-    const { data: sec } = await supabase.from("training_sections").select(SECTION_COLS).limit(1000);
-    const index: Record<string, string> = {};
-    const flat: TrainingSection[] = (sec ?? []) as unknown as TrainingSection[];
-    for (const s of flat) {
-      index[s.topic_id] = `${index[s.topic_id] ?? ""}\n${s.body ?? ""}`;
-    }
-    setBodies(index);
-    setAllSections(flat);
-    setSelectedId((cur) => cur ?? all[0]?.id ?? null);
-    setError(null);
-    setLoading(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const status = trainingStatus(record, topic);
+  const locked = status === "pending" || status === "approved" || !identity?.employeeId || !topic.published;
+  const current = record?.topic_revision === topic.revision ? record : undefined;
+  const values = draft ?? { version: record?.version ?? 0, sections: current?.completed_sections ?? [], reviewed: current?.reviewed ?? false, notes: current?.notes ?? "" };
+  const stale = !!draft && draft.version !== (record?.version ?? 0);
+  const persist = (next: TrainingDraft | null) => {
+    setDraft(next); setNotice("");
+    try { if (next) localStorage.setItem(storageKey, JSON.stringify(next)); else localStorage.removeItem(storageKey); }
+    catch { setError("This browser cannot retain your draft after closing. Keep this page open until you save."); }
   };
-
-  const loadSections = async (topicId: string | null) => {
-    if (!topicId) {
-      setSections([]);
-      return;
-    }
-    const { data, error: err } = await supabase
-      .from("training_sections")
-      .select(SECTION_COLS)
-      .eq("topic_id", topicId);
-    if (err) {
-      setError("Couldn't load sections — run supabase/schema-training.sql, then reload.");
-      return;
-    }
-    setSections((data ?? []) as unknown as TrainingSection[]);
-    setError(null);
+  const save = async (status: "in_progress" | "pending") => {
+    if (saving || locked || stale) return;
+    setSaving(true); setError(""); setNotice("");
+    try { const result = await fetchJson<{ record: TrainingRecord }>("/api/btb/training", jsonRequest({ topic_id: topic.id, topic_revision: topic.revision, version: values.version, completed_sections: values.sections, reviewed: values.reviewed, notes: values.notes, status })); onSaved(result.record); persist(null); setNotice(status === "pending" ? "Submitted. A manager will review your training before it counts as completed." : "Your training progress is saved."); }
+    catch (cause) { setError(messageOf(cause)); }
+    finally { setSaving(false); }
   };
+  return <article className="training-lesson"><header><div><p className="ops-meta">{categoryLabel(topic.category)} · {topic.est_minutes} minutes · revision {topic.revision}</p><h2>{topic.title}</h2></div>{onEdit && <Button variant="ghost" onClick={onEdit}><Pencil size={16} />Edit module</Button>}</header><div className="ui-actions">{topic.published ? <TrainingStatusBadge status={status} /> : <Badge accent="amber">Unpublished draft</Badge>}{identity?.employeeId && <span className="ops-meta">{values.sections.length}/{sections.length} sections checked</span>}</div>
+    {status === "needs_update" && <p className="ui-notice ui-notice--warning">This module has changed since your last submission. Review the current material and submit it again for manager approval.</p>}
+    {record?.review_notes && <div className="training-feedback"><strong>Manager feedback · {record.reviewed_by_name}</strong><p>{record.review_notes}</p></div>}
+    {status === "approved" && <p className="ui-notice ui-notice--success">Approved by {record?.reviewed_by_name} on {record?.reviewed_at?.slice(0, 10)}.</p>}
+    {topic.video_url && <TrainingVideo url={topic.video_url} title={topic.title} />}
+    {sections.map((section, index) => <section className="training-lesson-section" key={section.id}><h3><span>{String(index + 1).padStart(2, "0")}</span>{section.heading}</h3><TrainingBody body={section.body} />{identity?.employeeId && topic.published && <label className="ops-checkbox training-check"><input type="checkbox" disabled={locked || saving} checked={values.sections.includes(section.id)} onChange={(event) => persist({ ...values, sections: event.target.checked ? [...values.sections, section.id] : values.sections.filter((id) => id !== section.id) })} />I completed “{section.heading}”</label>}</section>)}
+    {!sections.length && !topic.video_url && <p className="ops-meta">Add sections or a video before publishing this module.</p>}
+    {identity?.employeeId && topic.published && <div className="training-submit"><label className="ops-checkbox"><input type="checkbox" disabled={locked || saving} checked={values.reviewed} onChange={(event) => persist({ ...values, reviewed: event.target.checked })} />I have reviewed all of this material and am ready to demonstrate it to my manager.</label><label className="ui-form-stack">Notes for your manager <span className="ops-meta">optional</span><textarea className="ui-input" rows={3} maxLength={2000} disabled={locked || saving} value={values.notes} onChange={(event) => persist({ ...values, notes: event.target.value })} /></label>
+      {stale && !locked && <div className="ui-notice ui-notice--warning"><div>Your saved progress changed. Review your selections before applying this draft.<Button variant="ghost" onClick={() => persist({ ...values, version: record?.version ?? 0 })}>Use my progress with latest</Button></div></div>}
+      {error && <div className="ui-notice ui-notice--error" role="alert"><div>{error}<br /><Button variant="ghost" disabled={saving} onClick={onReload}>Reload training</Button></div></div>}{notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
+      {!locked && <div className="ui-actions"><Button variant="ghost" disabled={saving || stale} onClick={() => save("in_progress")}><Save size={16} />{saving ? "Saving…" : "Save progress"}</Button><Button disabled={saving || stale || !values.reviewed || values.sections.length !== sections.length} onClick={() => save("pending")}><Send size={16} />Submit for manager approval</Button>{draft && <Button variant="ghost" disabled={saving} onClick={() => persist(null)}>Discard draft</Button>}</div>}
+    </div>}
+  </article>;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!cancelled) await loadTopics();
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount load
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!cancelled) await loadSections(selectedId);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedId]);
-
-  const visibleTopics = useMemo(
-    () => topics.filter((t) => matchesQuery(t, bodies[t.id] ?? "", query)),
-    [topics, bodies, query],
-  );
-  const groups = useMemo(() => groupByCategory(visibleTopics), [visibleTopics]);
-  const selected = topics.find((t) => t.id === selectedId) ?? null;
-  const ordered = useMemo(() => orderedSections(sections), [sections]);
-
-  const createTopic = async () => {
-    if (readOnly || saving) return;
-    const title = newTopic.title.trim();
-    if (!title) {
-      setError("Give the topic a title first.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    const { data, error: err } = await supabase
-      .from("training_topics")
-      .insert({
-        title,
-        category: isTrainingCategory(newTopic.category) ? newTopic.category : "food_safety",
-        est_minutes: Math.max(1, Number(newTopic.est_minutes) || 5),
-        published: false,
-        position: nextPosition(topics),
-        created_by: null,
-        location_id: activeLocationId(),
-      })
-      .select(TOPIC_COLS);
-    if (err) {
-      setError("Couldn't create the topic — run supabase/schema-training.sql, then retry.");
-      setSaving(false);
-      return;
-    }
-    const created = (data?.[0] as TrainingTopic | undefined) ?? null;
-    setNewTopic({ title: "", category: "food_safety", est_minutes: "5" });
-    setNotice(created ? `Draft created: ${created.title}` : "Draft created");
-    setSaving(false);
-    await loadTopics();
-    if (created) setSelectedId(created.id);
+function TrainingEditor({ topic, sections, onClose, onSaved }: { topic: BtbTrainingTopic | null; sections: TrainingSection[]; onClose: () => void; onSaved: (topic: BtbTrainingTopic, sections: TrainingSection[]) => void }) {
+  const [form, setForm] = useState({ title: topic?.title ?? "", category: topic?.category ?? "food_safety", est_minutes: topic?.est_minutes ?? 5, video_url: topic?.video_url ?? "", published: topic?.published ?? false });
+  const [draftSections, setDraftSections] = useState(sections.map(({ id, heading, body }) => ({ id, heading, body })));
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const move = (index: number, direction: number) => { const next = [...draftSections]; [next[index], next[index + direction]] = [next[index + direction], next[index]]; setDraftSections(next); };
+  const upload = async (file: File | undefined) => {
+    if (!file || uploading) return;
+    if (!file.type.startsWith("video/") || file.size > 100 * 1024 * 1024) { setError("Choose a video under 100 MB, or use an HTTPS video link."); return; }
+    setUploading(true); setError("");
+    try { const body = new FormData(); body.set("file", file); const result = await fetchJson<{ url: string }>("/api/btb/training/video", { method: "POST", body, signal: AbortSignal.timeout(120_000) }); setForm((previous) => ({ ...previous, video_url: result.url })); }
+    catch (cause) { setError(messageOf(cause)); }
+    finally { setUploading(false); }
   };
-
-  const addSection = async () => {
-    if (readOnly || saving || !selectedId) return;
-    const heading = newSection.heading.trim();
-    if (!heading) {
-      setError("Sections need a heading.");
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    const { error: err } = await supabase.from("training_sections").insert({
-      topic_id: selectedId,
-      position: nextPosition(sections),
-      heading,
-      body: newSection.body.trim(),
-    });
-    if (err) {
-      setError("Couldn't save the section — run supabase/schema-training.sql, then retry.");
-      setSaving(false);
-      return;
-    }
-    setNewSection({ heading: "", body: "" });
-    setNotice(`Section added: ${heading}`);
-    setSaving(false);
-    await loadSections(selectedId);
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault(); if (saving || uploading) return;
+    setSaving(true); setError("");
+    try { const result = await fetchJson<{ topic: BtbTrainingTopic; sections: TrainingSection[] }>("/api/btb/training/topics", jsonRequest({ ...form, sections: draftSections, id: topic?.id ?? null, revision: topic?.revision ?? 0 })); onSaved(result.topic, result.sections); }
+    catch (cause) { setError(messageOf(cause)); }
+    finally { setSaving(false); }
   };
+  return <Modal open title={topic ? "Edit training module" : "Create training module"} description={topic ? "Saving a new revision asks employees to review the updated material again." : "Build the instructions, then publish when they are ready for the team."} busy={saving || uploading} onClose={onClose}><form onSubmit={save}>{error && <p className="ui-notice ui-notice--error" role="alert">{error}</p>}<fieldset className="ui-form-stack" disabled={saving || uploading}>
+    <label>Module title<Input data-modal-autofocus required maxLength={200} value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} /></label><div className="ops-form-grid"><label>Category<select className="ui-input" value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })}>{TRAINING_CATEGORIES.map((category) => <option key={category} value={category}>{categoryLabel(category)}</option>)}</select></label><label>Estimated minutes<Input type="number" required min={1} max={480} value={form.est_minutes} onChange={(event) => setForm({ ...form, est_minutes: Number(event.target.value) })} /></label></div>
+    <label>Video link <span>optional</span><Input type="url" placeholder="https://…" maxLength={2000} value={form.video_url} onChange={(event) => setForm({ ...form, video_url: event.target.value })} /></label><label>Upload a video <span>up to 100 MB</span><input type="file" accept="video/*" onChange={(event) => void upload(event.target.files?.[0])} /></label>
+    {draftSections.map((section, index) => <div className="training-section-editor ui-form-stack" key={section.id}><div className="ops-section-heading"><strong>Section {index + 1}</strong><div className="ui-actions"><button type="button" className="ui-iconbutton" disabled={!index} aria-label={`Move section ${index + 1} up`} onClick={() => move(index, -1)}><ArrowUp size={16} /></button><button type="button" className="ui-iconbutton" disabled={index === draftSections.length - 1} aria-label={`Move section ${index + 1} down`} onClick={() => move(index, 1)}><ArrowDown size={16} /></button><button type="button" className="ui-iconbutton ui-iconbutton--danger" aria-label={`Remove section ${index + 1}`} onClick={() => setDraftSections(draftSections.filter((item) => item.id !== section.id))}><Trash2 size={16} /></button></div></div><label>Section heading<Input required maxLength={200} value={section.heading} onChange={(event) => setDraftSections(draftSections.map((item) => item.id === section.id ? { ...item, heading: event.target.value } : item))} /></label><label>Instructions<textarea className="ui-input" rows={5} maxLength={20000} value={section.body} onChange={(event) => setDraftSections(draftSections.map((item) => item.id === section.id ? { ...item, body: event.target.value } : item))} /><small>Blank lines separate paragraphs. Start a line with “- ” for a checklist bullet.</small></label></div>)}
+    <Button variant="ghost" disabled={draftSections.length >= 100} onClick={() => setDraftSections([...draftSections, { id: crypto.randomUUID(), heading: "", body: "" }])}><Plus size={16} />Add section</Button><label className="ops-checkbox"><input type="checkbox" checked={form.published} onChange={(event) => setForm({ ...form, published: event.target.checked })} />Publish to employees</label>
+  </fieldset>{uploading && <p role="status" className="ops-meta">Uploading video…</p>}<div className="ui-modal__actions"><Button variant="ghost" disabled={saving || uploading} onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving || uploading}>{saving ? "Saving…" : "Save module"}</Button></div></form></Modal>;
+}
 
-  const togglePublished = async (t: TrainingTopic) => {
-    if (readOnly) return;
-    setError(null);
-    const { error: err } = await supabase
-      .from("training_topics")
-      .update({ published: !t.published })
-      .eq("id", t.id);
-    if (err) {
-      setError("Couldn't publish — run supabase/schema-training.sql, then retry.");
-      return;
-    }
-    setNotice(t.published ? `Unpublished: ${t.title}` : `Published: ${t.title}`);
-    await loadTopics();
+function TrainingReviewForm({ record, data, onClose, onSaved }: { record: TrainingRecord; data: TrainingData; onClose: () => void; onSaved: (record: TrainingRecord) => void }) {
+  const [notes, setNotes] = useState("");
+  const [decision, setDecision] = useState<"approved" | "changes_requested">("approved");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const topic = data.topics.find((topic) => topic.id === record.topic_id);
+  const reviews = data.reviews.filter((review) => review.record_id === record.id);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault(); if (saving) return; setSaving(true); setError("");
+    try { const result = await fetchJson<{ record: TrainingRecord }>("/api/btb/training/review", jsonRequest({ id: record.id, version: record.version, notes, decision })); onSaved(result.record); }
+    catch (cause) { setError(messageOf(cause)); }
+    finally { setSaving(false); }
   };
-
-  const removeTopic = async (id: string) => {
-    if (readOnly) return;
-    setError(null);
-    const { error: err } = await supabase.from("training_topics").delete().eq("id", id);
-    if (err) {
-      setError("Couldn't delete the topic — run supabase/schema-training.sql, then retry.");
-      return;
-    }
-    setNotice("Topic deleted (its sections went too)");
-    setSelectedId(null);
-    await loadTopics();
-  };
-
-  const removeSection = async (id: string) => {
-    if (readOnly || !selectedId) return;
-    setError(null);
-    const { error: err } = await supabase.from("training_sections").delete().eq("id", id);
-    if (err) {
-      setError("Couldn't delete the section — run supabase/schema-training.sql, then retry.");
-      return;
-    }
-    await loadSections(selectedId);
-  };
-
-  const saveVideo = async (explicitUrl?: string) => {
-    if (readOnly || !selected) return;
-    setError(null);
-    const url = (explicitUrl ?? videoDrafts[selected.id] ?? selected.video_url ?? "").trim();
-    const { error: err } = await supabase
-      .from("training_topics")
-      .update({ video_url: url || null })
-      .eq("id", selected.id);
-    if (err) {
-      setError("Couldn't save the video — run supabase/schema-training-video.sql, then retry.");
-      return;
-    }
-    setVideoDrafts((d) => {
-      const next = { ...d };
-      delete next[selected.id];
-      return next;
-    });
-    setNotice(url ? "Training video saved" : "Training video removed");
-    await loadTopics();
-  };
-
-  // Module video file → training-videos bucket → public URL saved on the topic.
-  const uploadVideoFile = async (file: File | undefined) => {
-    if (!file || readOnly || !selected || uploadingVideo) return;
-    if (file.size > 100 * 1024 * 1024) {
-      setError("Video must be under 100 MB — compress it or paste a YouTube link instead.");
-      return;
-    }
-    setUploadingVideo(true);
-    setError(null);
-    try {
-      const path = `topics/${selected.id}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-      const { error: upErr } = await supabase.storage
-        .from("training-videos")
-        .upload(path, file, { contentType: file.type || "video/mp4", upsert: true });
-      if (upErr) throw new Error(upErr.message);
-      const { data } = supabase.storage.from("training-videos").getPublicUrl(path);
-      await saveVideo(data.publicUrl);
-    } catch (e) {
-      setError(e instanceof Error ? `Video upload failed: ${e.message}` : "Video upload failed.");
-    }
-    setUploadingVideo(false);
-  };
-
-  return (
-    <div>
-      {/* Interactive UI — hidden when the guide goes to the printer. */}
-      <div className="print:hidden">
-        <PageHeader
-          title="Training Guide"
-          subtitle={`${topics.length} topic${topics.length === 1 ? "" : "s"} · about ${totalMinutes(topics)} min of reading`}
-          action={
-            <div className="flex items-center gap-2">
-              {notice && <Badge accent="green">{notice}</Badge>}
-              <PrintButton label="Print Guide" />
-            </div>
-          }
-        />
-
-        <div className="mb-5">
-          <Input
-            accent="purple"
-            type="search"
-            placeholder="Search titles, categories and section text…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="max-w-md"
-          />
-        </div>
-
-        {error && (
-          <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">{error}</div>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <div className="space-y-4">
-            {loading ? (
-              <Card className="p-6 text-center text-sm text-slate-400">Loading…</Card>
-            ) : visibleTopics.length === 0 ? (
-              <Card className="p-6 text-center text-sm text-slate-400">
-                {query ? "Nothing matches that search." : "No topics yet — managers can add the first one."}
-              </Card>
-            ) : (
-              Object.entries(groups).map(([cat, items]) => (
-                <div key={cat}>
-                  <p className="text-xs font-bold uppercase tracking-wide text-slate-400 mb-2">
-                    {categoryLabel(cat)}
-                  </p>
-                  <div className="space-y-2">
-                    {items.map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => setSelectedId(t.id)}
-                        className={`w-full text-left rounded-xl border px-4 py-3 transition-colors ${
-                          selectedId === t.id
-                            ? "border-purple-300 bg-purple-50"
-                            : "border-slate-200 bg-white hover:bg-slate-50"
-                        }`}
-                      >
-                        <span className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold text-slate-900">{t.title}</span>
-                          <span className="text-[11px] text-slate-400 shrink-0">{t.est_minutes} min</span>
-                        </span>
-                        {!t.published && !readOnly && (
-                          <span className="mt-1 inline-block">
-                            <Badge accent="amber">Draft</Badge>
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))
-            )}
-
-            {!readOnly && (
-              <Card className="p-4">
-                <p className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-                  <FilePlus2 className="w-4 h-4 text-purple-600" /> New topic
-                </p>
-                <div className="space-y-3">
-                  <label className="block text-sm">
-                    <span className="block text-xs font-medium text-slate-500 mb-1">Title *</span>
-                    <Input
-                      accent="purple"
-                      value={newTopic.title}
-                      onChange={(e) => setNewTopic((t) => ({ ...t, title: e.target.value }))}
-                      placeholder="Glove & handwashing policy"
-                    />
-                  </label>
-                  <label className="block text-sm">
-                    <span className="block text-xs font-medium text-slate-500 mb-1">Category</span>
-                    <select
-                      className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent w-full"
-                      value={newTopic.category}
-                      onChange={(e) => setNewTopic((t) => ({ ...t, category: e.target.value }))}
-                    >
-                      {TRAINING_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {categoryLabel(c)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="block text-sm">
-                    <span className="block text-xs font-medium text-slate-500 mb-1">Est. minutes</span>
-                    <Input
-                      accent="purple"
-                      type="number"
-                      min="1"
-                      value={newTopic.est_minutes}
-                      onChange={(e) => setNewTopic((t) => ({ ...t, est_minutes: e.target.value }))}
-                    />
-                  </label>
-                  <Button accent="purple" onClick={createTopic} disabled={saving}>
-                    {saving ? "Saving…" : "Create Draft"}
-                  </Button>
-                </div>
-              </Card>
-            )}
-          </div>
-
-          <div className="lg:col-span-2">
-            {!selected ? (
-              <Card className="p-8 text-center text-sm text-slate-400">Pick a topic from the list.</Card>
-            ) : (
-              <Card className="p-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                      <BookOpen className="w-5 h-5 text-purple-600" /> {selected.title}
-                    </h2>
-                    <p className="text-sm text-slate-500 mt-1">
-                      {categoryLabel(selected.category)} · {selected.est_minutes} min
-                      {!selected.published && !readOnly && " · draft"}
-                    </p>
-                  </div>
-                  {!readOnly && (
-                    <div className="flex gap-2">
-                      <Button
-                        accent="purple"
-                        variant="soft"
-                        onClick={() => togglePublished(selected)}
-                      >
-                        {selected.published ? "Unpublish" : "Publish"}
-                      </Button>
-                      <Button accent="red" variant="soft" onClick={() => removeTopic(selected.id)}>
-                        Delete
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Training video — plays for everyone, set by managers. */}
-                {(() => {
-                  const embed = videoEmbed(selected.video_url ?? "");
-                  const draft = videoDrafts[selected.id] ?? selected.video_url ?? "";
-                  return (
-                    <div className="mt-4">
-                      {embed ? (
-                        embed.kind === "youtube" ? (
-                          <iframe
-                            src={embed.src}
-                            title={`${selected.title} — training video`}
-                            className="w-full aspect-video rounded-xl border border-slate-200"
-                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                            allowFullScreen
-                          />
-                        ) : (
-                          <video src={embed.src} controls className="w-full rounded-xl border border-slate-200" />
-                        )
-                      ) : (
-                        !readOnly && (
-                          <p className="text-xs text-slate-400">No video yet — paste a YouTube or mp4 link below.</p>
-                        )
-                      )}
-                      {!readOnly && (
-                        <div className="mt-2 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Input
-                              accent="purple"
-                              placeholder="YouTube or mp4 link…"
-                              value={draft}
-                              onChange={(e) =>
-                                setVideoDrafts((d) => ({ ...d, [selected.id]: e.target.value }))
-                              }
-                              className="grow min-w-[12rem]"
-                            />
-                            <Button accent="purple" variant="soft" onClick={() => saveVideo()} disabled={saving}>
-                              {saving ? "Saving…" : "Save video"}
-                            </Button>
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <input
-                              type="file"
-                              accept="video/*"
-                              disabled={uploadingVideo}
-                              onChange={(e) => {
-                                void uploadVideoFile(e.target.files?.[0]);
-                                e.target.value = "";
-                              }}
-                              className="block text-xs text-slate-600 file:mr-2 file:rounded-lg file:border file:border-slate-300 file:bg-white file:px-3 file:py-1.5 file:text-xs file:font-semibold hover:file:bg-slate-50"
-                            />
-                            {uploadingVideo && (
-                              <span className="text-xs text-slate-400">Uploading module video…</span>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                <div className="mt-5 space-y-6">
-                  {ordered.length === 0 ? (
-                    <p className="text-sm text-slate-400">
-                      No sections yet{readOnly ? "" : " — add the first one below"}.
-                    </p>
-                  ) : (
-                    ordered.map((s) => {
-                      const { paragraphs, checklist } = parseBody(s.body);
-                      return (
-                        <section key={s.id}>
-                          <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-sm font-bold uppercase tracking-wide text-slate-700">{s.heading}</h3>
-                            {!readOnly && (
-                              <button
-                                aria-label={`Delete ${s.heading}`}
-                                className="text-slate-300 hover:text-red-600"
-                                onClick={() => removeSection(s.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
-                          {paragraphs.map((p, i) => (
-                            <p key={i} className="mt-2 text-sm text-slate-600 leading-relaxed">
-                              {p}
-                            </p>
-                          ))}
-                          {checklist.length > 0 && (
-                            <ul className="mt-3 space-y-1.5">
-                              {checklist.map((c, i) => (
-                                <li key={i} className="flex items-start gap-2 text-sm text-slate-600">
-                                  <CheckSquare className="w-4 h-4 mt-0.5 text-purple-400 shrink-0" />
-                                  {c}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                        </section>
-                      );
-                    })
-                  )}
-                </div>
-
-                {!readOnly && (
-                  <div className="mt-6 pt-5 border-t border-slate-100">
-                    <p className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-                      <Plus className="w-4 h-4 text-purple-600" /> Add a section
-                    </p>
-                    <div className="space-y-3">
-                      <label className="block text-sm">
-                        <span className="block text-xs font-medium text-slate-500 mb-1">Heading *</span>
-                        <Input
-                          accent="purple"
-                          value={newSection.heading}
-                          onChange={(e) => setNewSection((s) => ({ ...s, heading: e.target.value }))}
-                          placeholder="Before service"
-                        />
-                      </label>
-                      <label className="block text-sm">
-                        <span className="block text-xs font-medium text-slate-500 mb-1">
-                          Body — blank line = new paragraph, lines starting with “- ” become checklist items
-                        </span>
-                        <textarea
-                          className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent min-h-[7rem]"
-                          value={newSection.body}
-                          onChange={(e) => setNewSection((s) => ({ ...s, body: e.target.value }))}
-                          placeholder={"Wash hands for 20 seconds.\n\n- before putting gloves on\n- after touching raw beef"}
-                        />
-                      </label>
-                      <Button accent="purple" onClick={addSection} disabled={saving}>
-                        {saving ? "Saving…" : "Add Section"}
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Full guide for print — every visible topic with all its sections. */}
-      <div id="print-section" className="hidden print:block max-w-4xl mx-auto px-4 py-6 text-gray-900">
-        <div className="mb-5 border-b border-gray-400 pb-3">
-          <h1 className="text-2xl font-bold">Training Guide</h1>
-          <p className="text-xs mt-1">
-            {visibleTopics.length} topic{visibleTopics.length === 1 ? "" : "s"} · about{" "}
-            {totalMinutes(visibleTopics)} min of reading
-          </p>
-        </div>
-
-        {Object.entries(groups).map(([cat, items]) => (
-          <div key={cat} className="mb-6">
-            <h2 className="text-sm font-bold uppercase tracking-wide border-b border-gray-300 pb-1 mb-3">
-              {categoryLabel(cat)}
-            </h2>
-            {items.map((t) => (
-              <div key={t.id} className="mb-5 break-inside-avoid">
-                <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="text-base font-bold">{t.title}</h3>
-                  <span className="text-xs text-gray-500">{t.est_minutes} min</span>
-                </div>
-                {!t.published && <p className="text-xs italic text-gray-500">Draft — not published to staff</p>}
-
-                {allSections
-                  .filter((s) => s.topic_id === t.id)
-                  .sort((a, b) => a.position - b.position)
-                  .map((s) => {
-                    const { paragraphs, checklist } = parseBody(s.body);
-                    return (
-                      <div key={s.id} className="mt-3">
-                        <h4 className="text-sm font-bold uppercase tracking-wide">{s.heading}</h4>
-                        {paragraphs.map((p, i) => (
-                          <p key={i} className="mt-1.5 text-sm leading-relaxed">
-                            {p}
-                          </p>
-                        ))}
-                        {checklist.length > 0 && (
-                          <ul className="mt-2 space-y-1 text-sm">
-                            {checklist.map((c, i) => (
-                              <li key={i}>☐ {c}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-            ))}
-          </div>
-        ))}
-
-        <p className="text-xs text-gray-500 text-center mt-8">© Between the Buns — Training Guide</p>
-      </div>
-    </div>
-  );
+  return <Modal open title="Review employee training" description={`${data.employees.find((employee) => employee.id === record.employee_id)?.name ?? "Employee"} · ${topic?.title ?? "Training module"}`} busy={saving} onClose={onClose}><form onSubmit={submit}><div className="ops-workspace"><p className="ops-meta">Module revision {record.topic_revision} · submitted {record.submitted_at?.slice(0, 10)}</p><ul className="training-reviewed-sections">{data.sections.filter((section) => section.topic_id === record.topic_id).map((section) => <li key={section.id}><Check size={15} />{section.heading}</li>)}</ul>{record.notes && <div className="training-feedback"><strong>Employee notes</strong><p>{record.notes}</p></div>}{error && <p className="ui-notice ui-notice--error" role="alert">{error}</p>}<fieldset className="ui-form-stack" disabled={saving}><label>Manager decision<select className="ui-input" data-modal-autofocus value={decision} onChange={(event) => setDecision(event.target.value as typeof decision)}><option value="approved">Approve completed training</option><option value="changes_requested">Request changes</option></select></label><label>Feedback {decision === "changes_requested" && <span>required</span>}<textarea className="ui-input" required={decision === "changes_requested"} maxLength={2000} rows={4} value={notes} onChange={(event) => setNotes(event.target.value)} /></label></fieldset>{!!reviews.length && <details><summary>Previous manager reviews ({reviews.length})</summary>{reviews.map((review) => <p className="ops-meta" key={review.id}>{review.created_at.slice(0, 10)} · {review.reviewer_name} · {review.decision === "approved" ? "Approved" : "Changes requested"}{review.notes && `: ${review.notes}`}</p>)}</details>}</div><div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? "Saving review…" : decision === "approved" ? "Approve training" : "Send feedback"}</Button></div></form></Modal>;
 }

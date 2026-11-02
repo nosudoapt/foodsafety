@@ -1,24 +1,37 @@
 @import "tailwindcss";
+@import "./tokens.css";
+@import "./workspace.css";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: var(--paper);
+  --foreground: var(--ink);
 }
 
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 input, select, textarea {
-  color: #111827 !important;
-  background-color: #ffffff !important;
+  font-family: inherit;
+  color: var(--ink);
+  background-color: var(--surface);
+  accent-color: var(--brand);
 }
 
 input::placeholder {
-  color: #9ca3af !important;
+  color: var(--muted);
 }
+
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), summary, select { cursor: pointer; }
+button:disabled { cursor: not-allowed; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
+::selection { background: var(--brand-soft); color: var(--brand); }
 
 /* PWA standalone mode */
 @media all and (display-mode: standalone) {

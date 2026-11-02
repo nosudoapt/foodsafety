@@ -1,10 +1,10 @@
 "use client";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
-import NewRestaurantChecklist from "@/components/NewRestaurantChecklist";
+import FranchiseChecklist from "@/components/btb/FranchiseChecklist";
 export default function Page() {
   return (
     <BtbFeatureGate feature="new_restaurant">
-      {(readOnly) => <NewRestaurantChecklist readOnly={readOnly} />}
+      {(readOnly) => <FranchiseChecklist readOnly={readOnly} />}
     </BtbFeatureGate>
   );
 }

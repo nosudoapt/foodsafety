@@ -1,9 +1,11 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
+import { BTB_COOKIE } from "@/lib/btb-auth";
+import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
-import { MONTH_END_EDIT_ROLES, parseCountSave, requireRole } from "@/lib/btb-inventory-api";
+import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, parseCountSave, requireRole } from "@/lib/btb-inventory-api";
+import { requireEditableMonth } from "@/lib/inventory-server-guards";
 import { replaceRows } from "@/lib/persist-replace";
 
 // Count sheet — previously read/saved DIRECTLY from the browser via the anon
@@ -16,13 +18,11 @@ import { replaceRows } from "@/lib/persist-replace";
 // silently lose a month's counts (the old page deleted first and hoped).
 
 const COUNT_COLS = "id, item_id, count_month, qty, counted_by, location_id";
-const ALL_ROLES = ["staff", "supervisor", "manager", "corporate", "admin"];
-
 // Read a month's counts, the previous month's counts (variance column) and
 // the stored food-sales figure in one round trip.
 export async function GET(req: Request) {
   const cookieStore = await cookies();
-  const auth = requireRole(roleFromSession(cookieStore.get(BTB_COOKIE)?.value), ALL_ROLES);
+  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), INVENTORY_READ_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const month = new URL(req.url).searchParams.get("month");
@@ -49,21 +49,38 @@ export async function GET(req: Request) {
 // Save the count sheet for a month (replace semantics, restore-on-failure).
 export async function POST(req: Request) {
   const cookieStore = await cookies();
-  const auth = requireRole(roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
+  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const body = await req.json().catch(() => ({}));
   const parsed = parseCountSave(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
-  const { count_month: month, rows, location_id } = parsed.value;
+  const { count_month: month, rows } = parsed.value;
+
+  const db = inventoryDb();
+  const editable = await requireEditableMonth(db, month);
+  if (!editable.ok) return NextResponse.json({ error: editable.error }, { status: editable.status });
+
+  // Reject unknown IDs before deleting anything. Without this preflight, a
+  // typo would fail the insert on the FK after the old month had been deleted.
+  const itemIds = rows.map((row) => row.item_id);
+  if (itemIds.length > 0) {
+    const { data: knownItems, error: itemError } = await db
+      .from("inventory_items")
+      .select("id")
+      .in("id", itemIds);
+    if (itemError) return NextResponse.json({ error: itemError.message }, { status: 500 });
+    if ((knownItems ?? []).length !== itemIds.length) {
+      return NextResponse.json({ error: "one or more inventory items do not exist" }, { status: 400 });
+    }
+  }
 
   // Same rule as the old page: only non-zero quantities are stored; saving an
   // empty sheet clears the month.
   const toInsert = rows
     .filter((r) => r.qty > 0)
-    .map((r) => ({ item_id: r.item_id, count_month: month, qty: r.qty, location_id }));
+    .map((r) => ({ item_id: r.item_id, count_month: month, qty: r.qty, counted_by: auth.role, location_id: null }));
 
-  const db = inventoryDb();
   const outcome = await replaceRows({
     label: "count sheet save",
     backup: async () => {

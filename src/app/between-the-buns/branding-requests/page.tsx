@@ -52,8 +52,7 @@ const DUE_TEXT: Record<string, string> = {
   none: "No date",
 };
 
-// Signage / menu / uniform requests. Everyone may file one (the gate hands us
-// the role); only managers move cards through the board or delete them.
+// Signage / menu / T-shirt requests. Managers own the request board.
 export default function BrandingRequestsPage() {
   return (
     <BtbFeatureGate feature="branding_requests">
@@ -150,7 +149,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
   const now = today();
 
   const submit = async () => {
-    if (saving) return;
+    if (readOnly || saving) return;
     const title = form.title.trim();
     if (!title) {
       setError("Give the request a title first.");
@@ -222,7 +221,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
     <div>
       <PageHeader
         title="Branding Requests"
-        subtitle="Signage, menus, uniforms and packaging — filed by sites, worked by marketing"
+        subtitle="Signage, menus, T-shirts and packaging — filed by sites, worked by marketing"
         action={notice ? <Badge accent="green">{notice}</Badge> : undefined}
       />
 
@@ -243,7 +242,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
         <div className="mb-4 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      <Card className="p-5 mb-6">
+      {!readOnly && <Card className="p-5 mb-6">
         <p className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
           <Megaphone className="w-4 h-4 text-amber-600" /> File a request
         </p>
@@ -274,7 +273,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
           {sizesFor(form.category).length > 0 && (
             <label className="text-sm">
               <span className="block text-xs font-medium text-slate-500 mb-1">
-                {form.category === "uniform" ? "Uniform size" : "Tray size"}
+                {form.category === "uniform" ? "T-shirt size" : "Tray size"}
               </span>
               <select
                 className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
@@ -357,7 +356,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
           )}
         </div>
         {fileErr && <p className="mt-2 text-xs text-red-600">{fileErr}</p>}
-      </Card>
+      </Card>}
 
       {loading ? (
         <Card className="p-8 text-center text-sm text-slate-400">Loading…</Card>

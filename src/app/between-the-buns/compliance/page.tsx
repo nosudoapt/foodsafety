@@ -5,13 +5,15 @@ import BtbFeatureGate from "@/components/BtbFeatureGate";
 import ComplianceRegister from "@/components/ComplianceRegister";
 import DocumentVault from "@/components/DocumentVault";
 import TaxDatesPanel from "@/components/TaxDatesPanel";
-import { PageHeader } from "@/components/ui";
+import { PageHeader, TabList } from "@/components/ui";
+import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
+import { btbCanEdit } from "@/lib/btb-access";
+import { accessibleBtbCards } from "@/lib/btb-page-access";
+import { BTB_RESTAURANT } from "@/lib/btb-roles";
 
 // Combined compliance hub — renewals (expiring docs), tax & renewal dates
 // (deadlines) and business documents (plain files) in one place. The three
-// standalone routes still work; this is the single screen that shows all of
-// them. Gated on "compliance": every role that can see this page
-// (supervisor, manager, corporate) can already view all three sections.
+// standalone routes and tabs share the same saved page restrictions.
 export default function Page() {
   return (
     <BtbFeatureGate feature="compliance">
@@ -21,44 +23,35 @@ export default function Page() {
 }
 
 type Tab = "renewals" | "dates" | "documents";
+const SECTIONS = [
+  { id: "renewals", label: "Renewals", page: "compliance" },
+  { id: "dates", label: "Tax & filing dates", page: "tax-dates" },
+  { id: "documents", label: "Business documents", page: "documents" },
+] as const;
 
 function ComplianceHub({ readOnly }: { readOnly: boolean }) {
   const [tab, setTab] = useState<Tab>("renewals");
-
-  const tabClass = (t: Tab) =>
-    `px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-      tab === t ? "bg-red-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-    }`;
+  const { identity, rows } = useBtbWorkspace();
+  if (!identity) return null;
+  const allowed = accessibleBtbCards(identity.role, rows);
+  const tabs = SECTIONS.filter((section) => allowed.some((card) => card.href === `/between-the-buns/${section.page}`));
+  const active = tabs.some((section) => section.id === tab) ? tab : "renewals";
 
   return (
-    <div>
+    <div className="compliance-hub">
       <PageHeader
         title="Compliance & Renewals"
-        subtitle="Licences and permits · tax & renewal dates · business documents — one screen"
+        subtitle="Keep licences, deadlines and essential documents together, ready for the next review."
       />
 
-      <div className="flex flex-wrap gap-2 mb-6">
-        <button onClick={() => setTab("renewals")} className={tabClass("renewals")}>
-          Compliance Renewals
-        </button>
-        <button onClick={() => setTab("dates")} className={tabClass("dates")}>
-          Tax & Renewal Dates
-        </button>
-        <button onClick={() => setTab("documents")} className={tabClass("documents")}>
-          Business Documents
-        </button>
-      </div>
-
-      {tab === "renewals" && <ComplianceRegister readOnly={readOnly} />}
-      {tab === "dates" && <TaxDatesPanel readOnly={readOnly} showHeader={false} />}
-      {tab === "documents" && (
-        <DocumentVault
-          title="Business Documents"
-          subtitle="Forms, SOPs, brand assets & menus — files that don't expire"
-          readOnly={readOnly}
-          uploader={{ restaurantName: "The Grill House" }}
-        />
-      )}
+      <TabList id="btb-compliance" label="Compliance sections" tabs={tabs} value={active} onChange={setTab} />
+      {tabs.map((section) => <section key={section.id} role="tabpanel" tabIndex={0}
+        id={`btb-compliance-panel-${section.id}`} aria-labelledby={`btb-compliance-tab-${section.id}`} hidden={active !== section.id}>
+        {active === section.id && (section.id === "renewals" ? <ComplianceRegister readOnly={readOnly} restaurant={BTB_RESTAURANT} showHeader={false} />
+          : section.id === "dates" ? <TaxDatesPanel readOnly={!btbCanEdit("tax_dates", identity.role)} showHeader={false} />
+          : <DocumentVault title="Business documents" subtitle="Forms, SOPs, brand assets & menus — files that don’t expire."
+            readOnly={!btbCanEdit("documents", identity.role)} showHeader={false} uploader={{ restaurantName: BTB_RESTAURANT }} />)}
+      </section>)}
     </div>
   );
 }

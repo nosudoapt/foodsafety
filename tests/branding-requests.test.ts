@@ -49,7 +49,7 @@ test("labels and colours read the way the cards do", () => {
   assert.equal(statusLabel("in_progress"), "In progress");
   assert.equal(statusLabel("open"), "Open");
   assert.equal(priorityLabel("urgent"), "Urgent");
-  assert.equal(categoryLabel("uniform"), "Uniform");
+  assert.equal(categoryLabel("uniform"), "T-shirt");
   assert.equal(categoryLabel("serving_trays"), "Serving trays");
   assert.equal(categoryLabel("display_board"), "Display board");
   assert.equal(statusAccent("open"), "red");
@@ -60,8 +60,8 @@ test("labels and colours read the way the cards do", () => {
   assert.equal(priorityAccent("something_odd"), "slate", "unknown priority falls back");
 });
 
-test("sizes attach to uniforms and trays only", () => {
-  assert.deepEqual([...sizesFor("uniform")], ["S", "M", "L"]);
+test("T-shirts include all six sizes and preserve the stored category", () => {
+  assert.deepEqual([...sizesFor("uniform")], ["S", "M", "L", "XL", "XXL", "XXXL"]);
   assert.deepEqual([...sizesFor("serving_trays")], ["Small", "Large"]);
   assert.deepEqual([...sizesFor("hats")], []);
   assert.deepEqual([...sizesFor("signage")], [], "legacy categories have no sizes");

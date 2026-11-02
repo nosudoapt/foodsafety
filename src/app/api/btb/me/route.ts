@@ -1,11 +1,12 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { apiFailure, btbIdentityFromSession, PRIVATE_HEADERS } from "@/lib/btb-api";
+import { BTB_RESTAURANT } from "@/lib/btb-roles";
 import {
   BTB_ACCOUNTS,
   BTB_COOKIE,
   btbPasswordIsDefault,
   btbPassword,
-  roleFromSession,
 } from "@/lib/btb-auth";
 
 // Who is signed in to BTB (used by the hub header), plus — when signed out —
@@ -13,23 +14,25 @@ import {
 // ever returned while the default password is still in use; an overridden
 // BTB_PASSWORD is never exposed.
 export async function GET() {
+  try {
   const cookieStore = await cookies();
-  const role = roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
+  const identity = await btbIdentityFromSession(cookieStore.get(BTB_COOKIE)?.value);
 
-  if (!role) {
+  if (!identity) {
     return NextResponse.json({
       authenticated: false,
       accounts: BTB_ACCOUNTS.map((a) => ({ role: a.role, email: a.email, name: a.name })),
       passwordHint: btbPasswordIsDefault() ? btbPassword() : null,
-    });
+    }, { headers: PRIVATE_HEADERS });
   }
 
-  const account = BTB_ACCOUNTS.find((a) => a.role === role)!;
   return NextResponse.json({
     authenticated: true,
-    role: account.role,
-    email: account.email,
-    name: account.name,
-    restaurant: account.restaurant,
-  });
+    role: identity.role,
+    email: identity.email,
+    name: identity.name,
+    employeeId: identity.employeeId,
+    restaurant: BTB_RESTAURANT,
+  }, { headers: PRIVATE_HEADERS });
+  } catch (error) { return apiFailure(error); }
 }

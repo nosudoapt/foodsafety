@@ -6,6 +6,8 @@ import { DEMO_ACCOUNTS, DEMO_ROLES, isDemoEmail, isDemoRole, demoAccountFor } fr
 import { demoCredentialsFor, demoPassword } from "../src/lib/demo-server";
 import { ROLES, OWNER_TIER_ROLES, MGMT_ROLES, isRole } from "../src/lib/roles";
 import { canAccess, requiredRolesFor } from "../src/lib/route-guards";
+import { DASHBOARD_VIEWS } from "../src/lib/dashboard";
+import { workspaceNavForRole } from "../src/lib/workspace-nav";
 
 // Compiled tests run from .test-dist/tests/, so the project root is two levels up.
 const ROOT = join(__dirname, "..", "..");
@@ -145,54 +147,61 @@ test("corporate is owner-tier: full vault access, read-only by convention", () =
 // --- 4. the dashboard really is different per role ---------------------------
 
 test("every role in roles.ts maps to a dashboard view", () => {
-  const source = read("src/app/dashboard/page.tsx");
-  const block = source.match(/const VIEW_FOR_ROLE: Record<Role, ViewKey> = \{([\s\S]*?)\};/);
-  assert.ok(block, "VIEW_FOR_ROLE map not found");
-  const mapped = [...block[1].matchAll(/(\w+):\s*"(owner|manager|staff|rollup|mlo|designer)"/g)].map((m) => m[1]);
-  assert.deepEqual([...mapped].sort(), [...ROLES].sort(), "each role needs exactly one view");
-
-  for (const key of ["owner", "manager", "staff", "rollup", "mlo", "designer"]) {
-    assert.ok(new RegExp(`^  ${key}: \\{`, "m").test(source), `view "${key}" not defined`);
+  assert.deepEqual(Object.keys(DASHBOARD_VIEWS).sort(), [...ROLES].sort());
+  assert.equal(new Set(Object.values(DASHBOARD_VIEWS).map((view) => view.title)).size, ROLES.length);
+  for (const role of ROLES) {
+    const view = DASHBOARD_VIEWS[role];
+    assert.ok(view.metrics.length > 0 && view.responsibility);
+    for (const action of [view.primary, view.secondary]) {
+      if (!action.href.startsWith("#")) assert.ok(canAccess(action.href, role), `${role}: ${action.href}`);
+    }
   }
 });
 
 test("staff view is genuinely simpler than the owner view", () => {
-  const source = read("src/app/dashboard/page.tsx");
-  const staffBlock = source.slice(source.indexOf("  staff: {"), source.indexOf("  rollup: {"));
-  const ownerBlock = source.slice(source.indexOf("  owner: {"), source.indexOf("  manager: {"));
-
-  assert.ok(staffBlock.length > 0 && ownerBlock.length > 0);
-  assert.ok(!staffBlock.includes("/admin/"), "staff view must not surface admin links");
-  assert.ok(!staffBlock.includes('href: "/reports"'), "staff view should not push reporting");
-  assert.ok(ownerBlock.includes("/admin/vault"), "owner view should surface the vault");
-  assert.ok(ownerBlock.includes("/admin/new-restaurant"), "owner view should surface new-restaurant");
-  assert.ok(ownerBlock.length > staffBlock.length, "owner view should offer more than staff");
+  assert.equal(DASHBOARD_VIEWS.staff.primary.href, "/checks");
+  assert.ok(DASHBOARD_VIEWS.staff.metrics.includes("checksToday"));
+  assert.ok(!DASHBOARD_VIEWS.staff.metrics.includes("documents"));
+  const staffLinks = workspaceNavForRole("staff").flatMap((group) => group.items.map((item) => item.href));
+  const ownerLinks = workspaceNavForRole("owner").flatMap((group) => group.items.map((item) => item.href));
+  assert.ok(!staffLinks.includes("/admin/vault"));
+  assert.ok(!staffLinks.includes("/admin/new-restaurant"));
+  assert.ok(ownerLinks.includes("/admin/vault"));
+  assert.ok(ownerLinks.includes("/admin/new-restaurant"));
+  assert.ok(ownerLinks.length > staffLinks.length);
 });
 
 test("manager view offers operations admin but never the vault", () => {
-  const source = read("src/app/dashboard/page.tsx");
-  const managerBlock = source.slice(source.indexOf("  manager: {"), source.indexOf("  staff: {"));
-  assert.ok(managerBlock.includes("/admin/compliance"));
-  assert.ok(managerBlock.includes("/admin/staff-licenses"));
-  assert.ok(!managerBlock.includes("/admin/vault"));
-  assert.ok(!managerBlock.includes("/admin/new-restaurant"));
+  const links = workspaceNavForRole("manager").flatMap((group) => group.items.map((item) => item.href));
+  assert.ok(links.includes("/admin/compliance"));
+  assert.ok(links.includes("/admin/staff-licenses"));
+  assert.ok(!links.includes("/admin/vault"));
+  assert.ok(!links.includes("/admin/new-restaurant"));
+  assert.equal(DASHBOARD_VIEWS.manager.primary.href, "/corrective-actions");
 });
 
-test("corporate view is framed as a read-only rollup", () => {
-  const source = read("src/app/dashboard/page.tsx");
-  const rollupBlock = source.slice(source.indexOf("  rollup: {"), source.indexOf("  mlo: {"));
-  assert.ok(rollupBlock.includes("Read-only"), "rollup must be labelled read-only");
-  assert.ok(rollupBlock.includes("/admin/inspections/corporate"));
-  assert.ok(!rollupBlock.includes("/admin/vault"));
+test("corporate prioritizes group oversight and corporate inspections", () => {
+  assert.equal(DASHBOARD_VIEWS.corporate.primary.href, "/admin/inspections/corporate");
+  assert.ok(DASHBOARD_VIEWS.corporate.metrics.includes("locations"));
+  assert.ok(DASHBOARD_VIEWS.corporate.metrics.includes("inspectionsMonth"));
+  assert.ok(!DASHBOARD_VIEWS.corporate.metrics.includes("checksToday"));
 });
 
 // --- 5. the entry points exist ----------------------------------------------
 
 test("sign-in offers one-click demo roles and links to the picker", () => {
   const signIn = read("src/app/auth/sign-in/page.tsx");
-  assert.ok(signIn.includes("DemoRoleButtons"), "sign-in needs the demo panel");
-  assert.ok(signIn.includes('href="/demo"'));
-  assert.ok(read("src/app/demo/page.tsx").includes("DemoRoleCards"));
+  // The panel moved into components/auth/DemoPanel.tsx during the auth rewrite;
+  // what matters is that sign-in still mounts it.
+  assert.ok(signIn.includes("DemoPanel"), "sign-in needs the demo panel");
+  assert.ok(
+    read("src/components/auth/DemoPanel.tsx").includes("useDemoSignIn"),
+    "the demo panel must reuse the shared sign-in hook, not reimplement it"
+  );
+  assert.ok(
+    read("src/app/demo/page.tsx").includes("DemoRoleCards"),
+    "/demo still needs the full card picker"
+  );
 });
 
 test("the badge offers a way back to the picker", () => {
@@ -201,8 +210,8 @@ test("the badge offers a way back to the picker", () => {
   assert.ok(badge.includes('href="/demo"'), "badge must link back to the picker");
   assert.ok(badge.includes("isDemoEmail"), "badge must only show for demo sessions");
 
-  const sidebar = read("src/components/Sidebar.tsx");
-  assert.equal((sidebar.match(/<DemoRoleBadge/g) ?? []).length, 2, "badge in mobile header + desktop rail");
+  const shell = read("src/components/admin/AdminShell.tsx");
+  assert.ok(shell.includes("<DemoRoleBadge"), "the shared workspace rail includes the demo identity");
 });
 
 test("the picker itself stays out of the demo", () => {

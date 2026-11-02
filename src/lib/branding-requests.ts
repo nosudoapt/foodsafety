@@ -14,9 +14,9 @@ export type BrandingCategory = (typeof BRANDING_CATEGORIES)[number];
 // their meaning, but no longer offered in the form.
 const LEGACY_CATEGORIES = ["signage", "menu", "packaging", "digital", "other"] as const;
 
-/** Sizes offered per category: uniforms S–L, serving trays Small/Large. */
+/** Keep the stored category key compatible with existing requests. */
 export const BRANDING_SIZES: Record<string, readonly string[]> = {
-  uniform: ["S", "M", "L"],
+  uniform: ["S", "M", "L", "XL", "XXL", "XXXL"],
   serving_trays: ["Small", "Large"],
 };
 
@@ -36,7 +36,7 @@ export interface BrandingRequest {
   priority: string;
   status: string;
   requested_by?: string | null;
-  /** Size detail — uniform S/M/L or tray Small/Large, otherwise null. */
+  /** Size detail — T-shirt S–XXXL or tray Small/Large, otherwise null. */
   size?: string | null;
   /** Reply-to email for the requester — used by the Email designer button. */
   contact_email?: string | null;
@@ -75,8 +75,9 @@ export const statusLabel = (v: string): string => {
 
 export const priorityLabel = label;
 
-/** Card badge for a category: Uniform, Serving trays, Display board … */
+/** Card badge for a category: T-shirt, Serving trays, Display board … */
 export const categoryLabel = (v: string): string => {
+  if (v === "uniform") return "T-shirt";
   if (v === "serving_trays") return "Serving trays";
   if (v === "gift_cards") return "Gift cards";
   if (v === "display_board") return "Display board";

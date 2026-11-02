@@ -1,8 +1,10 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE, roleFromSession } from "@/lib/btb-auth";
+import { BTB_COOKIE } from "@/lib/btb-auth";
+import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
-import { MONTH_END_EDIT_ROLES, isUuid, parseNewItem, requireRole } from "@/lib/btb-inventory-api";
+import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, isUuid, parseNewItem, requireRole } from "@/lib/btb-inventory-api";
+import { requireItemWithoutFinalizedHistory } from "@/lib/inventory-server-guards";
 
 // Inventory item list — previously read/edited DIRECTLY from the browser via
 // the anon key (month-end-inventory/page.tsx). All access now goes through
@@ -14,7 +16,7 @@ const ITEM_COLS = "id, name, unit, category, unit_cost, position, location_id";
 
 export async function GET() {
   const cookieStore = await cookies();
-  const auth = requireRole(roleFromSession(cookieStore.get(BTB_COOKIE)?.value), ["staff", "supervisor", "manager", "corporate", "admin"]);
+  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), INVENTORY_READ_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const { data, error } = await inventoryDb()
@@ -28,7 +30,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const cookieStore = await cookies();
-  const auth = requireRole(roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
+  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const body = await req.json().catch(() => ({}));
@@ -42,7 +44,8 @@ export async function POST(req: Request) {
   // page insert did with `items.length`.
   let position = item.position;
   if (position === null) {
-    const { count } = await db.from("inventory_items").select("id", { count: "exact", head: true });
+    const { count, error: countError } = await db.from("inventory_items").select("id", { count: "exact", head: true });
+    if (countError) return NextResponse.json({ error: countError.message }, { status: 500 });
     position = count ?? 0;
   }
 
@@ -54,7 +57,7 @@ export async function POST(req: Request) {
       unit_cost: item.unit_cost,
       category: null,
       position,
-      location_id: item.location_id,
+      location_id: null,
     })
     .select(ITEM_COLS)
     .single();
@@ -62,16 +65,48 @@ export async function POST(req: Request) {
   return NextResponse.json({ item: data });
 }
 
-export async function DELETE(req: Request) {
+export async function PATCH(req: Request) {
   const cookieStore = await cookies();
-  const auth = requireRole(roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
+  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const id = new URL(req.url).searchParams.get("id");
   if (!isUuid(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
-  // Counts cascade in the DB (inventory_counts.item_id ON DELETE CASCADE).
-  const { error } = await inventoryDb().from("inventory_items").delete().eq("id", id);
+  const body = await req.json().catch(() => ({}));
+  const parsed = parseNewItem(body);
+  if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
+
+  const db = inventoryDb();
+  const history = await requireItemWithoutFinalizedHistory(db, id);
+  if (!history.ok) return NextResponse.json({ error: history.error }, { status: history.status });
+
+  const { data, error } = await db
+    .from("inventory_items")
+    .update({ name: parsed.value.name, unit: parsed.value.unit, unit_cost: parsed.value.unit_cost })
+    .eq("id", id)
+    .select(ITEM_COLS)
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "item not found" }, { status: 404 });
+  return NextResponse.json({ item: data });
+}
+
+export async function DELETE(req: Request) {
+  const cookieStore = await cookies();
+  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+  const id = new URL(req.url).searchParams.get("id");
+  if (!isUuid(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
+
+  const db = inventoryDb();
+  const history = await requireItemWithoutFinalizedHistory(db, id);
+  if (!history.ok) return NextResponse.json({ error: history.error }, { status: history.status });
+
+  // Draft counts cascade in the DB. Finalized history is blocked above.
+  const { data, error } = await db.from("inventory_items").delete().eq("id", id).select("id").maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "item not found" }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,14 @@
 # Database setup (Supabase)
 
+## Current production release
+
+The connected production project uses **SQL Editor releases without a migration
+ledger**. For BTB team operations, uploads and email configuration, follow
+[`deploy/BTB_DASHBOARD_SETUP.md`](../deploy/BTB_DASHBOARD_SETUP.md): install
+`schema-btb-team-operations.sql`, then `schema-btb-uploads.sql`, and run the
+read-only release check. The migration runner and full historical setup below
+are for separately managed/new installations.
+
 ## Migrations — `npm run db:migrate`
 
 The files below are listed **in run order** in [`migrations.json`](./migrations.json)

@@ -96,10 +96,11 @@ export function activeLocationId(): string | null {
   }
 }
 
-export function setActiveLocationId(id: string): void {
+export function setActiveLocationId(id: string | null): void {
   if (typeof window === "undefined") return;
   try {
-    localStorage.setItem(ACTIVE_LOCATION_KEY, id);
+    if (id) localStorage.setItem(ACTIVE_LOCATION_KEY, id);
+    else localStorage.removeItem(ACTIVE_LOCATION_KEY);
   } catch {
     // Private browsing / storage disabled — the choice just won't survive a reload.
   }

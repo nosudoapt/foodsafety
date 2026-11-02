@@ -12,6 +12,8 @@ import {
   uploadToSupabase,
 } from "@/lib/photos";
 import { locationScope, activeLocationId } from "@/lib/locations";
+import { btbToday } from "@/lib/btb-team";
+import { isoDay as toISODate } from "@/lib/staff-schedule";
 
 // One cleaning_logs row per task per week: who did it, when, and JSON arrays of
 // object paths for each photo side (multiple angles). Photos are compressed
@@ -42,10 +44,6 @@ function hasContent(l: TaskLog): boolean {
   return !!(l.name || l.time || l.before.length || l.after.length);
 }
 
-function toISODate(d: Date): string {
-  return d.toISOString().split("T")[0];
-}
-
 function getStartOfWeek(date: Date): Date {
   const d = new Date(date);
   const day = d.getDay();
@@ -68,7 +66,7 @@ function mondayOf(dateStr: string): string {
 
 /** Date to file an entry under when the user didn't pick one. */
 function defaultDate(weekKey: string): string {
-  const today = toISODate(new Date());
+  const today = btbToday();
   return today >= weekKey && today <= plusDays(weekKey, 6) ? today : weekKey;
 }
 
@@ -97,7 +95,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [zoom, setZoom] = useState<Zoom | null>(null);
-  const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date()));
+  const [currentWeekStart, setCurrentWeekStart] = useState(() => getStartOfWeek(new Date(`${btbToday()}T12:00:00`)));
   const [activeTab, setActiveTab] = useState<"today" | "history">("today");
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
@@ -384,7 +382,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
     d.setDate(d.getDate() + 7);
     setCurrentWeekStart(getStartOfWeek(d));
   };
-  const goToThisWeek = () => setCurrentWeekStart(getStartOfWeek(new Date()));
+  const goToThisWeek = () => setCurrentWeekStart(getStartOfWeek(new Date(`${btbToday()}T12:00:00`)));
 
   const doneCount = cleaningTasks.reduce(
     (n, _, idx) => (weekData[idx] && hasContent(weekData[idx]) ? n + 1 : n),

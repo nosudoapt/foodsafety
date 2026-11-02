@@ -14,13 +14,12 @@ export default function LocationSwitcher() {
   if (!canSwitchLocation(role) || locations.length === 0) return null;
 
   return (
-    <label className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white pl-3 pr-2 h-9 shadow-sm">
+    <label className="location-picker">
       <MapPin className="w-4 h-4 text-slate-400 shrink-0" aria-hidden="true" />
       <span className="sr-only">Active location</span>
       <select
         value={locationId ?? ""}
         onChange={(e) => setLocationId(e.target.value)}
-        className="max-w-[11rem] truncate bg-transparent text-sm font-semibold text-slate-700 outline-none cursor-pointer focus:ring-2 focus:ring-green-500 rounded"
         title="Switch location"
       >
         {locations.map((l) => (

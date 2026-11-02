@@ -1,121 +1,84 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { Check, CircleAlert, Eye, LockKeyhole, Save, Search } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
-import BtbWordmark from "@/components/BtbWordmark";
-
-const ROLES = ["staff", "supervisor", "manager", "corporate"];
-const PAGES = [
-  "admin", "prep-list", "checklists", "branding-requests", "month-end-inventory",
-  "training-guide", "tax-dates", "staff-schedule", "cash-out", "order-sheet",
-  "cleaning-schedule", "prep-manual", "menu", "allergen-chart", "gluten-free",
-  "fryer-timing", "emergency", "protocols", "handbook", "manuals", "compliance",
-  "documents", "staff-licenses", "inspections", "franchise-inspection", "marketing",
-  "new-restaurant", "vault",
-];
+import BtbIcon from "@/components/BtbIcon";
+import { PageHeader } from "@/components/ui";
+import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
+import { BTB_CARDS } from "@/lib/btb-hub";
+import { btbCanEdit, btbCanView } from "@/lib/btb-access";
+import { BTB_MANAGED_ROLES, btbPageAllowed, pageSlug, type BtbPageAccess } from "@/lib/btb-page-access";
+import { BTB_ROLE_LABELS } from "@/lib/btb-roles";
+import { BTB_DASHBOARD_VIEWS } from "@/lib/btb-dashboard";
+import { fetchJson } from "@/lib/fetch-json";
 
 export default function AdminDashboard() {
-  // Admin-only surface: the gate walls every other role out (defense in depth —
-  // the hub already hides the card, but the URL must not be enough).
-  return (
-    <BtbFeatureGate feature="admin_dashboard" wide>
-      {() => <AdminDashboardBody />}
-    </BtbFeatureGate>
-  );
+  return <BtbFeatureGate feature="admin_dashboard" wide>{() => <AccessEditor />}</BtbFeatureGate>;
 }
 
-function AdminDashboardBody() {
-  const [access, setAccess] = useState<Record<string, string[]>>(() => Object.fromEntries(ROLES.map((r) => [r, []])));
+function AccessEditor() {
+  const { rows, accessError, reload } = useBtbWorkspace();
+  if (!rows) return <div className="btb-access"><PageHeader title="Role & page access" subtitle="Give each role the tools it needs." /><div className="ui-empty"><CircleAlert size={28} /><h2>Access settings are unavailable</h2><p role="alert">{accessError}</p><button className="ui-button" onClick={reload}>Try again</button></div></div>;
+  return <PermissionsEditor initialRows={rows} />;
+}
+
+function PermissionsEditor({ initialRows }: { initialRows: BtbPageAccess[] }) {
+  const [rows, setRows] = useState(initialRows);
+  const [selectedRole, setSelectedRole] = useState<(typeof BTB_MANAGED_ROLES)[number]>("staff");
+  const [edits, setEdits] = useState<Record<string, BtbPageAccess>>({});
+  const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const changes = Object.values(edits);
+  const effective = rows.filter((row) => !edits[`${row.role}:${row.page}`]).concat(changes);
+  const cards = BTB_CARDS.filter((card) => card.feature !== "admin_dashboard" && `${card.title} ${card.desc}`.toLowerCase().includes(query.trim().toLowerCase()));
 
-  useEffect(() => {
-    fetch("/api/btb/role-page-access").then((r) => r.json()).then((d) => {
-      const map: Record<string, string[]> = Object.fromEntries(ROLES.map((r) => [r, []]));
-      for (const row of d.rows ?? []) {
-        if (row.allowed && map[row.role]) map[row.role].push(row.page);
-      }
-      setAccess(map);
-    }).catch(() => {});
-  }, []);
-
-  const toggle = async (role: string, page: string) => {
-    const cur = access[role] ?? [];
-    const nextAllowed = !cur.includes(page);
-    setAccess((prev) => {
-      const c = prev[role] ?? [];
-      const n = nextAllowed ? [...c, page] : c.filter((p) => p !== page);
-      return { ...prev, [role]: n };
-    });
-    await fetch("/api/btb/role-page-access", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, page, allowed: nextAllowed }),
-    });
-  };
-
-  const saveAll = async () => {
+  const save = async () => {
+    if (!changes.length || saving) return;
     setSaving(true);
+    setError("");
     setSaved(false);
-    for (const role of ROLES) {
-      for (const page of PAGES) {
-        const allowed = (access[role] ?? []).includes(page);
-        await fetch("/api/btb/role-page-access", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ role, page, allowed }),
-        });
-      }
-    }
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      const response = await fetchJson<{ ok: boolean }>("/api/btb/role-page-access", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ rows: changes }) });
+      if (!response.ok) throw new Error("Save not confirmed");
+      setRows(effective);
+      setEdits({});
+      setSaved(true);
+    } catch {
+      setError("Changes weren’t saved. Your selections are still here — try saving again.");
+    } finally { setSaving(false); }
   };
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10">
-      <div className="text-center mb-6 sm:mb-8">
-        <BtbWordmark className="text-2xl sm:text-3xl" />
-        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-2">Admin Dashboard</h1>
-        <p className="text-slate-500 mt-1 text-sm sm:text-base">Assign which pages each role can access</p>
-      </div>
-      <div className="flex justify-center mb-4">
-        <button onClick={saveAll} disabled={saving} className="px-4 py-2 rounded-lg bg-[#b65a2e] text-white font-semibold disabled:opacity-50">
-          {saving ? "Saving…" : saved ? "Saved ✓" : "Save"}
-        </button>
-      </div>
-      <div className="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead className="bg-slate-50 sticky top-0">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold text-slate-700">Page</th>
-                {ROLES.map((r) => (
-                  <th key={r} className="px-4 py-3 text-center font-semibold text-slate-700 capitalize">{r}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {PAGES.map((p, i) => (
-                <tr key={p} className={i % 2 === 0 ? "bg-white" : "bg-slate-50/50"}>
-                  <td className="px-4 py-3 font-medium text-slate-900 capitalize">{p.replace("-", " ")}</td>
-                  {ROLES.map((r) => (
-                    <td key={r} className="px-4 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        className="w-4 h-4 accent-[#b65a2e] cursor-pointer"
-                        checked={(access[r] ?? []).includes(p)}
-                        onChange={() => toggle(r, p)}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <p className="mt-6 text-center text-xs text-slate-400">© Between the Buns — Admin</p>
-    </div>
-  );
+  return <div className="btb-access">
+    <PageHeader title="Role & page access" subtitle="Choose which eligible pages appear for each role. Updates take effect after saving." />
+    <div className="btb-access__roles" role="group" aria-label="Role to configure">{BTB_MANAGED_ROLES.map((role) => <button key={role} aria-pressed={selectedRole === role} onClick={() => setSelectedRole(role)}><strong>{BTB_ROLE_LABELS[role]}</strong><span>{BTB_CARDS.filter((card) => btbPageAllowed(card, role, effective)).length} pages available</span></button>)}</div>
+    <div className="btb-access__intro"><h2>{BTB_ROLE_LABELS[selectedRole]} workspace</h2><p>{BTB_DASHBOARD_VIEWS[selectedRole].responsibility}</p></div>
+    <div className="btb-access__toolbar"><label className="dash-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search access settings</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Find a page…" /></label><span role="status">{saving ? "Saving changes…" : changes.length ? `${changes.length} unsaved ${changes.length === 1 ? "change" : "changes"}` : saved ? "All changes saved" : "Up to date"}</span><div><button className="ui-button ui-button--ghost" disabled={!changes.length || saving} onClick={() => { setEdits({}); setError(""); setSaved(false); }}>Reset changes</button><button className="ui-button" disabled={!changes.length || saving} onClick={save}>{saved ? <Check size={16} aria-hidden="true" /> : <Save size={16} aria-hidden="true" />}{saving ? "Saving…" : "Save changes"}</button></div></div>
+    {error && <div className="ui-notice ui-notice--error" role="alert"><CircleAlert size={18} aria-hidden="true" />{error}</div>}
+    <div className="btb-access__list">{cards.map((card) => {
+      const eligible = btbCanView(card.feature, selectedRole);
+      const allowed = btbPageAllowed(card, selectedRole, effective);
+      const editable = btbCanEdit(card.feature, selectedRole);
+      const slug = pageSlug(card);
+      const key = `${selectedRole}:${slug}`;
+      return <div className="btb-access__row" key={slug} data-eligible={eligible}>
+        <span className="ui-icon ui-tone--purple"><BtbIcon name={card.iconKey} size={18} /></span>
+        <div className="btb-access__name"><strong>{card.title}</strong><p>{card.desc}</p></div>
+        <span className="ui-badge">{!eligible ? <><LockKeyhole size={12} aria-hidden="true" />Role restricted</> : editable ? "Can update" : <><Eye size={12} aria-hidden="true" />Read-only</>}</span>
+        <label className="btb-access__toggle"><input type="checkbox" disabled={!eligible || saving} checked={allowed} aria-label={`${card.title} available to ${BTB_ROLE_LABELS[selectedRole]}`} onChange={(event) => {
+          const allowed = event.target.checked;
+          setSaved(false);
+          setEdits((current) => {
+            const next = { ...current };
+            if (allowed === btbPageAllowed(card, selectedRole, rows)) delete next[key];
+            else next[key] = { role: selectedRole, page: slug, allowed };
+            return next;
+          });
+        }} /><span>{eligible ? allowed ? "Available" : "Hidden" : "Restricted"}</span></label>
+      </div>;
+    })}{!cards.length && <div className="ui-empty"><h3>No matching pages</h3><p>Try a different page name.</p></div>}</div>
+    <p className="dash__provenance">A role’s default access applies until a restriction is saved. Page availability controls the overview and direct-page interface; each feature’s edit rights are determined by the role matrix.</p>
+  </div>;
 }

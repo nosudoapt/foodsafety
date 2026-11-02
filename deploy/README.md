@@ -1,57 +1,57 @@
-# Production Deployment Runbook — inventory prototype
+# Inventory prototype — final deployment runbook
 
-Manual SQL Editor deployment for the Supabase free prototype. **Three SQL
-scripts to run, in order.** Everything else is optional hardening. No script
-in this directory has been executed against production.
+For the employee accounts, operations, training and licence-email release, use
+[BTB team setup](BTB_TEAM_SETUP.md). Its additional SQL and email configuration
+are separate deployment steps from this inventory runbook.
 
-| File | What it does | When |
-|------|--------------|------|
-| `01-preflight.sql` | Read-only inspection of live schema, RLS, grants, row counts | Step 1 — always safe |
-| `02-create-missing-tables.sql` | Creates ONLY `inventory_month_snapshots` + `inventory_audit_log` (repo steps 25/26, idempotent, guarded) | Step 2 — after step 1 review |
-| `03-verify.sql` | Read-only verification: new-table shape, preserved rows (67 in `role_page_access`), ledger-equivalence evidence | Step 3 — after step 2 |
-| `04-security-hardening.sql` | Revokes anon access to the 7 sensitive tables | **NOT yet** — see its prerequisites |
-| `ledger-reconciliation.md` | Runner `--baseline 27` to adopt the DB in the migration ledger | Optional, later |
+For Vercel dashboard and Supabase SQL Editor instructions, use
+[BTB dashboard setup](BTB_DASHBOARD_SETUP.md).
 
-## The runbook
+Production schema creation and verification (`01b` → `02` → `03`) have been
+reported complete. `_migrations` remains absent **by design**: do not run or
+baseline the migration runner against production.
 
-1. **Backup.** Supabase Dashboard → Database → Backups: confirm a restore
-   point exists. (Free tier keeps ~7 days; a test restore has never been
-   done — treat recovery as unproven.)
-2. **Run `01-preflight.sql`** in SQL Editor. Confirm: 5 inventory tables
-   exist; `inventory_month_snapshots` / `inventory_audit_log` /
-   `_migrations` absent; `role_page_access` = 67 rows.
-3. **Run `02-create-missing-tables.sql`** as a whole (one transaction:
-   both tables or nothing). Re-running is safe.
-4. **Run `03-verify.sql`.** Confirm: 2 new tables with 15/8 columns; both
-   empty; all prior row counts identical (`role_page_access` still 67);
-   3.9 returns 0 missing tables.
-5. **Deploy the app** (the repo at this commit). The month-end page, its
-   API routes, finalize/reopen and role-page-access now run through
-   server-side routes with BTB cookie auth — the browser no longer talks to
-   Supabase directly. Works with or without the service-role key (falls
-   back to anon with a server-side warning).
-6. **(Recommended, enables step 7)** Set `SUPABASE_SERVICE_ROLE_KEY` in the
-   server environment only (Dashboard → Project Settings → API →
-   service_role secret → into your host's env vars, and `.env.local` for
-   local dev). Never a `NEXT_PUBLIC_*` name; never committed.
-7. **(Later, optional)** Follow `04-security-hardening.sql`: only after the
-   workflows pass on the deployed app AND the service-role key is live.
-   Its closing curl probes must return 401/403 before the exposure is
-   called fixed.
-8. **(Later, optional)** Follow `ledger-reconciliation.md` once
-   `SUPABASE_DB_URL` is fixed.
+## Files
 
-## Do NOT run until…
+| File | Purpose | Current use |
+|---|---|---|
+| `01b-compact-preflight.sql` | One-grid, read-only schema/security report | Retained for diagnosis |
+| `02-create-missing-tables.sql` | Guarded creation of snapshots + audit tables | Already reported complete; do not rerun unnecessarily |
+| `03-verify.sql` | Read-only post-schema verification | Already reported complete |
+| `04-security-hardening.sql` | Final guarded revocation of browser DB access | **Remaining inventory production SQL** |
 
-- **02**: a restore point exists and 01 shows the two tables absent/compatible.
-- **04 in full**: app deployed + service-role key configured + workflows tested.
-- **Any runner command** (`npm run db:migrate*`): until 03 passes, the URL is
-  fixed, and you've read `ledger-reconciliation.md`. With an empty ledger a
-  plain `db:migrate` would execute steps 1–27, **including seed-demo.sql**.
+## Finish line
 
-## What this deployment does NOT change
+Use **Node.js 22 or later** for the build and server runtime. The installed
+Supabase client requires the native WebSocket support in Node 22+; `.nvmrc`
+selects Node 22 for local development and verification.
 
-- The anon exposure on the 5 existing inventory tables remains OPEN until
-  step 7 — anyone holding the anon key can still read/write them.
-- No production SQL has been executed by this package; nothing is "fixed"
-  until you run the steps and 03 confirms them.
+1. In the **hosting provider's server environment**, configure strong values
+   for `SUPABASE_SERVICE_ROLE_KEY`, `BTB_PASSWORD`, and `BTB_SESSION_TOKEN`
+   (plus `SUPABASE_URL` if `NEXT_PUBLIC_SUPABASE_URL` is not already correct).
+   Never use `NEXT_PUBLIC_*` for a secret. Redeploy the final commit.
+2. Sign in as BTB manager/admin and open
+   `/api/btb/inventory-health`. Continue only if it returns HTTP 200 with
+   `deployment: "inventory-server-v3"` and `serviceRoleConfigured: true`.
+3. Confirm a usable Supabase restore point, then run
+   `deploy/04-security-hardening.sql` once in SQL Editor. It changes
+   permissions/policies only; it does not change rows.
+4. Run `npm run verify:inventory-security` from a configured local checkout.
+   It prints no key, reads no rows (`limit=0`), and sends only no-match DELETE
+   probes. All 14 statuses must be 401/403. Re-open the health URL; it must
+   still return 200.
+
+## Stop conditions
+
+- Health endpoint is 401/403: sign in with a manager/admin BTB account.
+- Health endpoint is 503: the final app/config is not live; **do not run 04**.
+- `04-security-hardening.sql` raises an exception: its transaction rolled back;
+  do not bypass the guard.
+- Security verifier reports anything other than 401/403: direct DB exposure
+  remains; do not call hardening complete.
+
+## Explicitly prohibited
+
+- Do not run `npm run db:migrate*` against production.
+- Do not create or populate `_migrations` merely to silence its absence.
+- Do not run `seed-demo.sql`, reset data, or paste secrets into SQL/chat/logs.

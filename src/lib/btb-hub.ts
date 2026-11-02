@@ -46,13 +46,15 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/admin", title: "Admin Dashboard", desc: "Assign page access per role.", iconKey: "layoutGrid", accent: "red", feature: "admin_dashboard" },
   { href: "/between-the-buns/prep-list", title: "Daily Prep Sheet", desc: "3-section sheet — Produce, Sauces, Freezer. Par/OH/Make boxes.", iconKey: "layoutGrid", accent: "red", feature: "prep_list" },
   { href: "/between-the-buns/checklists", title: "Opening & Closing", desc: "Open/close duties — Front & Kitchen, ticked per shift.", iconKey: "listChecks", accent: "amber", feature: "checklists" },
-  { href: "/between-the-buns/branding-requests", title: "Branding Requests", desc: "Signage, menus, uniforms — file it, marketing works the board.", iconKey: "sparkles", accent: "amber", feature: "branding_requests" },
+  { href: "/between-the-buns/branding-requests", title: "Branding Requests", desc: "Signage, menus and T-shirts in sizes S–XXXL.", iconKey: "sparkles", accent: "amber", feature: "branding_requests" },
   { href: "/between-the-buns/month-end-inventory", title: "Month-End Inventory", desc: "Closing count sheet — value, variance vs last month.", iconKey: "listChecks", accent: "green", feature: "month_end_inventory" },
-  { href: "/between-the-buns/training-guide", title: "Training Guide", desc: "SOPs and onboarding — search, checklist sections, publish when ready.", iconKey: "bookCheck", accent: "purple", feature: "training_guide" },
+  { href: "/between-the-buns/training-guide", title: "Training & Progress", desc: "Learn the routines, submit your training and track manager approvals.", iconKey: "bookCheck", accent: "purple", feature: "training_guide" },
+  { href: "/between-the-buns/loyalty-rewards", title: "Loyalty Rewards", desc: "Employee and customer guides, rewards, eligibility and MYR redemption.", iconKey: "sparkles", accent: "purple", feature: "loyalty_rewards" },
   { href: "/between-the-buns/tax-dates", title: "Tax & Renewal Dates", desc: "GST/PST returns, registry renewals, year-end filings — one list.", iconKey: "clipboard", accent: "amber", feature: "tax_dates" },
-  { href: "/between-the-buns/staff-schedule", title: "Staff Schedule", desc: "Weekly shifts and the roster — managers post, everyone reads.", iconKey: "idCard", accent: "purple", feature: "staff_schedule" },
+  { href: "/between-the-buns/staff-schedule", title: "Staff Schedule", desc: "Weekly shifts with named opening and closing staff.", iconKey: "idCard", accent: "purple", feature: "staff_schedule" },
+  { href: "/between-the-buns/employees", title: "Employees", desc: "Individual logins, phone numbers, emails and team records.", iconKey: "idCard", accent: "purple", feature: "employees" },
   { href: "/between-the-buns/cash-out", title: "Cash Out", desc: "End-of-day till count, safe drop & 30-day history.", iconKey: "calculator", accent: "green", feature: "cash_out" },
-  { href: "/between-the-buns/order-sheet", title: "Order Sheet", desc: "ORDER = PAR − On Hand. Keeps 3 months of orders.", iconKey: "clipboard", accent: "amber", feature: "order_sheet" },
+  { href: "/between-the-buns/order-sheet", title: "Order Sheet", desc: "PAR, on-hand counts, previous orders and a permanent order history.", iconKey: "clipboard", accent: "amber", feature: "order_sheet" },
   { href: "/between-the-buns/cleaning-schedule", title: "Cleaning Schedule", desc: "Weekly tasks with before & after photo upload.", iconKey: "sparkles", accent: "purple", feature: "cleaning_schedule" },
   { href: "/between-the-buns/prep-manual", title: "Prep Manual", desc: "Searchable recipes & prep guides — 21 recipes.", iconKey: "book", accent: "red", feature: "reference" },
   { href: "/between-the-buns/menu", title: "Recipe Cheat Sheets", desc: "Burgers, wraps, salads, smoothies & shakes.", iconKey: "utensils", accent: "amber", feature: "reference" },
@@ -68,10 +70,11 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/compliance", title: "Compliance & Renewals", desc: "Licenses, permits & agreements with expiry alerts.", iconKey: "shield", accent: "red", feature: "compliance" },
   { href: "/between-the-buns/documents", title: "Business Documents", desc: "Forms, SOPs, brand assets & menus — plain files, no expiry.", iconKey: "file", accent: "amber", feature: "documents" },
   { href: "/between-the-buns/staff-licenses", title: "Staff Licenses & Certs", desc: "Food-handler cards & certifications with expiry.", iconKey: "idCard", accent: "purple", feature: "staff_licenses" },
+  { href: "/between-the-buns/licence-reminders", title: "Licence Email Reminders", desc: "Expiry emails to managers and corporate, with delivery history.", iconKey: "shield", accent: "amber", feature: "licence_reminders" },
   { href: "/between-the-buns/inspections", title: "In-House Inspections", desc: "Self-audit checklists with scoring & history.", iconKey: "clipboardCheck", accent: "green", feature: "inspections" },
   { href: "/between-the-buns/franchise-inspection", title: "Franchise Inspection", desc: "Weighted rubric — scoring, photo proofs & history.", iconKey: "clipboardCheck", accent: "red", feature: "franchise_inspection" },
   { href: "/between-the-buns/marketing", title: "Marketing", desc: "Promotions & the social media calendar.", iconKey: "megaphone", accent: "amber", feature: "marketing" },
-  { href: "/between-the-buns/new-restaurant", title: "New Restaurant Checklist", desc: "Opening tasks by phase for a new location.", iconKey: "listChecks", accent: "purple", feature: "new_restaurant" },
+  { href: "/between-the-buns/new-restaurant", title: "Franchise Opening Checklist", desc: "All 16 launch sections, from franchise setup through grand opening.", iconKey: "listChecks", accent: "purple", feature: "new_restaurant" },
   { href: "/between-the-buns/vault", title: "Login Vault", desc: "Encrypted credentials for vendor & utility logins.", iconKey: "key", accent: "red", feature: "vault" },
 ];
 
@@ -83,4 +86,3 @@ export function cardsForRole(role: string): BtbCard[] {
 export function hiddenCardsForRole(role: string): BtbCard[] {
   return BTB_CARDS.filter((card) => !btbCanView(card.feature, role as BtbRole));
 }
-
