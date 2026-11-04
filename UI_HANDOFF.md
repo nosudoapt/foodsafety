@@ -64,7 +64,7 @@ BTB shared login details now live in server-only `src/lib/btb-auth.ts`; individu
 
 The uploader integration is complete. The real Auth/profile identity `btb-uploader@foodsafe.invalid` was provisioned and reread successfully, with BTB staff scope and interactive login disabled. `BTB_UPLOADER_PROFILE_ID=67472997-c69a-460d-b171-2a527df8ff5c` is saved in `.env.local`; copy it to Vercel. The provisioning-script rerun reused this same marked identity. Foreign keys remain genuine Supabase profile IDs, with employee attribution stored separately.
 
-Both Vercel projects, `foodsafety` and `bitesbrew`, successfully deployed login correction `8e1d98b` from `nosudoapt/foodsafety` / `main`. Manager sign-in works at **https://foodsafety-sigma.vercel.app/between-the-buns/login**. The user explicitly approved publishing the temperature/prep follow-up; all local checks have passed and publication/live verification are next. Release SQL and real inbox delivery still need the dashboard steps.
+Following explicit user approval, **`1ec8471` — `Restore BTB temperature log and saved prep history`** was pushed to `nosudoapt/foodsafety` / `main`. Both Vercel projects successfully deployed it: `foodsafety` (`7547622147`) and `bitesbrew` (`7547638619`). The earlier login correction is `8e1d98b`. Manager sign-in and the public temperature/prep/cleaning workflows are verified at **https://foodsafety-sigma.vercel.app/between-the-buns/login**. Release SQL and real inbox delivery still need the dashboard steps.
 
 ## Verification
 
@@ -74,7 +74,7 @@ ESLint, standalone TypeScript, **347/347** unit/database checks and **91/91** fu
 
 Desktop/375px temperature, prep and cleaning captures and the retained temperature-save dialog have been reviewed. The final normal production build passed with `.env.local`; all **94** browser assets checked contain neither loopback fixture configuration nor the service-role credential. `git diff --check` passes. No verification job is running.
 
-Read-only local browser checks against the real connected database restored **two prep sheets: October 21 and October 15, six rows each**, including their older catalog names and saved quantities. Opening a saved sheet works. The real BTB temperature API returns **200**, verifies the genuine storage owner and reports no BTB readings. Both pages fit 375px; there were no browser runtime errors or production record writes.
+Read-only **public Chromium verification passed** after deployment. Prep History shows **two sheets: October 21 and October 15, six rows each**, including their older catalog names and saved quantities; both dates open successfully. The BTB temperature API returns **200** with no BTB readings and **401** when signed out. Temperature history, date filtering and the entry dialog load; the legacy-history link reaches the separate original FoodSafe sign-in. Cleaning Schedule shows **11 tasks** and its empty saved history. All three workflows fit 375px, with **zero browser runtime errors and zero attempted production data writes**. Save/reload and cleaning-photo persistence were verified in isolated browser tests.
 
 The published Cleaning Schedule and History load, but both connected cleaning tables contain **zero saved records**. Four earlier temperature records belong to FoodSafe restaurants (`My Restaurant` / `The Grill House`). Public browser requests confirm this is the same Supabase project as the local connection. Recovery of other historical cleaning data needs the original data source or backup.
 
