@@ -24,7 +24,7 @@ import {
   type PrepSavePayload,
 } from "@/lib/offline-queue";
 import { buildParMaps, parFor } from "@/lib/par-prefill";
-import { btbToday } from "@/lib/btb-team";
+import { BTB_RESTAURANT, btbToday, isIsoDate } from "@/lib/btb-team";
 
 interface PrepEntry {
   par: string;
@@ -46,6 +46,7 @@ interface SavedPrepList {
   day: string;
   data: PrepData;
   savedAt: string;
+  pullMissing: boolean;
 }
 
 const EMPTY: PrepEntry = { par: "", oh: "", make: "", initial: "", pull: "", urgent: false };
@@ -60,6 +61,41 @@ const makeOf = (par: string, oh: string): string => {
   const o = parseFloat(oh);
   return !isNaN(p) && !isNaN(o) ? String(Math.max(0, p - o)) : "";
 };
+
+// Finish each saved date before stopping at seven sheets. The same paginated
+// reader opens a single sheet, so loading older catalog items never cuts them off.
+async function readSavedPrepLists(signal: AbortSignal, date?: string): Promise<SavedPrepList[]> {
+  const groups = new Map<string, SavedPrepList>();
+  const scope = locationScope();
+  for (let from = 0; from < 100_000; from += 500) {
+    // SELECT * also reads installations where the optional Pull column is absent.
+    let query = supabase.from("prep_counts").select("*").eq("restaurant_name", BTB_RESTAURANT)
+      .order("count_date", { ascending: false }).order("created_at", { ascending: false }).order("id").range(from, from + 499);
+    if (scope) query = query.or(scope);
+    if (date) query = query.eq("count_date", date);
+    const { data: rows, error } = await query.abortSignal(signal);
+    if (error) throw error;
+    if (!rows) throw new Error("Saved prep sheets could not be read.");
+    for (const row of rows) {
+      if (!isIsoDate(row.count_date) || typeof row.item_name !== "string") continue;
+      if (!groups.has(row.count_date)) {
+        if (groups.size === 7) return [...groups.values()];
+        groups.set(row.count_date, {
+          id: row.count_date, date: row.count_date,
+          day: new Date(`${row.count_date}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }),
+          data: Object.create(null) as PrepData, savedAt: row.created_at ?? `${row.count_date}T12:00:00Z`, pullMissing: false,
+        });
+      }
+      const list = groups.get(row.count_date)!;
+      if (Object.hasOwn(list.data, row.item_name)) continue;
+      const par = String(row.par ?? 0), oh = String(row.on_hand ?? 0);
+      list.data[row.item_name] = { par, oh, make: makeOf(par, oh), pull: row.pull == null ? "" : String(row.pull), initial: "", urgent: !!row.urgent };
+      list.pullMissing ||= !Object.hasOwn(row, "pull");
+    }
+    if (rows.length < 500) return [...groups.values()];
+  }
+  throw new Error("History is too large to load completely.");
+}
 
 // Staff/manager/owner fill it daily; corporate can read the sheet but not
 // type into it (btb-access.ts) — hence `readOnly` on the boxes and Save.
@@ -80,8 +116,13 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   );
   const [prepData, setPrepData] = useState<PrepData>({});
   const [savedLists, setSavedLists] = useState<SavedPrepList[]>([]);
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const [historyLoaded, setHistoryLoaded] = useState(-1);
+  const [historyError, setHistoryError] = useState("");
   const [activeTab, setActiveTab] = useState<"today" | "history">("today");
   const [loading, setLoading] = useState(true);
+  const [sheetRevision, setSheetRevision] = useState(0);
+  const [sheetError, setSheetError] = useState("");
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -99,12 +140,12 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
 
   const sendQueuedSave = async (op: OfflineOp) => {
     const payload = op.payload as PrepSavePayload;
-    let del = supabase.from("prep_counts").delete().eq("count_date", payload.date);
+    let del = supabase.from("prep_counts").delete().eq("restaurant_name", BTB_RESTAURANT).eq("count_date", payload.date);
     if (payload.scope) del = del.or(payload.scope);
     const { error: delErr } = await del;
     if (delErr) throw delErr;
     if (payload.rows.length) {
-      const { error: insErr } = await supabase.from("prep_counts").insert(payload.rows);
+      const { error: insErr } = await supabase.from("prep_counts").insert(payload.rows.map((row) => ({ ...row, restaurant_name: BTB_RESTAURANT })));
       if (insErr) throw insErr;
     }
   };
@@ -113,7 +154,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   // whenever the browser reports the connection is back.
   const syncOffline = async () => {
     const res = await drain(queue, sendQueuedSave, PREP_KINDS);
-    if (res.sent) setError(null);
+    if (res.sent) { setError(null); setHistoryRevision((value) => value + 1); }
     await refreshPending();
     return res;
   };
@@ -135,9 +176,28 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one-shot mount sync
   }, []);
 
+  // History is refreshed from the database after confirmed saves and offline sync.
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const lists = await readSavedPrepLists(controller.signal);
+        if (!cancelled) { setSavedLists(lists); setHistoryError(""); }
+      } catch {
+        if (!cancelled) setHistoryError("Saved prep history couldn’t be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setHistoryLoaded(historyRevision);
+      }
+    })();
+    return () => { cancelled = true; controller.abort(); };
+  }, [historyRevision]);
+
   const handleDateChange = (newDate: string) => {
+    if (!isIsoDate(newDate) || newDate === date || saving) return;
     setDate(newDate);
     setLoading(true);
+    setSavedAt(null);
     const d = new Date(newDate + "T12:00:00");
     setDay(d.toLocaleDateString("en-US", { weekday: "long" }));
   };
@@ -147,82 +207,52 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   // same-weekday first, most recent otherwise (see src/lib/par-prefill.ts).
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const scope = locationScope();
-      let sheetQ = supabase
-        .from("prep_counts")
-        .select("id, item_name, par, on_hand, urgent")
-        .eq("count_date", date)
-        .order("created_at");
-      if (scope) sheetQ = sheetQ.or(scope);
-      // Pull lives in its own column (supabase/schema-prep-sheet.sql). Fetched
-      // separately so a tablet one migration behind still reads the rest.
-      let pullQ = supabase
-        .from("prep_counts")
-        .select("item_name, pull")
-        .eq("count_date", date);
-      if (scope) pullQ = pullQ.or(scope);
-      let histQ = supabase
-        .from("prep_counts")
-        .select("item_name, par, urgent, count_date, created_at")
-        .neq("count_date", date)
-        .order("count_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (scope) histQ = histQ.or(scope);
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const scope = locationScope();
+        let histQ = supabase
+          .from("prep_counts")
+          .select("item_name, par, urgent, count_date, created_at")
+          .eq("restaurant_name", BTB_RESTAURANT)
+          .neq("count_date", date)
+          .order("count_date", { ascending: false })
+          .order("created_at", { ascending: false })
+          .limit(200);
+        if (scope) histQ = histQ.or(scope);
 
-      const [
-        { data: sheet, error: sheetErr },
-        { data: pullRows, error: pullErr },
-        { data: hist },
-      ] = await Promise.all([sheetQ, pullQ, histQ]);
-      if (cancelled) return;
-      if (sheetErr) {
-        setError("Couldn't load this day's prep sheet — run supabase/schema-locations.sql, then reload.");
-        setLoading(false);
-        return;
-      }
-      setPullMissing(!!pullErr);
+        const [lists, { data: hist }] = await Promise.all([readSavedPrepLists(controller.signal, date), histQ.abortSignal(controller.signal)]);
+        if (cancelled) return;
+        const sheet = lists[0];
+        setPullMissing(sheet?.pullMissing ?? false);
+        const histRows = ((hist ?? []) as { item_name: string; par: number; urgent?: boolean | null; count_date: string }[]).map(
+          (r) => ({ item_name: r.item_name, par: r.par, urgent: r.urgent, date: r.count_date }),
+        );
+        const maps = buildParMaps(histRows, date);
 
-      const saved = new Map(
-        ((sheet ?? []) as { item_name: string; par: number; on_hand: number; urgent?: boolean | null }[]).map(
-          (r) => [r.item_name, r] as const,
-        ),
-      );
-      const pulls = new Map(
-        ((pullErr ? [] : pullRows ?? []) as { item_name: string; pull: number }[]).map(
-          (r) => [r.item_name, r.pull] as const,
-        ),
-      );
-      const histRows = ((hist ?? []) as { item_name: string; par: number; urgent?: boolean | null; count_date: string }[]).map(
-        (r) => ({ item_name: r.item_name, par: r.par, urgent: r.urgent, date: r.count_date }),
-      );
-      const maps = buildParMaps(histRows, date);
-
-      const next: PrepData = {};
-      for (const key of prepCatalog) {
-        const row = saved.get(key);
-        if (row) {
-          const par = String(Number(row.par) || 0);
-          const oh = String(Number(row.on_hand) || 0);
-          const pull = pulls.has(key) ? String(Number(pulls.get(key)) || 0) : "";
-          next[key] = { par, oh, make: makeOf(par, oh), initial: "", pull, urgent: !!row.urgent };
-          continue;
+        const next: PrepData = { ...sheet?.data };
+        for (const key of prepCatalog) {
+          if (Object.hasOwn(next, key)) continue;
+          // Nothing saved for this date yet — seed PAR so a manager doesn't
+          // retype it every day. On Hand stays blank: staff still counts it.
+          const snap = PAR_KEY_SET.has(key) ? parFor(maps, key) : undefined;
+          next[key] = snap && snap.par > 0 ? { ...EMPTY, par: String(snap.par), urgent: !!snap.urgent } : { ...EMPTY };
         }
-        // Nothing saved for this date yet — seed PAR so a manager doesn't
-        // retype it every day. On Hand stays blank: staff still counts it.
-        const snap = PAR_KEY_SET.has(key) ? parFor(maps, key) : undefined;
-        next[key] = snap && snap.par > 0 ? { ...EMPTY, par: String(snap.par), urgent: !!snap.urgent } : { ...EMPTY };
+        setPrepData(next);
+        setError(null);
+        setSheetError("");
+        setSavedAt(null);
+      } catch {
+        if (!cancelled) setSheetError("This day’s saved prep sheet couldn’t be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setPrepData(next);
-      setError(null);
-      setSavedAt(null);
-      setLoading(false);
     })();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [date]);
+  }, [date, sheetRevision]);
 
   const updateEntry = (key: string, field: keyof PrepEntry, value: string | boolean) => {
     setSavedAt(null);
@@ -245,18 +275,19 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   // Replace this count_date wholesale (location-scoped, same as the order
   // sheet): rows with a value — a prefilled PAR counts, a blank row doesn't.
   const savePrepList = async () => {
-    if (readOnly || saving) return;
+    if (readOnly || saving || loading || sheetError) return;
     setSaving(true);
     setError(null);
     const rows = Object.entries(prepData)
       .filter(
         ([, e]) =>
-          (Number(e.par) || 0) > 0 ||
-          (Number(e.oh) || 0) > 0 ||
-          (Number(e.pull) || 0) > 0 ||
+          e.par !== "" ||
+          e.oh !== "" ||
+          e.pull !== "" ||
           e.urgent,
       )
       .map(([key, e]) => ({
+        restaurant_name: BTB_RESTAURANT,
         item_name: key,
         par: Number(e.par) || 0,
         on_hand: Number(e.oh) || 0,
@@ -267,7 +298,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
       }));
 
     const scope = locationScope();
-    let del = supabase.from("prep_counts").delete().eq("count_date", date);
+    let del = supabase.from("prep_counts").delete().eq("restaurant_name", BTB_RESTAURANT).eq("count_date", date);
     if (scope) del = del.or(scope);
     const { error: delErr } = await del;
     let insErr = delErr;
@@ -300,33 +331,19 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
       return;
     }
 
-    setSavedLists((prev) =>
-      [
-        {
-          id: Date.now().toString(),
-          date,
-          day,
-          data: { ...prepData },
-          savedAt: new Date().toISOString(),
-        },
-        ...prev,
-      ].slice(0, 7),
-    );
+    setHistoryRevision((value) => value + 1);
     setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
     setSaving(false);
   };
 
   const loadPrepList = (list: SavedPrepList) => {
-    setDate(list.date);
     setLoading(true);
+    setDate(list.date);
+    setSheetRevision((value) => value + 1);
     setDay(list.day);
     setPrepData(list.data);
+    setSavedAt(null);
     setActiveTab("today");
-  };
-
-  const deletePrepList = (id: string) => {
-    if (!confirm("Delete this prep list?")) return;
-    setSavedLists((prev) => prev.filter((l) => l.id !== id));
   };
 
   // A row counts once it can produce an answer: Make for the Par columns
@@ -379,6 +396,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
                 id="prep-date"
                 type="date"
                 value={date}
+                disabled={saving}
                 onChange={(e) => handleDateChange(e.target.value)}
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:ring-2 focus:ring-red-500"
               />
@@ -410,6 +428,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
             {error}
           </div>
         )}
+        {sheetError && <div className="ui-notice ui-notice--error"><p role="alert">{sheetError}</p><button className="ui-button ui-button--ghost" disabled={loading} onClick={() => { setLoading(true); setSheetRevision((value) => value + 1); }}>Retry saved sheet</button></div>}
 
         {offlinePending > 0 && (
           <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
@@ -439,7 +458,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
                   key={column.label}
                   column={column}
                   prepData={prepData}
-                  readOnly={readOnly}
+                  readOnly={readOnly || loading || saving || !!sheetError}
                   canEditPar={canEditPar}
                   updateEntry={updateEntry}
                 />
@@ -451,12 +470,13 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
               <div className="mt-6 flex gap-3">
                 <button
                   onClick={savePrepList}
-                  disabled={saving || loading}
+                  disabled={saving || loading || !!sheetError}
                   className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition disabled:opacity-60"
                 >
                   {saving ? "Saving…" : "Save Prep Sheet"}
                 </button>
                 <button
+                  disabled={saving || loading || !!sheetError}
                   onClick={() => {
                     setPrepData({});
                     setSavedAt(null);
@@ -471,7 +491,8 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         ) : (
           /* History Tab */
           <div className="space-y-4">
-            {savedLists.length === 0 ? (
+            <div className="ops-toolbar"><p className="ops-meta">Your seven most recent saved sheets, including older catalog items.</p><button className="ui-button ui-button--ghost" disabled={historyLoaded !== historyRevision} onClick={() => setHistoryRevision((value) => value + 1)}>Refresh saved sheets</button></div>
+            {historyLoaded !== historyRevision ? <p role="status">Loading saved prep sheets…</p> : historyError ? <p className="ui-notice ui-notice--error" role="alert">{historyError}</p> : savedLists.length === 0 ? (
               <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
                 <p className="text-gray-500">No saved prep sheets yet</p>
                 <p className="text-gray-400 text-sm mt-1">
@@ -480,45 +501,40 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
               </div>
             ) : (
               savedLists.map((list) => (
-                <div
+                <article
                   key={list.id}
+                  aria-label={`Prep sheet ${list.date}`}
                   className="bg-white rounded-xl border border-gray-200 p-4"
                 >
                   <div className="flex items-center justify-between mb-2">
                     <div>
-                      <h3 className="font-semibold text-gray-900">
+                      <h2 className="font-semibold text-gray-900">
                         {list.day},{" "}
                         {new Date(list.date + "T12:00:00").toLocaleDateString("en-US", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
                         })}
-                      </h3>
+                      </h2>
                       <p className="text-xs text-gray-500">
-                        Saved {new Date(list.savedAt).toLocaleTimeString()}
+                        Saved {new Date(list.savedAt).toLocaleTimeString("en-CA", { timeZone: "America/Regina", hour: "2-digit", minute: "2-digit" })} · Saskatchewan time
                       </p>
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => loadPrepList(list)}
-                        className="text-sm text-red-600 hover:text-red-700 font-medium"
+                        disabled={saving}
+                        className="ui-button ui-button--ghost"
                       >
                         Load
                       </button>
-                      {!readOnly && (
-                        <button
-                          onClick={() => deletePrepList(list.id)}
-                          className="text-sm text-gray-400 hover:text-red-500"
-                        >
-                          🗑️
-                        </button>
-                      )}
                     </div>
                   </div>
                   <div className="text-xs text-gray-600">
-                    {Object.values(list.data).filter((d) => d.make || d.pull).length} items filled
+                    {Object.keys(list.data).length} saved items
                   </div>
-                </div>
+                  <details className="mt-3"><summary className="ops-text-link cursor-pointer">View saved quantities</summary><div className="ops-table-wrap"><table className="ops-table"><caption>Saved quantities for {list.date}</caption><thead><tr><th scope="col">Item</th><th scope="col">Par</th><th scope="col">On hand</th><th scope="col">Make</th><th scope="col">Pull</th></tr></thead><tbody>{Object.entries(list.data).map(([name, entry]) => <tr key={name}><th scope="row">{name}{entry.urgent ? " · Urgent" : ""}</th><td>{entry.par}</td><td>{entry.oh}</td><td>{entry.make}</td><td>{entry.pull || "—"}</td></tr>)}</tbody></table></div></details>
+                </article>
               ))
             )}
           </div>
@@ -707,6 +723,7 @@ function Row({
           type="text"
           inputMode="numeric"
           value={e.par}
+          aria-label={`Par: ${key}`}
           onChange={(ev) => updateEntry(key, "par", ev.target.value)}
           readOnly={!canEditPar || readOnly}
           title={canEditPar ? undefined : "PAR is set by a manager"}
@@ -718,6 +735,7 @@ function Row({
         type="text"
         inputMode="numeric"
         value={e.oh}
+        aria-label={`On hand: ${key}`}
         onChange={(ev) => updateEntry(key, "oh", ev.target.value)}
         readOnly={readOnly}
         className={`${cellClass} ${readOnly ? "bg-gray-50" : "bg-white"}`}
@@ -728,6 +746,7 @@ function Row({
           type="text"
           inputMode="numeric"
           value={e.pull}
+          aria-label={`Pull: ${key}`}
           onChange={(ev) => updateEntry(key, "pull", ev.target.value)}
           readOnly={readOnly}
           title="Pull from the freezer"
@@ -737,6 +756,7 @@ function Row({
         <input
           type="text"
           value={e.make}
+          aria-label={`Make: ${key}`}
           readOnly
           className={`${cellClass} bg-gray-50 font-bold`}
           title="Auto-calculated: Par - OH"
@@ -746,6 +766,7 @@ function Row({
       <input
         type="text"
         value={e.initial}
+        aria-label={`Initial: ${key}`}
         onChange={(ev) => updateEntry(key, "initial", ev.target.value)}
         readOnly={readOnly}
         className={`${cellClass} ${readOnly ? "bg-gray-50" : "bg-white"}`}

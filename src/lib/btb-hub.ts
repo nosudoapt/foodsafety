@@ -27,6 +27,7 @@ export type BtbIconKey =
   | "megaphone"
   | "listChecks"
   | "flame"
+  | "thermometer"
   | "key";
 
 export interface BtbCard {
@@ -56,6 +57,7 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/cash-out", title: "Cash Out", desc: "End-of-day till count, safe drop & 30-day history.", iconKey: "calculator", accent: "green", feature: "cash_out" },
   { href: "/between-the-buns/order-sheet", title: "Order Sheet", desc: "PAR, on-hand counts, previous orders and a permanent order history.", iconKey: "clipboard", accent: "amber", feature: "order_sheet" },
   { href: "/between-the-buns/cleaning-schedule", title: "Cleaning Schedule", desc: "Weekly tasks with before & after photo upload.", iconKey: "sparkles", accent: "purple", feature: "cleaning_schedule" },
+  { href: "/between-the-buns/temperatures", title: "Temperature Log", desc: "Temperature sheet for food, fridges and freezers, with 90-day history.", iconKey: "thermometer", accent: "green", feature: "temperatures" },
   { href: "/between-the-buns/prep-manual", title: "Prep Manual", desc: "Searchable recipes & prep guides — 21 recipes.", iconKey: "book", accent: "red", feature: "reference" },
   { href: "/between-the-buns/menu", title: "Recipe Cheat Sheets", desc: "Burgers, wraps, salads, smoothies & shakes.", iconKey: "utensils", accent: "amber", feature: "reference" },
   { href: "/between-the-buns/allergen-chart", title: "Bun Allergy Chart", desc: "Allergen info for all bun types.", iconKey: "alert", accent: "amber", feature: "reference" },

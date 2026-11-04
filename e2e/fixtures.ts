@@ -9,7 +9,7 @@ export const bun = "30000000-0000-4000-8000-000000000001";
 export type FoodSafeRole = "staff" | "manager" | "owner" | "multi_location_owner" | "corporate" | "designer";
 export type BtbRole = "staff" | "supervisor" | "manager" | "corporate" | "admin";
 type Row = Record<string, unknown>;
-interface Failure { table: string; method?: string; status?: number; times?: number; match?: Record<string, string> }
+interface Failure { table: string; method?: string; status?: number; times?: number; match?: Record<string, string | null> }
 interface FixtureOptions { tables?: Record<string, Row[]>; failures?: Failure[]; emailFailures?: ("reject" | "accepted-then-500")[] }
 interface FixtureState { tables: Record<string, Row[]>; requests: { path: string; method: string; query: Record<string, string>; body: unknown }[]; emailDeliveries: { id: string; key: string; body: { to: string[]; subject: string; text: string } }[]; emailRequests: { key: string; body: unknown }[] }
 

@@ -18,6 +18,7 @@ Warm porcelain surfaces, plum primary actions, self-hosted DM Sans and DM Serif 
 | Authentication | `src/app/auth/`, `src/components/auth/`, `src/contexts/AuthContext.tsx` |
 | BTB employee accounts and verified API access | `src/app/between-the-buns/employees/`, `src/app/between-the-buns/account/`, `src/lib/btb-auth.ts`, `src/lib/btb-api.ts`, `src/lib/btb-passwords.ts` |
 | BTB checks, schedules, orders and printing | `src/app/between-the-buns/checklists/`, `src/app/between-the-buns/staff-schedule/`, `src/app/between-the-buns/order-sheet/`, `src/components/btb/OnePagePrint.tsx` |
+| BTB temperatures and saved prep sheets | `src/app/between-the-buns/temperatures/`, `src/app/api/btb/temperatures/`, `src/lib/btb-temperature-store.ts`, `src/lib/btb-temperatures.ts`, `src/app/between-the-buns/prep-list/` |
 | Training progress and manager review | `src/app/between-the-buns/training-guide/`, `src/components/btb/TrainingProgress.tsx`, `src/app/api/btb/training/` |
 | Published training in manuals | `src/components/PrintManuals.tsx`, `src/lib/training-manuals.ts`, `src/app/api/btb/training/print/`, `src/app/api/manuals/training/` |
 | Certificates and licence emails | `src/app/between-the-buns/staff-licenses/`, `src/app/between-the-buns/licence-reminders/`, `src/lib/btb-reminder-service.ts`, `src/app/api/cron/btb-licence-reminders/` |
@@ -34,6 +35,8 @@ Warm porcelain surfaces, plum primary actions, self-hosted DM Sans and DM Serif 
 - Order history retains dated snapshots, previous quantities, archived items and every saved revision. Screen filters and unsaved edits do not alter the saved printout.
 - Training completion counts only current published modules approved by a manager. Supervisors and corporate can monitor team progress; manager review, feedback, self-approval prevention and renewed review after module edits are enforced by the server.
 - BTB dashboard dates and operational defaults use the Saskatchewan workday through `btbToday()`.
+- Temperature Log opens inside the BTB workspace. Staff/supervisors/managers record measured Celsius values, explicit kitchen target ranges and corrective-action notes; corporate reviews read-only. The API supplies attribution/time, calculates range status, scopes to the real disabled BTB storage owner and appends once per UUID. Fully paginated 90-day history has a date filter and retry. Earlier FoodSafe readings remain under their original account, reached through an explicit legacy-history disclosure.
+- Daily Prep History reloads the seven most recent saved dates from the database, including all archived item names, zero quantities, Pull and Urgent values. Each date is read completely across database pages both in History and when opened. Same-date Load refreshes correctly; failed reads offer retry and prevent saving an incomplete sheet. Reads, replacements and offline replay share restaurant/location scope.
 - The campaign board has real month filters. Undated social ideas remain in the weekly plan; dated posts contribute to the dashboard’s upcoming-post count.
 - BTB document/marketing reads, downloads and mutations use authenticated server endpoints. Creation enables after a real uploader-profile connection check, with connection retry and retained failed drafts. Records show the verified employee/shared-workspace creator. The dedicated profile owns the legacy foreign keys independently of simultaneous FoodSafe sessions; new attachments have a 3 MB limit and BTB campaigns are company-wide.
 - Inventory follows count → reconcile → close, with explicit saving, retained drafts, audit feedback and reopening.
@@ -55,15 +58,25 @@ Warm porcelain surfaces, plum primary actions, self-hosted DM Sans and DM Serif 
 
 The [dashboard setup guide](deploy/BTB_DASHBOARD_SETUP.md) matches the user's Vercel + Supabase SQL Editor workflow. The [BTB team setup runbook](deploy/BTB_TEAM_SETUP.md) documents schema prerequisites, account bootstrap, email configuration, scheduling and retry behaviour.
 
-Neither release SQL transaction has been applied to the connected Supabase project. Coordinate the application deployment with `supabase/schema-btb-team-operations.sql`, then `supabase/schema-btb-uploads.sql`, using the complete files in SQL Editor. Run `deploy/05-btb-release-check.sql` and return its 39-row result grid, then verify the documented APIs and live grants. SQL Editor uses the dashboard login, so the historical database-password failure does not block this workflow. The project uses direct releases without a migration ledger.
+Neither release SQL transaction has been confirmed applied to the connected Supabase project; the public documents API still returns 503. Coordinate setup with `supabase/schema-btb-team-operations.sql`, then `supabase/schema-btb-uploads.sql`, using the complete files in SQL Editor. Run `deploy/05-btb-release-check.sql` and return its 39-row result grid, then verify the documented APIs and live grants. SQL Editor uses the dashboard login, so the historical database-password failure does not block this workflow. The project uses direct releases without a migration ledger.
 
 BTB shared login details now live in server-only `src/lib/btb-auth.ts`; individual passwords remain in the backend database. `BTB_PASSWORD` and `BTB_SESSION_TOKEN` are no longer required or read. Private session signing is derived automatically from the existing `SUPABASE_SERVICE_ROLE_KEY`. Real reminder delivery needs `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET`, actual manager/corporate recipient addresses and a deployed scheduler. The included Vercel cron is **15:00 UTC / 09:00 America/Regina**. Local provider-fixture results establish dispatch behaviour; real inbox delivery still needs verification.
 
 The uploader integration is complete. The real Auth/profile identity `btb-uploader@foodsafe.invalid` was provisioned and reread successfully, with BTB staff scope and interactive login disabled. `BTB_UPLOADER_PROFILE_ID=67472997-c69a-460d-b171-2a527df8ff5c` is saved in `.env.local`; copy it to Vercel. The provisioning-script rerun reused this same marked identity. Foreign keys remain genuine Supabase profile IDs, with employee attribution stored separately.
 
-GitHub confirms Vercel integrations for `foodsafety` and `bitesbrew` under `nosudoapts-projects`. The user requested pushing this release to `nosudoapt/foodsafety` on `main`; check the new revision's deployment records for its live URLs/status. Release SQL and real inbox delivery still need the dashboard steps.
+Both Vercel projects, `foodsafety` and `bitesbrew`, successfully deployed login correction `8e1d98b` from `nosudoapt/foodsafety` / `main`. Manager sign-in works at **https://foodsafety-sigma.vercel.app/between-the-buns/login**. The user explicitly approved publishing the temperature/prep follow-up; all local checks have passed and publication/live verification are next. Release SQL and real inbox delivery still need the dashboard steps.
 
 ## Verification
+
+### Temperature and saved-history restoration — 2026-11-04
+
+ESLint, standalone TypeScript, **347/347** unit/database checks and **91/91** full Chromium tests pass. Browser coverage includes six temperature tests, five prep/cleaning tests, and all three complete one-page PDF checks. The legacy-history link test now waits for a genuine saved FoodSafe fixture reading.
+
+Desktop/375px temperature, prep and cleaning captures and the retained temperature-save dialog have been reviewed. The final normal production build passed with `.env.local`; all **94** browser assets checked contain neither loopback fixture configuration nor the service-role credential. `git diff --check` passes. No verification job is running.
+
+Read-only local browser checks against the real connected database restored **two prep sheets: October 21 and October 15, six rows each**, including their older catalog names and saved quantities. Opening a saved sheet works. The real BTB temperature API returns **200**, verifies the genuine storage owner and reports no BTB readings. Both pages fit 375px; there were no browser runtime errors or production record writes.
+
+The published Cleaning Schedule and History load, but both connected cleaning tables contain **zero saved records**. Four earlier temperature records belong to FoodSafe restaurants (`My Restaurant` / `The Grill House`). Public browser requests confirm this is the same Supabase project as the local connection. Recovery of other historical cleaning data needs the original data source or backup.
 
 ### Backend login correction — 2026-11-04
 
@@ -71,10 +84,11 @@ Lint, TypeScript, **343/343** unit/database checks and **22/22** targeted Chromi
 tests passed. Browser coverage includes production login without BTB environment
 settings, old-cookie recovery, all five shared roles, individual credential/session
 changes and operational permissions. The manager's Cleaning Schedule link is visible.
-The normal `.env.local` production build passed last; browser assets contain neither
-the session-signing implementation nor loopback fixture configuration. The user
-approved publishing the fix on November 4; verify the latest GitHub/Vercel deployment
-status for the hosted version.
+The login release's normal `.env.local` production build passed; browser assets contained
+neither the session-signing implementation nor loopback fixture configuration. The user
+approved publishing the fix on November 4. Both deployments of **`8e1d98b`** succeeded;
+the public manager login, dashboard, Cleaning Schedule and Daily Prep Sheet were
+verified through Chromium with zero runtime errors.
 
 ### Local results — 2026-11-02
 

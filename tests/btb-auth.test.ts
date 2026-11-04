@@ -227,7 +227,7 @@ test("proxy cookie-gates BTB and leaves its login open", () => {
 
 // --- 6. BTB stays decoupled from the green demo -----------------------------
 
-test("BTB and the green demo do not link to each other", () => {
+test("BTB navigation and authentication stay independent, with an explicit legacy temperature-history link", () => {
   const root = join(ROOT, "src/app/between-the-buns");
   const files = readdirSync(root, { recursive: true, encoding: "utf8" })
     .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))
@@ -238,8 +238,9 @@ test("BTB and the green demo do not link to each other", () => {
     const source = readFileSync(file, "utf8");
     const hrefs = [...source.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
     for (const href of hrefs) {
+      const legacyHistory = file === join(root, "temperatures/page.tsx") && href === "/temperatures";
       assert.ok(
-        href.startsWith("/between-the-buns") || href.startsWith("#"),
+        href.startsWith("/between-the-buns") || href.startsWith("#") || legacyHistory,
         `${file} must not link out to ${href}`
       );
     }

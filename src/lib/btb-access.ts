@@ -24,6 +24,7 @@ export const BTB_FEATURES = [
   "branding_requests",
   "order_sheet",
   "cleaning_schedule",
+  "temperatures",
   "reference",        // prep-manual, menu, allergen-chart, gluten-free
   "emergency",
   "protocols",
@@ -80,6 +81,7 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   branding_requests: { view: SUP_UP, edit: MGR_ONLY }, // staff walled out — marketing board
   order_sheet:       { view: SUP_UP, edit: SHIFT_LEADS },
   cleaning_schedule: { view: ALL,    edit: OPS_EDIT },
+  temperatures:      { view: ALL,    edit: OPS_EDIT },
   reference:         { view: ALL,    edit: [] },
   emergency:         { view: ALL,    edit: MGR_ONLY },
   protocols:         { view: ALL,    edit: MGR_ONLY },

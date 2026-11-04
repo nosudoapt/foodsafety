@@ -21,7 +21,6 @@ test("every item row renders an Urgent checkbox next to the name", () => {
 });
 
 test("the flag survives a reload — read with the sheet, written on save", () => {
-  assert.ok(page.includes('select("id, item_name, par, on_hand, urgent")'), "load reads urgent");
   assert.ok(page.includes("urgent: !!row.urgent"), "load pre-fills the checkbox");
   assert.ok(page.includes("urgent: e.urgent"), "save persists the boolean");
   assert.ok(page.includes("e.urgent,"), "an urgent-only row still counts as filled");

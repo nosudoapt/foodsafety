@@ -116,7 +116,7 @@ export function btbAccessSummary(role: BtbRole, rows: readonly BtbPageAccess[]):
 }
 
 export function btbCardGroup(card: BtbCard): string {
-  if (["prep_list", "checklists", "order_sheet", "cleaning_schedule", "month_end_inventory", "cash_out"].includes(card.feature)) return "Shift & stock";
+  if (["prep_list", "checklists", "order_sheet", "cleaning_schedule", "temperatures", "month_end_inventory", "cash_out"].includes(card.feature)) return "Shift & stock";
   if (["reference", "emergency", "protocols", "handbook", "manuals", "training_guide", "staff_schedule", "employees", "loyalty_rewards"].includes(card.feature)) return "People & reference";
   return "Business & standards";
 }

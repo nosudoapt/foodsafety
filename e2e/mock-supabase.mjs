@@ -11,6 +11,7 @@ const west = "20000000-0000-4000-8000-000000000002";
 const bun = "30000000-0000-4000-8000-000000000001";
 const cheese = "30000000-0000-4000-8000-000000000002";
 const btbUploader = "10000000-0000-4000-8000-000000000099";
+const btbRecorder = "10000000-0000-4000-8000-000000000098";
 const monthAt = (offset) => new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + offset, 1)).toISOString().slice(0, 7);
 const today = () => new Date().toISOString().slice(0, 10);
 // BTB uses the Saskatchewan workday even when the test browser runs in UTC.
@@ -34,19 +35,20 @@ function seed() {
   const scope = { restaurant_name: "The Test Kitchen", location_id: east, user_id: userId("manager"), created_at: time };
   const btb = { restaurant_name: "Between the Buns", created_at: time };
   const personal = { restaurant_name: "The Test Kitchen", created_at: time };
+  const temperature = { record_type: "cold_storage", min_safe_temp: 0, max_safe_temp: 4, notes: "" };
   const document = { doc_type: "other", expiry_date: null, notes: "Shared with the restaurant team.", file_size: 1200, file_url: `data:application/pdf;base64,${Buffer.from("%PDF-1.4\nBrowser test document").toString("base64")}` };
   const campaign = { description: "Seasonal artwork for the next release.", month: Number(monthAt(0).slice(5)), year: Number(monthAt(0).slice(0, 4)), file_size: null, file_name: null, file_url: null, category: "poster", size: '24"×36" Poster', person_name: "Alex", status: "planned" };
   const opening = [{ id: "o1", text: "Open Sign: Turn on the open sign at opening time", completed: true, section: "Front" }, { id: "o2", text: "Check the opening equipment", completed: true, section: "Kitchen" }];
   return {
-    profiles: [...roles.map((role) => ({ id: userId(role), role, full_name: `Alex ${role.replaceAll("_", " ")}`, restaurant_name: "The Test Kitchen", email: `${role}@workspace.test`, location_id: east, trial_ends_at: null })), { id: btbUploader, role: "manager", full_name: "BTB archive uploader", restaurant_name: "Between the Buns", email: "archive@workspace.test", location_id: null }],
+    profiles: [...roles.map((role) => ({ id: userId(role), role, full_name: `Alex ${role.replaceAll("_", " ")}`, restaurant_name: "The Test Kitchen", email: `${role}@workspace.test`, location_id: east, trial_ends_at: null })), { id: btbUploader, role: "manager", full_name: "BTB archive uploader", restaurant_name: "Between the Buns", email: "archive@workspace.test", location_id: null }, { id: btbRecorder, role: "staff", full_name: "BTB workspace uploader", restaurant_name: "Between the Buns", email: "btb-uploader@foodsafe.invalid", location_id: null, btb_uploader: true, banned_until: "2126-01-01T00:00:00Z" }],
     locations: [{ id: east, name: "Harbour Kitchen", address: "14 Harbour Road", created_at: "2026-01-01" }, { id: west, name: "Market Street", address: "22 Market Street", created_at: "2026-01-02" }],
     location_members: roles.flatMap((role) => (role === "owner" ? [east, west] : [east]).map((location_id) => ({ user_id: userId(role), location_id }))),
     daily_checks: roles.filter((role) => role !== "designer").map((role) => ({ ...personal, id: `check-${role}`, user_id: userId(role), check_type: "opening", completed: true, completed_at: time, notes: "Opening checks completed.", checklist_items: opening })),
     cleaning_records: [{ ...scope, id: "clean1", user_id: userId("staff"), completed: true, completed_at: time }],
     temperature_records: [
-      { ...scope, id: "temp1", user_id: userId("staff"), food_item: "Cold display", temperature: 9, unit: "C", is_safe: false, recorded_at: time },
-      { ...scope, id: "temp2", equipment_name: "Walk-in fridge", temperature: 42, unit: "F", is_safe: false, recorded_at: time },
-      { ...scope, id: "temp3", location_id: west, equipment_name: "Market freezer", temperature: -12, unit: "C", is_safe: false, recorded_at: time },
+      { ...scope, ...temperature, id: "temp1", user_id: userId("staff"), equipment_name: "Display fridge", food_item: "Cold display", temperature: 9, unit: "C", is_safe: false, recorded_at: time },
+      { ...scope, ...temperature, id: "temp2", equipment_name: "Walk-in fridge", food_item: "Cheese", temperature: 42, unit: "F", is_safe: false, recorded_at: time },
+      { ...scope, ...temperature, id: "temp3", location_id: west, equipment_name: "Market freezer", food_item: "Freezer stock", temperature: -12, unit: "C", min_safe_temp: -25, max_safe_temp: -18, is_safe: false, recorded_at: time },
     ],
     corrective_actions: [{ ...scope, id: "action1", issue_description: "Check the fridge seal", resolved: false }, { ...scope, id: "action2", location_id: west, issue_description: "Replace freezer gasket", resolved: false }],
     training_records: [{ ...scope, id: "training1", user_id: userId("staff"), expiry_date: today(), training_type: "Food safety" }],
@@ -80,6 +82,9 @@ function seed() {
 // Match the checked-in operational schemas closely enough to catch missing
 // uploader IDs, invalid fields and incorrect browser queries during UX tests.
 const schemas = {
+  prep_counts: { columns: "id,restaurant_name,item_name,par,on_hand,pull,urgent,count_date,created_at,location_id", required: "restaurant_name,item_name,par,on_hand,count_date" },
+  cleaning_logs: { columns: "id,restaurant_name,task_name,done_by,before_photo,after_photo,done_date,created_at,done_time,week_start,location_id", required: "restaurant_name,task_name,done_date" },
+  temperature_records: { columns: "id,user_id,restaurant_name,equipment_name,record_type,food_item,temperature,unit,min_safe_temp,max_safe_temp,is_safe,notes,recorded_at,created_at,location_id", required: "user_id,restaurant_name,equipment_name,record_type,food_item,temperature,min_safe_temp,max_safe_temp,is_safe" },
   business_documents: { columns: "id,user_id,restaurant_name,doc_type,name,file_name,file_url,file_size,uploaded_by,expiry_date,notes,created_at,updated_at", required: "user_id,restaurant_name,doc_type,file_name,file_url,uploaded_by" },
   marketing_promotions: { columns: "id,user_id,restaurant_name,title,description,file_name,file_url,file_size,month,year,status,category,size,person_name,location_id,created_at,updated_at", required: "user_id,restaurant_name,title,month,year" },
   social_media_calendar: { columns: "id,user_id,restaurant_name,day,channel,caption,post_date,created_at", required: "user_id,restaurant_name,day,channel,caption" },
@@ -118,7 +123,14 @@ await resetBtbDatabase(tables);
 
 function matches(row, params) {
   return [...params].every(([column, expression]) => {
-    if (["select", "order", "limit", "offset", "on_conflict"].includes(column)) return true;
+    if (["select", "order", "limit", "offset", "on_conflict", "columns"].includes(column)) return true;
+    if (column === "or" || column === "and") {
+      const results = expression.slice(1, -1).split(",").map((condition) => {
+        const separator = condition.indexOf(".");
+        return matches(row, new URLSearchParams({ [condition.slice(0, separator)]: condition.slice(separator + 1) }));
+      });
+      return column === "or" ? results.some(Boolean) : results.every(Boolean);
+    }
     const split = expression.indexOf(".");
     const op = expression.slice(0, split);
     const value = expression.slice(split + 1);
@@ -189,6 +201,11 @@ async function handleRequest(req, res) {
   requestLog.push({ path: url.pathname, method: req.method, query: Object.fromEntries(url.searchParams), body });
 
   if (url.pathname.startsWith("/auth/v1/")) {
+    if (url.pathname.startsWith("/auth/v1/admin/users/") && req.method === "GET") {
+      if (req.headers.apikey !== "browser-test-service-key") return send(res, 403, { message: "Server access required" });
+      const profile = tables.profiles.find((item) => item.id === url.pathname.split("/").pop());
+      return profile ? send(res, 200, { id: profile.id, email: profile.email, app_metadata: { btb_uploader: profile.btb_uploader === true }, banned_until: profile.banned_until }) : send(res, 404, { message: "User not found" });
+    }
     if (url.pathname.endsWith("/token")) {
       const grant = url.searchParams.get("grant_type");
       const role = grant === "pkce" ? String(body?.auth_code).split(":")[1] || "owner" : grant === "refresh_token" ? String(body?.refresh_token).replace("refresh-", "") : String(body?.email).split("@")[0];
@@ -222,14 +239,16 @@ async function handleRequest(req, res) {
   tables[table] ??= [];
   let rows = tables[table].filter((row) => matches(row, url.searchParams));
   const selected = url.searchParams.get("select");
-  const fields = [...url.searchParams.keys()].filter((key) => !["select", "order", "limit", "offset", "on_conflict", "or", "and"].includes(key));
+  const fields = [...url.searchParams.keys()].filter((key) => !["select", "order", "limit", "offset", "on_conflict", "columns", "or", "and"].includes(key));
   if (selected && selected !== "*" && !selected.includes("(")) fields.push(...selected.split(",").map((field) => field.trim()));
-  const entries = req.method === "POST" ? (Array.isArray(body) ? body : [body]) : req.method === "PATCH" ? rows.map((row) => ({ ...row, ...body })) : [];
+  const defaults = table === "prep_counts" ? { restaurant_name: "Between the Buns", par: 0, on_hand: 0, pull: 0, urgent: false, count_date: today(), location_id: null } : table === "cleaning_logs" ? { restaurant_name: "Between the Buns", done_date: today(), location_id: null } : {};
+  const entries = req.method === "POST" ? (Array.isArray(body) ? body : [body]).map((entry) => ({ ...defaults, ...entry })) : req.method === "PATCH" ? rows.map((row) => ({ ...row, ...body })) : [];
   const invalid = schemaError(table, fields, entries);
   if (invalid) return send(res, 400, invalid);
   if (req.method === "POST") {
+    if (table === "temperature_records" && entries.some((entry) => entry.id && tables[table].some((row) => row.id === entry.id))) return send(res, 409, { code: "23505", message: "Duplicate reading" });
     const keys = (url.searchParams.get("on_conflict") ?? "id").split(",");
-    rows = (Array.isArray(body) ? body : [body]).map((entry) => {
+    rows = entries.map((entry) => {
       const old = req.headers.prefer?.includes("resolution=merge-duplicates") ? tables[table].find((row) => keys.every((key) => row[key] !== undefined && row[key] === entry[key])) : undefined;
       if (old) { Object.assign(old, entry); return old; }
       const created = { id: randomUUID(), created_at: new Date().toISOString(), ...entry };
@@ -255,7 +274,7 @@ async function handleRequest(req, res) {
   const offset = Number(url.searchParams.get("offset") ?? 0);
   rows = rows.slice(offset);
   const limit = url.searchParams.get("limit");
-  if (limit !== null) rows = rows.slice(0, Number(limit));
+  if (req.method === "GET" || limit !== null) rows = rows.slice(0, Math.min(Number(limit ?? 1000), 1000));
   const projection = url.searchParams.get("select");
   if (projection && projection !== "*" && !projection.includes("(")) rows = rows.map((row) => Object.fromEntries(projection.split(",").map((key) => [key.trim(), row[key.trim()] ?? null])));
   if (req.method === "HEAD") return send(res, 200, null, { "Content-Range": `*/${count}` });

@@ -162,6 +162,7 @@ const ROUTE_FEATURE: Record<string, string> = {
   "branding-requests": "branding_requests",
   "order-sheet": "order_sheet",
   "cleaning-schedule": "cleaning_schedule",
+  temperatures: "temperatures",
   compliance: "compliance",
   documents: "documents",
   "staff-licenses": "staff_licenses",
