@@ -1,6 +1,19 @@
 # BTB — next-session handoff
 
-Updated: 2026-11-02 after the uploader integration and dashboard-release preparation. Local implementation, verification and the normal production build are complete. Continue with focused reads; completed features do not need rebuilding.
+Updated: 2026-11-04 after the backend-login regression fix. Continue with focused reads; completed features do not need rebuilding. The verification table below records the earlier November 2 release; new login verification is recorded separately below.
+
+## November 4 login correction
+
+- The user reported **“BTB login is not configured”** and requested keeping login details in the backend instead of environment variables.
+- `src/lib/btb-auth.ts` now owns the familiar shared workspace credentials (`manager@foodsafe.demo` / `admin1234`, and the other existing role accounts). Personal employee credentials remain hashed in the database.
+- `BTB_PASSWORD` and `BTB_SESSION_TOKEN` are no longer read or required. Signed shared/personal sessions derive a private key automatically from the existing `SUPABASE_SERVICE_ROLE_KEY`; role binding, employee expiry and credential-version verification remain in place.
+- This login correction needs no SQL installation. Updating the deployed app is still required. Old sessions may need a fresh sign-in.
+- Also reported by the user's client: missing temperature sheet and cleaning logs. History confirms commit `6fc3318` removed the BTB hub's **Temperature Log** link to `/temperatures` when authentication was separated. That FoodSafe-authenticated page still exists. The cleaning page/card still exists and permits operational roles. Recheck the client's exact workflow after login works; do not claim that both sheet reports are resolved or mix FoodSafe restaurant records into BTB.
+- November 4 read-only checks of the connected Supabase project: `prep_counts` has **12** rows; `cleaning_logs` and FoodSafe `cleaning_records` each have **0** rows; `temperature_records` has **4** rows (one `My Restaurant`, three `The Grill House`). BTB's current browser client can read all 12 prep rows and receives an empty, successful cleaning-log response. These counts do not establish that a client's deployment uses the same Supabase project.
+- Login regression checks: lint and TypeScript pass; **343/343** unit/database checks pass; **22/22** targeted Chromium tests pass (`auth.spec.ts`, `btb.spec.ts`, `btb-team.spec.ts`). These cover production login without BTB env settings, old-cookie recovery, all five shared roles, employee credentials/session invalidation and operational permissions. The manager cleaning link is visible in the browser test.
+- The normal `.env.local` production build passed after browser testing. Browser assets contain neither the signing implementation nor the loopback fixture URL/keys. The user explicitly approved committing/pushing the login fix on November 4. Check the new commit's deployment status before describing the hosted fix as verified.
+- Restarted the old local dev server after it retained a stale proxy/login check. Fresh manager login, `/api/btb/me`, the BTB hub and `/between-the-buns/cleaning-schedule` now return **HTTP 200** at `http://127.0.0.1:5001`. The connected database's saved page settings enable Cleaning Schedule for the manager. The replacement dev server remains running.
+- Before publishing, GitHub reported both production deployments on `48a83e6`: FoodSafety `7492036736` and Bitesbrew `7492014407`. Shared manager sign-in requires no SQL; new individual-account/operations features still need their separate existing release migrations.
 
 ## Start here
 
@@ -91,7 +104,7 @@ One **Loyalty Rewards** card contains employee/customer guides for staff, superv
 ## Live deployment blockers
 
 - Both `supabase/schema-btb-team-operations.sql` and `supabase/schema-btb-uploads.sql` are **not applied live**. The user will use SQL Editor, so the historical **28P01** database-password failure is not a blocker for this chosen workflow.
-- Missing local configuration: `BTB_PASSWORD`, `BTB_SESSION_TOKEN`, `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET`. Production setup, real manager/corporate recipients and deployed scheduling remain outstanding.
+- Missing local email configuration: `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET`. Production setup, real manager/corporate recipients and deployed scheduling remain outstanding. Separate BTB login environment variables are no longer needed.
 - GitHub links this repository to Vercel projects `foodsafety` and `bitesbrew`. Production configuration and the new revision's live deployment require verification through its GitHub deployment records/Vercel dashboard.
 - Reminder settings default to disabled with empty recipients. Reminders use `[30, 7, 1, 0]` days, five-minute leases, frozen retry content/provider keys, **three total delivery attempts**, and stop uncertain retries after 23 hours. Manual dispatch: 30 claims/45 seconds; cron: 300/270 seconds with a 300-second route maximum. Daily schedule: **15:00 UTC / 09:00 America/Regina** (`vercel.json`). Browser simulation is not proof of real inbox delivery.
 - The real uploader is ready. Copy its UUID to Vercel, then confirm live document/marketing responses include `uploader.connected: true` after deployment. Auth `listUsers` previously returned HTTP 500 and a later profile reread hit transient HTTP 522; the script now uses targeted lookups, and the final live verification/rerun succeeded.
@@ -105,7 +118,7 @@ One **Loyalty Rewards** card contains employee/customer guides for staff, superv
 - `e2e/mock-supabase.mjs`: Saskatchewan-dated fixtures and HTTP error responses instead of server termination.
 - `e2e/manuals.spec.ts`: independent manuals sessions, role/site restrictions, read-failure recovery and complete section pagination. `src/lib/training-manuals.ts` is the shared server-only reader.
 - `e2e/btb-uploads.spec.ts`, `tests/btb-uploads-database.test.mjs`: real profile FKs, role/session isolation, retained drafts, connection recovery, validation, scope and pagination. `src/lib/btb-uploader.ts` and `scripts/provision-btb-uploader.mjs` implement profile resolution/provisioning.
-- Browser fixtures: PGlite-backed SQL, `127.0.0.1:5101` / `5102`; FoodSafe `${role}@workspace.test`, BTB `${role}@foodsafe.demo`, password `BrowserTest!234`; fake service key `browser-test-service-key`.
+- Browser fixtures: PGlite-backed SQL, `127.0.0.1:5101` / `5102`; FoodSafe `${role}@workspace.test` and individual employees use `BrowserTest!234`; shared BTB `${role}@foodsafe.demo` accounts use `admin1234`. Fake service key: `browser-test-service-key`.
 - Email simulation is loopback-only via `/__test/send-email`; includes rejection and accepted-then-500 cases. Browser-origin checks compare against the incoming Host header.
 - PDF raster reviews: `/private/var/folders/ls/qsfwpxnx2rx4ln2q5kf7qglr0000gn/T/opencode/btb-final-print-review/` (created using `pdfjs-dist/legacy/build/pdf.mjs` and `@napi-rs/canvas`).
 - The development app's usual local address is **http://127.0.0.1:5001**. The final production build and browser-fixture checks above are complete.

@@ -30,14 +30,17 @@ with these values (use separate development/test values for other environments):
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Existing browser anon key; already in `.env.local` |
 | `SUPABASE_SERVICE_ROLE_KEY` | Existing server service-role key; already in `.env.local` |
 | `BTB_UPLOADER_PROFILE_ID` | `67472997-c69a-460d-b171-2a527df8ff5c` — provisioned for the connected Supabase project and saved in `.env.local` |
-| `BTB_PASSWORD` | A strong shared-workspace password chosen by you |
-| `BTB_SESSION_TOKEN` | A separate random signing secret; generate at least 32 random bytes with a password manager |
 | `CRON_SECRET` | Another independent random secret, at least 32 random bytes |
 | `RESEND_API_KEY` | Resend → API Keys; a sending key for your verified domain |
 | `BTB_EMAIL_FROM` | Your verified sender, e.g. `Between the Buns <renewals@your-domain.ca>` |
 
 `SUPABASE_URL` is an optional server alias for the same Supabase URL. The existing
 `VAULT_ENC_KEY` must also stay configured if the login vault is used.
+
+BTB shared login details are maintained in server-only `src/lib/btb-auth.ts`, and
+individual employee passwords are stored in the backend database. Session signing
+uses the existing backend key automatically. `BTB_PASSWORD` and `BTB_SESSION_TOKEN`
+are no longer read or required; this login change needs no SQL installation.
 
 Choose **Node.js 22.x** in the project's build/runtime settings. For the
 `nosudoapt/foodsafety` repository, `package.json` is at the repository root, so
@@ -82,7 +85,7 @@ in [`deploy/README.md`](README.md).
 ## 3. Confirm BTB access and uploads
 
 1. Open `<production-url>/between-the-buns/login`.
-2. Sign in as `manager@foodsafe.demo` with your configured `BTB_PASSWORD`.
+2. Sign in as `manager@foodsafe.demo` with the backend workspace password (`admin1234`).
 3. Open **Employees** and create the manager's personal account. Sign in with it.
 4. Open **Business documents**, upload a small PDF, refresh and download it.
    Confirm **Added by** shows the manager's name.

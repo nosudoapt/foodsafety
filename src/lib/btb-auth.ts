@@ -43,28 +43,27 @@ export function btbAccountFor(role: string): BtbAccount | undefined {
   return BTB_ACCOUNTS.find((a) => a.role === role);
 }
 
-// Shared password for the five role workspaces. Development has a local default;
-// production requires BTB_PASSWORD. Individual accounts use their own hashes.
+// Backend-owned credentials for the five shared role workspaces. Keep the
+// existing login working in development and production without login env vars.
+// Individual employee passwords remain hashed in the backend database.
 export function btbPassword(): string {
-  const configured = process.env.BTB_PASSWORD?.trim();
-  if (configured) return configured;
-  if (process.env.NODE_ENV === "production") {
-    throw new BtbConfigurationError("BTB_PASSWORD is not configured in the server environment.");
-  }
   return "admin1234";
 }
 
-// True only while the default password is in use — lets the login screen show
-// the hint without ever leaking a password that has been overridden.
+// Local-development convenience only; the live login never returns a password.
 export function btbPasswordIsDefault(): boolean {
-  return process.env.NODE_ENV !== "production" && !process.env.BTB_PASSWORD;
+  return process.env.NODE_ENV !== "production";
 }
 
+// The backend already requires this private database credential. Derive a
+// separate, stable signing key from it so all server instances agree without
+// a BTB_SESSION_TOKEN setting or a public, hard-coded production signing key.
+// Rotating the backend credential also invalidates existing BTB sessions.
 export function btbSessionToken(): string {
-  const configured = process.env.BTB_SESSION_TOKEN?.trim();
-  if (configured) return configured;
+  const backendKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+  if (backendKey) return createHmac("sha256", backendKey).update("btb-session-signing:v1").digest("hex");
   if (process.env.NODE_ENV === "production") {
-    throw new BtbConfigurationError("BTB_SESSION_TOKEN is not configured in the server environment.");
+    throw new BtbConfigurationError("The server's existing Supabase backend connection is not configured.");
   }
   return "btb-dev-session-token";
 }

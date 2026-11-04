@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -23,7 +24,7 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
 // --- 1. BTB's own credential list -------------------------------------------
 
-test("BTB has four role accounts, one per role", () => {
+test("BTB has five role accounts, one per role", () => {
   assert.deepEqual([...BTB_ROLES], ["staff", "supervisor", "manager", "corporate", "admin"]);
   assert.deepEqual([...BTB_ACCOUNTS.map((a) => a.role)].sort(), [...BTB_ROLES].sort());
   for (const account of BTB_ACCOUNTS) {
@@ -49,17 +50,53 @@ test("one shared password unlocks every BTB account", () => {
 
 test("one password works on both sign-in pages, but each checks its own list", () => {
   // Deliberate: the user asked for one credential across the green demo and
-  // BTB. When neither env var is overridden they must default to the same
+  // BTB. When the FoodSafe demo password is not overridden they use the same
   // value — otherwise owner@… + password would work on one page and not the other.
-  if (!process.env.BTB_PASSWORD && !process.env.DEMO_PASSWORD) {
+  if (!process.env.DEMO_PASSWORD) {
     assert.equal(btbPassword(), demoPassword(), "both surfaces must share a default password");
   }
-  assert.equal(btbPasswordIsDefault(), !process.env.BTB_PASSWORD);
+  assert.equal(btbPasswordIsDefault(), process.env.NODE_ENV !== "production");
 
   // BTB still validates against BTB_ACCOUNTS only — an address it doesn't
   // know fails even with the correct shared password.
   assert.ok(accountForCredentials("manager@foodsafe.demo", btbPassword()));
   assert.equal(accountForCredentials("nobody@foodsafe.demo", btbPassword()), null);
+});
+
+test("production logins need no BTB environment settings and retain private, role-bound sessions", () => {
+  const env: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "production", SUPABASE_SERVICE_ROLE_KEY: "test-only-backend-service-key" };
+  delete env.BTB_PASSWORD;
+  delete env.BTB_SESSION_TOKEN;
+  execFileSync(process.execPath, ["-e", `
+    const assert = require("node:assert/strict");
+    const auth = require(${JSON.stringify(join(ROOT, ".test-dist/src/lib/btb-auth.js"))});
+    for (const account of auth.BTB_ACCOUNTS) {
+      assert.equal(auth.accountForCredentials(account.email, "admin1234").role, account.role);
+    }
+    assert.equal(auth.accountForCredentials("manager@foodsafe.demo", "wrong"), null);
+    assert.equal(auth.btbPasswordIsDefault(), false);
+    const shared = auth.sessionValueFor("manager");
+    const employee = auth.employeeSessionValueFor({ id: "50000000-0000-4000-8000-000000000001", role: "staff", version: 1 });
+    assert.equal(auth.roleFromSession(shared), "manager");
+    assert.equal(auth.roleFromSession(employee), "staff");
+    assert.equal(auth.roleFromSession(shared.replace(/^manager/, "admin")), null);
+    assert.equal(auth.roleFromSession("manager.btb-dev-session-token"), null);
+    for (const cookie of [shared, employee]) {
+      assert.ok(!cookie.includes("admin1234"));
+      assert.ok(!cookie.includes(process.env.SUPABASE_SERVICE_ROLE_KEY));
+    }
+    process.env.BTB_PASSWORD = "obsolete-env-password";
+    process.env.BTB_SESSION_TOKEN = "obsolete-env-signing-key";
+    assert.equal(auth.accountForCredentials("manager@foodsafe.demo", "admin1234").role, "manager");
+    assert.equal(auth.accountForCredentials("manager@foodsafe.demo", "obsolete-env-password"), null);
+    assert.equal(auth.sessionValueFor("manager"), shared);
+    assert.equal(auth.roleFromSession(employee), "staff");
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "rotated-test-backend-key";
+    assert.equal(auth.roleFromSession(shared), null);
+    assert.equal(auth.roleFromSession(employee), null);
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    assert.throws(() => auth.sessionValueFor("manager"), auth.BtbConfigurationError);
+  `], { env, stdio: "pipe" });
 });
 
 // --- 2. the session cookie carries the role ---------------------------------
@@ -166,9 +203,9 @@ test("no client component imports the module holding BTB's password", () => {
   assert.deepEqual(offenders, [], `client files must import ./btb-roles, not ./btb-auth: ${offenders.join(", ")}`);
 });
 
-test("the password hint is only served while the default is in use", () => {
+test("the password hint is gated to local development", () => {
   const me = read("src/app/api/btb/me/route.ts");
-  assert.ok(me.includes("btbPasswordIsDefault()"), "hint must be gated on the default password");
+  assert.ok(me.includes("btbPasswordIsDefault()"), "hint must be gated to local development");
   assert.ok(me.includes("authenticated: false"), "signed-out response must expose the account list");
 
   const login = read("src/app/api/btb/login/route.ts");

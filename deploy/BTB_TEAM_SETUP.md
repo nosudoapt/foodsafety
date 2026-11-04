@@ -17,9 +17,9 @@ the connected Supabase project**: its configured database connection returned
 Real email delivery also needs `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET`
 and actual manager/corporate recipients. Test-provider acceptance does not
 establish real inbox delivery. Verify the pushed revision's Vercel deployment before live checks.
-The local environment also lacks `BTB_PASSWORD` and `BTB_SESSION_TOKEN`; configure
-both in production before using shared workspaces or individual sessions. The
-dedicated uploader Auth/profile was provisioned through the service-role API;
+Shared workspace credentials are maintained in server-only `src/lib/btb-auth.ts`;
+individual credentials remain in the database. BTB needs no separate login
+environment variables. The dedicated uploader Auth/profile was provisioned through the service-role API;
 its UUID is saved as `BTB_UPLOADER_PROFILE_ID` in `.env.local`. The additional
 `schema-btb-uploads.sql` migration is also pending live installation.
 The final targeted Auth/profile reread and provisioning-script rerun succeeded,
@@ -35,17 +35,16 @@ application root. Copy the names in `.env.example` to the hosting environment.
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Existing browser/client configuration |
 | `SUPABASE_URL` | Optional server URL; falls back to the public URL |
 | `SUPABASE_SERVICE_ROLE_KEY` | Privileged, server-only database access for BTB APIs |
-| `BTB_PASSWORD` | Password for the existing shared role workspaces |
-| `BTB_SESSION_TOKEN` | Strong, independent signing key for both shared and personal BTB sessions |
 | `BTB_UPLOADER_PROFILE_ID` | Real dedicated Supabase profile for BTB document/marketing creation |
 | `RESEND_API_KEY` | Server-only Resend sending key |
 | `BTB_EMAIL_FROM` | Resend-verified sender, e.g. `Between the Buns <renewals@your-domain.ca>` |
 | `CRON_SECRET` | Random server-only secret for scheduled dispatch |
 
-Secrets must not use a `NEXT_PUBLIC_*` name. Production does not fall back to
-development BTB credentials. Rotating `BTB_SESSION_TOKEN` ends all BTB sessions.
-Individual passwords are stored as salted scrypt hashes; they are independent
-of the shared password and of FoodSafe/Supabase Auth.
+Secrets must not use a `NEXT_PUBLIC_*` name. BTB derives its private session-signing
+key from the existing `SUPABASE_SERVICE_ROLE_KEY`; no additional signing setting
+is needed. Rotating that backend key ends existing BTB sessions. Shared logins
+use the backend-owned credentials in `src/lib/btb-auth.ts`. Individual passwords
+are stored as salted scrypt hashes, independently of FoodSafe/Supabase Auth.
 
 ## 2. Install the team schema
 
@@ -114,7 +113,7 @@ training tables; both applications now read this content through the server.
 ## 3. Set up individual accounts
 
 1. Open `/between-the-buns/login`. Bootstrap through the existing shared manager
-   address, `manager@foodsafe.demo`, using the configured `BTB_PASSWORD`.
+   address, `manager@foodsafe.demo`, using the backend workspace password (`admin1234`).
 2. Open **Employees** and add the manager's personal record: name, unique email,
    phone, optional position, **Manager** role and an initial 10–128-character
    password. Save, then sign in using that individual email/password.

@@ -32,8 +32,6 @@ export default defineConfig({
         NEXT_PUBLIC_SUPABASE_ANON_KEY: "browser-test-anon-key",
         SUPABASE_URL: "http://127.0.0.1:5102",
         SUPABASE_SERVICE_ROLE_KEY: "browser-test-service-key",
-        BTB_PASSWORD: "BrowserTest!234",
-        BTB_SESSION_TOKEN: "browser-test-session-secret-used-only-on-loopback",
         BTB_UPLOADER_PROFILE_ID: "10000000-0000-4000-8000-000000000099",
         RESEND_API_KEY: "browser-test-resend-key",
         BTB_EMAIL_FROM: "BTB Tests <btb@example.test>",

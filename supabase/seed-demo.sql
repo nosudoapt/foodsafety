@@ -16,7 +16,7 @@
 --
 -- Shared password: admin1234   (one password for BOTH surfaces)
 --   The green demo reads it from DEMO_PASSWORD (src/lib/demo-server.ts) and
---   BTB from BTB_PASSWORD (src/lib/btb-auth.ts); both default to this value,
+--   BTB from its backend credentials (src/lib/btb-auth.ts); both use this value,
 --   so the same email + password works on either sign-in page.
 --
 -- RESET APPROACH (requirement: public demos get messy fast)

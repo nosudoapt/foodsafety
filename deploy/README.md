@@ -26,10 +26,11 @@ Use **Node.js 22 or later** for the build and server runtime. The installed
 Supabase client requires the native WebSocket support in Node 22+; `.nvmrc`
 selects Node 22 for local development and verification.
 
-1. In the **hosting provider's server environment**, configure strong values
-   for `SUPABASE_SERVICE_ROLE_KEY`, `BTB_PASSWORD`, and `BTB_SESSION_TOKEN`
+1. In the **hosting provider's server environment**, configure
+   `SUPABASE_SERVICE_ROLE_KEY`
    (plus `SUPABASE_URL` if `NEXT_PUBLIC_SUPABASE_URL` is not already correct).
-   Never use `NEXT_PUBLIC_*` for a secret. Redeploy the final commit.
+   Never use `NEXT_PUBLIC_*` for a secret. BTB login details are backend-owned;
+   no separate login environment variables are needed. Redeploy the final commit.
 2. Sign in as BTB manager/admin and open
    `/api/btb/inventory-health`. Continue only if it returns HTTP 200 with
    `deployment: "inventory-server-v3"` and `serviceRoleConfigured: true`.

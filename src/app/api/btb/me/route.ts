@@ -10,9 +10,8 @@ import {
 } from "@/lib/btb-auth";
 
 // Who is signed in to BTB (used by the hub header), plus — when signed out —
-// the list of demo accounts for the login screen. The password hint is only
-// ever returned while the default password is still in use; an overridden
-// BTB_PASSWORD is never exposed.
+// the list of shared accounts for the login screen. Password hints are only
+// returned in local development; production never exposes a login password.
 export async function GET() {
   try {
   const cookieStore = await cookies();

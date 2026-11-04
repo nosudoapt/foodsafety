@@ -2,6 +2,7 @@ import { test as base, expect, type APIRequestContext, type Page, type TestInfo 
 
 export const fixtureUrl = "http://127.0.0.1:5102";
 export const password = "BrowserTest!234";
+export const workspacePassword = "admin1234";
 export const east = "20000000-0000-4000-8000-000000000001";
 export const west = "20000000-0000-4000-8000-000000000002";
 export const bun = "30000000-0000-4000-8000-000000000001";
@@ -69,7 +70,7 @@ export async function signInFoodSafe(page: Page, role: FoodSafeRole, next = "/da
 export async function signInBtb(page: Page, role: BtbRole, next = "/between-the-buns") {
   await page.goto(`/between-the-buns/login?next=${encodeURIComponent(next)}`);
   await page.getByLabel("Team email").fill(`${role}@foodsafe.demo`);
-  await page.getByLabel("Workspace password", { exact: true }).fill(password);
+  await page.getByLabel("Workspace password", { exact: true }).fill(workspacePassword);
   await page.getByRole("button", { name: "Open my workspace" }).click();
   await expect(page).toHaveURL(new RegExp(`${next}$`));
 }

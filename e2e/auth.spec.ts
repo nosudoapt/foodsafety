@@ -1,4 +1,4 @@
-import { test, expect, capture, password, signInFoodSafe, signInBtb } from "./fixtures";
+import { test, expect, capture, password, workspacePassword, signInFoodSafe, signInBtb } from "./fixtures";
 
 test("sign-in retains failed entries, rejects external return paths and clears identity on sign-out", async ({ page }) => {
   await page.goto("/auth/sign-in?next=https%3A%2F%2Foutside.example");
@@ -76,6 +76,23 @@ test("expired confirmation and recovery links offer a usable next step", async (
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeEnabled();
 });
 
+test("BTB backend login recovers old cookies and loads account shortcuts without login env settings", async ({ page, context }) => {
+  await context.addCookies([{ name: "btb_session", value: "manager.btb-dev-session-token", url: "http://127.0.0.1:5101", httpOnly: true, sameSite: "Lax" }]);
+  const response = await page.request.get("/api/btb/me");
+  await expect(response).toBeOK();
+  const info = await response.json();
+  expect(info.authenticated).toBe(false);
+  expect(info.passwordHint).toBeNull();
+  expect(info.accounts).toHaveLength(5);
+  expect(JSON.stringify(info)).not.toContain(workspacePassword);
+  await signInBtb(page, "manager");
+  await expect(page.getByRole("heading", { name: "Your restaurant, in focus." })).toBeVisible();
+  await expect(page.locator('a[href="/between-the-buns/cleaning-schedule"]').first()).toBeVisible();
+  const me = await page.request.get("/api/btb/me");
+  await expect(me).toBeOK();
+  expect(await me.json()).toMatchObject({ authenticated: true, role: "manager" });
+});
+
 test("BTB sign-in keeps its return path local and its sign-out preserves the FoodSafe session", async ({ page }) => {
   await signInFoodSafe(page, "owner");
   await expect(page.getByRole("heading", { name: "Your business, at a glance." })).toBeVisible();
@@ -84,7 +101,7 @@ test("BTB sign-in keeps its return path local and its sign-out preserves the Foo
   await page.getByLabel("Workspace password", { exact: true }).fill("wrong-password");
   await page.getByRole("button", { name: "Open my workspace" }).click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("email and password don’t match");
-  await page.getByLabel("Workspace password", { exact: true }).fill(password);
+  await page.getByLabel("Workspace password", { exact: true }).fill(workspacePassword);
   await page.getByRole("button", { name: "Open my workspace" }).click();
   await expect(page).toHaveURL(/\/between-the-buns$/);
   await expect(page.getByRole("heading", { name: "Your restaurant, in focus." })).toBeVisible();

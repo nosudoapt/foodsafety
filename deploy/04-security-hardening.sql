@@ -9,7 +9,7 @@
 --      GET /api/btb/inventory-health returns HTTP 200 with:
 --        { ok: true, deployment: "inventory-server-v3",
 --          serviceRoleConfigured: true, ... }
---   4. BTB_PASSWORD and BTB_SESSION_TOKEN are configured server-side.
+--   4. The current backend-owned BTB login code is deployed.
 --
 -- EFFECT:
 --   * Preserves every row, including all role_page_access rows.

@@ -1,5 +1,5 @@
 import type { APIRequestContext } from "@playwright/test";
-import { expect, password } from "./fixtures";
+import { expect, password, workspacePassword } from "./fixtures";
 import type { BtbEmployee } from "../src/lib/btb-team";
 import type { BtbTrainingTopic } from "../src/lib/btb-training";
 import type { TrainingSection } from "../src/lib/training";
@@ -7,7 +7,7 @@ import type { TrainingSection } from "../src/lib/training";
 export const appOrigin = "http://127.0.0.1:5101";
 export const restaurant = "Between the Buns";
 
-export async function apiSignIn(request: APIRequestContext, email = "manager@foodsafe.demo", credential = password) {
+export async function apiSignIn(request: APIRequestContext, email = "manager@foodsafe.demo", credential = email.endsWith("@foodsafe.demo") ? workspacePassword : password) {
   const response = await request.post("/api/btb/login", { headers: { Origin: appOrigin }, data: { email, password: credential } });
   await expect(response).toBeOK();
 }

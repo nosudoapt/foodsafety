@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     if (error instanceof BtbConfigurationError) {
-      return NextResponse.json({ error: "BTB login is not configured" }, { status: 503 });
+      return NextResponse.json({ error: "The BTB backend connection is unavailable. Please try again." }, { status: 503, headers: PRIVATE_HEADERS });
     }
     return apiFailure(error);
   }

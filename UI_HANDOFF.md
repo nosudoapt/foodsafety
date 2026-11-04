@@ -57,13 +57,24 @@ The [dashboard setup guide](deploy/BTB_DASHBOARD_SETUP.md) matches the user's Ve
 
 Neither release SQL transaction has been applied to the connected Supabase project. Coordinate the application deployment with `supabase/schema-btb-team-operations.sql`, then `supabase/schema-btb-uploads.sql`, using the complete files in SQL Editor. Run `deploy/05-btb-release-check.sql` and return its 39-row result grid, then verify the documented APIs and live grants. SQL Editor uses the dashboard login, so the historical database-password failure does not block this workflow. The project uses direct releases without a migration ledger.
 
-Production requires `BTB_PASSWORD` and `BTB_SESSION_TOKEN`, which are absent from the local environment. Real reminder delivery additionally needs `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET`, actual manager/corporate recipient addresses and a deployed scheduler. The included Vercel cron is **15:00 UTC / 09:00 America/Regina**. Local provider-fixture results establish dispatch behaviour; real inbox delivery still needs verification.
+BTB shared login details now live in server-only `src/lib/btb-auth.ts`; individual passwords remain in the backend database. `BTB_PASSWORD` and `BTB_SESSION_TOKEN` are no longer required or read. Private session signing is derived automatically from the existing `SUPABASE_SERVICE_ROLE_KEY`. Real reminder delivery needs `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET`, actual manager/corporate recipient addresses and a deployed scheduler. The included Vercel cron is **15:00 UTC / 09:00 America/Regina**. Local provider-fixture results establish dispatch behaviour; real inbox delivery still needs verification.
 
 The uploader integration is complete. The real Auth/profile identity `btb-uploader@foodsafe.invalid` was provisioned and reread successfully, with BTB staff scope and interactive login disabled. `BTB_UPLOADER_PROFILE_ID=67472997-c69a-460d-b171-2a527df8ff5c` is saved in `.env.local`; copy it to Vercel. The provisioning-script rerun reused this same marked identity. Foreign keys remain genuine Supabase profile IDs, with employee attribution stored separately.
 
 GitHub confirms Vercel integrations for `foodsafety` and `bitesbrew` under `nosudoapts-projects`. The user requested pushing this release to `nosudoapt/foodsafety` on `main`; check the new revision's deployment records for its live URLs/status. Release SQL and real inbox delivery still need the dashboard steps.
 
 ## Verification
+
+### Backend login correction — 2026-11-04
+
+Lint, TypeScript, **343/343** unit/database checks and **22/22** targeted Chromium
+tests passed. Browser coverage includes production login without BTB environment
+settings, old-cookie recovery, all five shared roles, individual credential/session
+changes and operational permissions. The manager's Cleaning Schedule link is visible.
+The normal `.env.local` production build passed last; browser assets contain neither
+the session-signing implementation nor loopback fixture configuration. The user
+approved publishing the fix on November 4; verify the latest GitHub/Vercel deployment
+status for the hosted version.
 
 ### Local results — 2026-11-02
 
