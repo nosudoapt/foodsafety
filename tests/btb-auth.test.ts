@@ -24,9 +24,15 @@ const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
 
 // --- 1. BTB's own credential list -------------------------------------------
 
-test("BTB has five role accounts, one per role", () => {
-  assert.deepEqual([...BTB_ROLES], ["staff", "supervisor", "manager", "corporate", "admin"]);
-  assert.deepEqual([...BTB_ACCOUNTS.map((a) => a.role)].sort(), [...BTB_ROLES].sort());
+test("BTB defines five legacy shared roles plus personal designer/owner roles", () => {
+  assert.deepEqual([...BTB_ROLES], ["staff", "supervisor", "manager", "designer", "corporate", "owner", "admin"]);
+  // Designer and Owner are personal, membership-scoped roles. A shared
+  // password account for either would bypass location isolation, so the
+  // shared workspace list must stay exactly these five.
+  assert.deepEqual([...BTB_ACCOUNTS.map((a) => a.role)].sort(), ["admin", "corporate", "manager", "staff", "supervisor"]);
+  for (const role of ["designer", "owner"] as const) {
+    assert.ok(!BTB_ACCOUNTS.some((account) => account.role === role), `${role} must not have a shared workspace account`);
+  }
   for (const account of BTB_ACCOUNTS) {
     assert.ok(isBtbRole(account.role));
     assert.match(account.email, /@foodsafe\.demo$/);

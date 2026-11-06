@@ -56,7 +56,10 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
     const routeName = f.split(sep).at(-2) ?? "";
     if (SESSION_LIFECYCLE_ROUTES.has(routeName)) continue;
     const src = read(f);
-    assert.ok(src.includes("btbRoute(") || src.includes("btbIdentityFromSession(") || src.includes("verifiedBtbRole as roleFromSession"), `${f} must verify individual account state, not just decode a cookie role`);
+    assert.ok(
+      src.includes("btbRoute(") || src.includes("btbIdentityFromSession(") || src.includes("verifiedBtbRole as roleFromSession") || src.includes("legacyBtbRole as roleFromSession"),
+      `${f} must verify individual account state, not just decode a cookie role`,
+    );
     if (!src.includes("btbRoute(")) assert.ok(src.includes("BTB_COOKIE"), `${f} must read the BTB cookie`);
   }
 });

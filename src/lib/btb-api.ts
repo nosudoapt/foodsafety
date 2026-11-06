@@ -70,6 +70,34 @@ export async function verifiedBtbRole(value: string | undefined | null) {
   return (await btbIdentityFromSession(value))?.role ?? null;
 }
 
+/** Explicit memberships switch personal accounts to the scoped workflows. */
+export async function btbUsesLocationWorkspace(identity: BtbIdentity, db = inventoryDb()): Promise<boolean> {
+  if (!identity.employeeId) return false;
+  if (["designer", "corporate", "owner"].includes(identity.role)) return true;
+  const result = await db.from("btb_location_access").select("location_id").eq("employee_id", identity.employeeId).limit(1);
+  // Additive rollout: an installation without release 06 still has legacy users.
+  if (["42P01", "PGRST205"].includes(result.error?.code ?? "")) return false;
+  dbError(result.error, "Location access could not be checked. Please retry.");
+  return !!result.data?.length;
+}
+
+export async function legacyBtbRole(value: string | undefined | null) {
+  const identity = await btbIdentityFromSession(value);
+  if (!identity) return null;
+  if (!["corporate", "owner"].includes(identity.role) && await btbUsesLocationWorkspace(identity)) return null;
+  return identity.role;
+}
+
+/** True when the employee is managed by the location platform and must not be
+ * changed through a legacy shared workspace. A missing release-06 table means
+ * the installation is still legacy-only, so the answer is false. */
+export async function btbEmployeeIsLocationManaged(db: SupabaseClient, employeeId: string): Promise<boolean> {
+  const result = await db.from("btb_location_access").select("location_id").eq("employee_id", employeeId).limit(1);
+  if (["42P01", "PGRST205"].includes(result.error?.code ?? "")) return false;
+  dbError(result.error, "This employee’s location access could not be verified. Please retry.");
+  return !!result.data?.length;
+}
+
 export interface BtbApiContext { db: SupabaseClient; identity: BtbIdentity }
 
 export async function requireBtbAccess(feature?: BtbFeature, edit = false): Promise<BtbApiContext> {
@@ -79,6 +107,7 @@ export async function requireBtbAccess(feature?: BtbFeature, edit = false): Prom
   const identity = await btbIdentityFromSession(value, db);
   if (!identity) throw new BtbApiError("Your session has ended. Please sign in again.", 401);
   if (feature) {
+    if (!["corporate", "owner"].includes(identity.role) && await btbUsesLocationWorkspace(identity, db)) throw new BtbApiError("Use your assigned location workspace for this workflow.", 403);
     if (!btbCanView(feature, identity.role) || (edit && !btbCanEdit(feature, identity.role))) throw new BtbApiError("Your role cannot make this change.", 403);
     const card = BTB_CARDS.find((item) => item.feature === feature);
     if (card && identity.role !== "admin") {

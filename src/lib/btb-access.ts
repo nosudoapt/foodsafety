@@ -47,14 +47,22 @@ interface Access {
   edit: readonly BtbRole[];
 }
 
-const ALL: readonly BtbRole[] = ["staff", "supervisor", "manager", "corporate"]; // admin excluded from normal pages
+// Role groups. "owner" is the new super-admin tier: it sees the whole
+// organization but does not inherit legacy store-edit surfaces (those stay
+// manager/corporate so legacy accountability is preserved). "designer" is a
+// marketing-only personal role and never appears in the shared workspaces.
+const ALL: readonly BtbRole[] = ["staff", "supervisor", "manager", "corporate", "owner"]; // admin excluded from normal pages
+const BASICS_ALL: readonly BtbRole[] = [...ALL, "designer"]; // reference/safety is readable by every worker
 const ADMIN_ONLY: readonly BtbRole[] = ["admin"];
-const OPS_EDIT: readonly BtbRole[] = ["staff", "supervisor", "manager"]; // corporate is view-only on ops
-const SUP_UP: readonly BtbRole[] = ["supervisor", "manager", "corporate"]; // supervisor tier and above
-const MGR: readonly BtbRole[] = ["manager", "corporate"];             // management (owners are managers here)
-const MGR_ONLY: readonly BtbRole[] = ["manager"];                    // store-level edit; corporate is oversight-only
+const OPS_EDIT: readonly BtbRole[] = ["staff", "supervisor", "manager"]; // corporate + owner are view-only on operations
+const SUP_UP: readonly BtbRole[] = ["supervisor", "manager", "corporate", "owner"]; // supervisor tier and above
+const MGR: readonly BtbRole[] = ["manager", "corporate"];             // legacy management (owner is scoped, not legacy)
+const MGR_ONLY: readonly BtbRole[] = ["manager"];                     // store-level edit; corporate is oversight-only
 const SHIFT_LEADS: readonly BtbRole[] = ["supervisor", "manager"];
-const CORP: readonly BtbRole[] = ["corporate"];                      // franchise HQ only
+const CORP: readonly BtbRole[] = ["corporate", "owner"];               // franchise HQ / super admin
+const MARKETING_VIEW: readonly BtbRole[] = ["manager", "designer", "corporate", "owner"];
+const MARKETING_EDIT: readonly BtbRole[] = ["manager", "corporate", "owner"]; // designers deliver through the platform workflow
+const BRANDING_VIEW: readonly BtbRole[] = ["supervisor", "manager", "designer", "corporate", "owner"];
 
 // view = who sees the card at all; edit = who can create/edit/delete.
 // edit is always a subset of view. Kept explicit so intent is auditable.
@@ -77,26 +85,29 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   // Closing counts: everyone reads the sheet, managers type the numbers.
   month_end_inventory: { view: ALL,  edit: MGR_ONLY },
   // Staff are walled out entirely; supervisors read the board and only
-  // managers move cards through it or delete them.
-  branding_requests: { view: SUP_UP, edit: MGR_ONLY }, // staff walled out — marketing board
+  // managers move cards through it or delete them (pinned by tests).
+  branding_requests: { view: BRANDING_VIEW, edit: MGR_ONLY }, // staff walled out — marketing board
   order_sheet:       { view: SUP_UP, edit: SHIFT_LEADS },
   cleaning_schedule: { view: ALL,    edit: OPS_EDIT },
   temperatures:      { view: ALL,    edit: OPS_EDIT },
-  reference:         { view: ALL,    edit: [] },
-  emergency:         { view: ALL,    edit: MGR_ONLY },
-  protocols:         { view: ALL,    edit: MGR_ONLY },
-  handbook:          { view: ALL,    edit: MGR_ONLY },
-  manuals:           { view: ALL,    edit: MGR_ONLY },
+  // Recipe/safety reference is readable by every worker, including designers.
+  reference:         { view: BASICS_ALL, edit: [] },
+  emergency:         { view: BASICS_ALL, edit: MGR_ONLY },
+  protocols:         { view: BASICS_ALL, edit: MGR_ONLY },
+  handbook:          { view: BASICS_ALL, edit: MGR_ONLY },
+  manuals:           { view: BASICS_ALL, edit: MGR_ONLY },
   compliance:        { view: SUP_UP, edit: MGR_ONLY },
   documents:         { view: SUP_UP, edit: MGR_ONLY },
   staff_licenses:    { view: SUP_UP, edit: MGR_ONLY },
   inspections:       { view: MGR,    edit: MGR },     // manager + corporate; shared InspectionForm
   // The corporate franchise report — HQ only (managers/owners are walled out).
   franchise_inspection: { view: CORP, edit: CORP },
-  marketing:         { view: MGR, edit: MGR },
+  // Designers review approved briefs here; production happens in the platform
+  // marketing workflow, so legacy campaign creation remains a manager action.
+  marketing:         { view: MARKETING_VIEW, edit: MARKETING_EDIT },
   // Opening a new location is a corporate decision, not a store one.
   new_restaurant:    { view: CORP, edit: CORP },
-  // Vendor/utility logins — store management tier and HQ.
+  // Vendor/utility logins — legacy store management tier and HQ.
   vault:             { view: MGR, edit: MGR },
 };
 

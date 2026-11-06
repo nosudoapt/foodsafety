@@ -82,6 +82,13 @@ test("reference pages are all-view, no-edit — except admin, which is walled ou
   }
 });
 
+test("personal designer role reads recipes but never writes them", () => {
+  // Missing this row made the shared hub render a broken reference tile and
+  // let the designer role disappear from the access matrix entirely.
+  assert.equal(btbCanView("reference", "designer"), true);
+  assert.equal(btbCanEdit("reference", "designer"), false);
+});
+
 test("new-restaurant and the corporate report are HQ-only", () => {
   for (const f of ["new_restaurant", "franchise_inspection"] as const) {
     assert.equal(btbCanView(f, "corporate"), true, `corporate views ${f}`);

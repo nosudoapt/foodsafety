@@ -1,4 +1,4 @@
-import { btbRoute, BtbApiError, dbError, EMPLOYEE_COLUMNS, readAll, readBody } from "@/lib/btb-api";
+import { btbRoute, BtbApiError, btbEmployeeIsLocationManaged, dbError, EMPLOYEE_COLUMNS, readAll, readBody } from "@/lib/btb-api";
 import { BTB_RESTAURANT, employeeEditableBy, isUuid, isVersion, validateEmployee, type BtbEmployee } from "@/lib/btb-team";
 import { BTB_ACCOUNTS } from "@/lib/btb-auth";
 import { hashEmployeePassword, validEmployeePassword } from "@/lib/btb-passwords";
@@ -21,6 +21,12 @@ export const POST = btbRoute("employees", true, async ({ db, identity }, request
     existing = result.data as BtbEmployee | null;
     if (!existing) throw new BtbApiError("This employee could not be found.", 404);
     if (!employeeEditableBy(identity.role, existing.role)) throw new BtbApiError("A manager manages this employee account.", 403);
+    // An unassigned legacy manager must not be able to touch a person who is
+    // governed by the location platform (reset their password, change their
+    // role or deactivate them). Corporate/owner retain organization-wide reach.
+    if (!["corporate", "owner"].includes(identity.role) && await btbEmployeeIsLocationManaged(db, existing.id)) {
+      throw new BtbApiError("This employee belongs to the location platform. Ask their location manager or corporate to update the account.", 403);
+    }
     if (existing.id === identity.employeeId && (body.active !== true || role !== existing.role)) throw new BtbApiError("Ask another manager to change your own access.");
   }
   const email = String(body.email).trim().toLowerCase();
