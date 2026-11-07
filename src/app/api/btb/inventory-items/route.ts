@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
+import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, isUuid, parseNewItem, requireRole } from "@/lib/btb-inventory-api";
 import { requireItemWithoutFinalizedHistory } from "@/lib/inventory-server-guards";
@@ -22,6 +22,7 @@ export async function GET() {
   const { data, error } = await inventoryDb()
     .from("inventory_items")
     .select(ITEM_COLS)
+    .is("location_id", null)
     .order("position")
     .order("name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -44,7 +45,7 @@ export async function POST(req: Request) {
   // page insert did with `items.length`.
   let position = item.position;
   if (position === null) {
-    const { count, error: countError } = await db.from("inventory_items").select("id", { count: "exact", head: true });
+    const { count, error: countError } = await db.from("inventory_items").select("id", { count: "exact", head: true }).is("location_id", null);
     if (countError) return NextResponse.json({ error: countError.message }, { status: 500 });
     position = count ?? 0;
   }
@@ -84,6 +85,7 @@ export async function PATCH(req: Request) {
   const { data, error } = await db
     .from("inventory_items")
     .update({ name: parsed.value.name, unit: parsed.value.unit, unit_cost: parsed.value.unit_cost })
+    .is("location_id", null)
     .eq("id", id)
     .select(ITEM_COLS)
     .maybeSingle();
@@ -105,7 +107,7 @@ export async function DELETE(req: Request) {
   if (!history.ok) return NextResponse.json({ error: history.error }, { status: history.status });
 
   // Draft counts cascade in the DB. Finalized history is blocked above.
-  const { data, error } = await db.from("inventory_items").delete().eq("id", id).select("id").maybeSingle();
+  const { data, error } = await db.from("inventory_items").delete().is("location_id", null).eq("id", id).select("id").maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "item not found" }, { status: 404 });
   return NextResponse.json({ ok: true });

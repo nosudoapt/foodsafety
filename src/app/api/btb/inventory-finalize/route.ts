@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
+import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth, toLines, totalValue, type InventoryCount, type InventoryItem } from "@/lib/month-end-inventory";
 import { computeAccounting } from "@/lib/inventory-accounting";
@@ -26,12 +26,13 @@ const MANAGER_ROLES = ["manager", "admin"];
 async function serverClosingValue(db: SupabaseClient, month: string): Promise<number> {
   const { data: items, error: itemError } = await db
     .from("inventory_items")
-    .select("id, name, unit, category, unit_cost, position");
+    .select("id, name, unit, category, unit_cost, position").is("location_id", null);
   if (itemError) throw new Error(`could not read inventory items: ${itemError.message}`);
 
   const { data: counts, error: countError } = await db
     .from("inventory_counts")
     .select("item_id, qty")
+    .is("location_id", null)
     .eq("count_month", month);
   if (countError) throw new Error(`could not read inventory counts: ${countError.message}`);
 
@@ -47,6 +48,7 @@ async function serverPurchases(db: SupabaseClient, month: string): Promise<numbe
   const { data, error } = await db
     .from("inventory_purchases")
     .select("amount")
+    .is("location_id", null)
     .eq("count_month", month);
   if (error) throw new Error(`could not read inventory purchases: ${error.message}`);
   const sum = (data ?? []).reduce((total, row) => {
@@ -66,6 +68,7 @@ async function serverOpening(
   const { data, error } = await db
     .from("inventory_month_snapshots")
     .select("closing_value, status")
+    .is("location_id", null)
     .eq("count_month", pm)
     .maybeSingle();
   if (error) throw new Error(`could not read prior snapshot: ${error.message}`);
@@ -93,6 +96,7 @@ export async function POST(req: Request) {
   const { data: existing, error: existingError } = await db
     .from("inventory_month_snapshots")
     .select("*")
+    .is("location_id", null)
     .eq("count_month", count_month)
     .maybeSingle();
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
@@ -157,7 +161,7 @@ export async function POST(req: Request) {
     writeSnapshot: async () => {
       const { data, error } = await db
         .from("inventory_month_snapshots")
-        .upsert(row, { onConflict: "count_month" })
+        .upsert(row, { onConflict: "count_month,scope_key" })
         .select()
         .single();
       return { data: (data as SnapshotRow | null) ?? null, error };
@@ -178,6 +182,7 @@ export async function POST(req: Request) {
         const { data, error } = await db
           .from("inventory_month_snapshots")
           .update(snapshotRestoreFields(prior))
+          .is("location_id", null)
           .eq("count_month", count_month)
           .eq("status", "finalized")
           .eq("version", written.version ?? row.version ?? 1)
@@ -190,6 +195,7 @@ export async function POST(req: Request) {
       const { data, error } = await db
         .from("inventory_month_snapshots")
         .delete()
+        .is("location_id", null)
         .eq("count_month", count_month)
         .eq("status", "finalized")
         .eq("version", written.version ?? row.version ?? 1)

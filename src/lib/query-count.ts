@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type CountFilter =
   | { column: string; op: "eq" | "gte" | "lt" | "lte"; value: string | boolean }
   | { column: string; op: "in"; value: string[] }
-  | { column: string; op: "notNull"; value?: never };
+  | { column: string; op: "notNull" | "isNull"; value?: never };
 
 function selectCount(client: SupabaseClient, table: string) {
   return client.from(table).select("id", { count: "exact", head: true });
@@ -15,6 +15,7 @@ function applyFilter(query: CountBuilder, filter: CountFilter): CountBuilder {
   switch (filter.op) {
     case "in": return query.in(filter.column, filter.value);
     case "notNull": return query.not(filter.column, "is", null);
+    case "isNull": return query.is(filter.column, null);
     case "eq": return query.eq(filter.column, filter.value);
     case "gte": return query.gte(filter.column, filter.value);
     case "lt": return query.lt(filter.column, filter.value);

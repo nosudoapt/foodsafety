@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
+import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
 import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, parseCountSave, requireRole } from "@/lib/btb-inventory-api";
@@ -30,9 +30,9 @@ export async function GET(req: Request) {
 
   const db = inventoryDb();
   const [countsRes, prevRes, summaryRes] = await Promise.all([
-    db.from("inventory_counts").select(COUNT_COLS).eq("count_month", month),
-    db.from("inventory_counts").select(COUNT_COLS).eq("count_month", prevMonth(month)),
-    db.from("inventory_month_summary").select("sales").eq("count_month", month),
+    db.from("inventory_counts").select(COUNT_COLS).is("location_id", null).eq("count_month", month),
+    db.from("inventory_counts").select(COUNT_COLS).is("location_id", null).eq("count_month", prevMonth(month)),
+    db.from("inventory_month_summary").select("sales").is("location_id", null).eq("count_month", month),
   ]);
   if (countsRes.error) return NextResponse.json({ error: countsRes.error.message }, { status: 500 });
   if (prevRes.error) return NextResponse.json({ error: prevRes.error.message }, { status: 500 });
@@ -68,6 +68,7 @@ export async function POST(req: Request) {
     const { data: knownItems, error: itemError } = await db
       .from("inventory_items")
       .select("id")
+      .is("location_id", null)
       .in("id", itemIds);
     if (itemError) return NextResponse.json({ error: itemError.message }, { status: 500 });
     if ((knownItems ?? []).length !== itemIds.length) {
@@ -87,11 +88,12 @@ export async function POST(req: Request) {
       const { data, error } = await db
         .from("inventory_counts")
         .select("*")
+        .is("location_id", null)
         .eq("count_month", month);
       return { rows: (data ?? []) as Record<string, unknown>[], error };
     },
     del: async () => {
-      const { error } = await db.from("inventory_counts").delete().eq("count_month", month);
+      const { error } = await db.from("inventory_counts").delete().is("location_id", null).eq("count_month", month);
       return { error };
     },
     ins: async () => {

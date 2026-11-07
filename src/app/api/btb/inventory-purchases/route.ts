@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
+import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 import { isDateInMonth } from "@/lib/btb-inventory-api";
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
   if (type === "gfs" && ref) {
     const { data: existingRows, error: duplicateReadError } = await db
       .from("inventory_purchases")
-      .select("id, type, supplier, reference, purchase_date, amount, description, count_month");
+      .select("id, type, supplier, reference, purchase_date, amount, description, count_month").is("location_id", null);
     if (duplicateReadError) return NextResponse.json({ error: duplicateReadError.message }, { status: 500 });
     const entries = (existingRows ?? []) as PurchaseEntry[];
     const candidate: PurchaseEntry = { count_month, purchase_date, type, supplier: sup, description: description.trim(), amount: amt, reference: ref };
@@ -106,6 +106,7 @@ export async function GET(req: Request) {
   const { data, error } = await inventoryDb()
     .from("inventory_purchases")
     .select("*")
+    .is("location_id", null)
     .eq("count_month", month)
     .order("purchase_date")
     .order("created_at");

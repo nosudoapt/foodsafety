@@ -57,10 +57,21 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
     if (SESSION_LIFECYCLE_ROUTES.has(routeName)) continue;
     const src = read(f);
     assert.ok(
-      src.includes("btbRoute(") || src.includes("btbIdentityFromSession(") || src.includes("verifiedBtbRole as roleFromSession") || src.includes("legacyBtbRole as roleFromSession"),
+      src.includes("btbRoute(") || src.includes("btbIdentityFromSession(") || src.includes("verifiedBtbRole as roleFromSession") || src.includes("legacyBtbRole as roleFromSession")
+        || src.includes("platformRoute("),
       `${f} must verify individual account state, not just decode a cookie role`,
     );
-    if (!src.includes("btbRoute(")) assert.ok(src.includes("BTB_COOKIE"), `${f} must read the BTB cookie`);
+    // platformRoute() resolves the personal employee session server-side (and
+    // re-verifies the credential version in SQL), so it also reads the cookie.
+    if (!src.includes("btbRoute(") && !src.includes("platformRoute(")) {
+      assert.ok(src.includes("BTB_COOKIE"), `${f} must read the BTB cookie`);
+    }
+    if (src.includes("platformRoute(")) {
+      assert.ok(
+        src.includes('from "@/lib/btb-platform-route"'),
+        `${f} must import the shared platformRoute wrapper, not hand-roll session resolution`,
+      );
+    }
   }
 });
 

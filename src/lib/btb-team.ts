@@ -1,6 +1,6 @@
 import type { BtbRole } from "./btb-roles";
 export { BTB_RESTAURANT } from "./btb-roles";
-export const EMPLOYEE_ROLES = ["staff", "supervisor", "manager"] as const;
+export const EMPLOYEE_ROLES = ["staff", "supervisor", "manager", "designer", "corporate", "owner"] as const;
 export type EmployeeRole = (typeof EMPLOYEE_ROLES)[number];
 
 export interface BtbEmployee {
@@ -43,7 +43,7 @@ export function btbToday(now = new Date()): string {
 }
 
 export function employeeEditableBy(actor: BtbRole, employeeRole: EmployeeRole): boolean {
-  return actor === "manager" || (actor === "supervisor" && employeeRole === "staff");
+  return (actor === "manager" && ["staff", "supervisor", "manager"].includes(employeeRole)) || (actor === "supervisor" && employeeRole === "staff");
 }
 
 export function attributionName(identity: BtbIdentity): string {

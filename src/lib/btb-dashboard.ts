@@ -31,6 +31,16 @@ interface BtbView {
 }
 
 export const BTB_DASHBOARD_VIEWS: Record<BtbRole, BtbView> = {
+  designer: {
+    title: "Good work starts with a clear brief.", subtitle: "Approved requests, artwork versions and the content calendar.",
+    focusTitle: "Your design workspace", focusBody: "Open the location platform to review approved briefs and deliver artwork.",
+    metrics: [], attention: [], quick: ["designer"], responsibility: "Design approved marketing work and maintain the content calendar.",
+  },
+  owner: {
+    title: "One connected restaurant group.", subtitle: "Locations, people and operations in one workspace.",
+    focusTitle: "Your location platform", focusBody: "Manage location access, reporting and configuration from the platform.",
+    metrics: [], attention: [], quick: ["platform"], responsibility: "Configure the organization and oversee each location.",
+  },
   staff: {
     title: "Ready for a good shift.", subtitle: "Your shift essentials, saved progress and kitchen reference, together.",
     focusTitle: "Set the next person up for success.", focusBody: "Start with opening checks, keep prep counts current, and finish with a clear close. Your saved records keep the handover moving.",

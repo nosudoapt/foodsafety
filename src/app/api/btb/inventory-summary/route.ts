@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
+import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { MONTH_END_EDIT_ROLES, parseSummarySave, requireRole } from "@/lib/btb-inventory-api";
 import { requireEditableMonth } from "@/lib/inventory-server-guards";
@@ -34,11 +34,12 @@ export async function POST(req: Request) {
       const { data, error } = await db
         .from("inventory_month_summary")
         .select("*")
+        .is("location_id", null)
         .eq("count_month", month);
       return { rows: (data ?? []) as Record<string, unknown>[], error };
     },
     del: async () => {
-      const { error } = await db.from("inventory_month_summary").delete().eq("count_month", month);
+      const { error } = await db.from("inventory_month_summary").delete().is("location_id", null).eq("count_month", month);
       return { error };
     },
     ins: async () => {

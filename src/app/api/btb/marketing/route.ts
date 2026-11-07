@@ -12,14 +12,14 @@ export const GET = btbRoute("marketing", false, async ({ db }, request) => {
   const download = new URL(request.url).searchParams.get("download");
   if (download) {
     if (!isUuid(download)) throw new BtbApiError("Choose a saved promotion.");
-    const result = await db.from("marketing_promotions").select("file_url,file_name").eq("restaurant_name", BTB_RESTAURANT).eq("id", download).maybeSingle();
+    const result = await db.from("marketing_promotions").select("file_url,file_name").eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).eq("id", download).maybeSingle();
     dbError(result.error, "The artwork couldn’t be downloaded. Please try again.");
     if (!result.data?.file_url) throw new BtbApiError("No artwork is attached to this promotion.", 404);
     return { url: result.data.file_url, name: result.data.file_name };
   }
   const [promotions, posts, uploader] = await Promise.all([
-    readAll((from, to) => db.from("marketing_promotions").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).order("created_at", { ascending: false }).order("id").range(from, to), "Promotions couldn’t be loaded. Please try again."),
-    readAll((from, to) => db.from("social_media_calendar").select(POST_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).order("day").order("id").range(from, to), "The social planner couldn’t be loaded. Please try again."),
+    readAll((from, to) => db.from("marketing_promotions").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).order("created_at", { ascending: false }).order("id").range(from, to), "Promotions couldn’t be loaded. Please try again."),
+    readAll((from, to) => db.from("social_media_calendar").select(POST_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).order("day").order("id").range(from, to), "The social planner couldn’t be loaded. Please try again."),
     btbUploaderConnection(db),
   ]);
   return { promotions, posts, uploader };
@@ -49,7 +49,7 @@ export const POST = btbRoute("marketing", true, async ({ db, identity }, request
 export const PATCH = btbRoute("marketing", true, async ({ db }, request) => {
   const body = await readBody(request);
   if (!isUuid(body.id) || !STATUSES.includes(String(body.status)) || !STATUSES.includes(String(body.previous_status))) throw new BtbApiError("Choose a saved campaign and status.");
-  const result = await db.from("marketing_promotions").update({ status: body.status, updated_at: new Date().toISOString() }).eq("restaurant_name", BTB_RESTAURANT).eq("id", body.id).eq("status", body.previous_status).select("id").maybeSingle();
+  const result = await db.from("marketing_promotions").update({ status: body.status, updated_at: new Date().toISOString() }).eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).eq("id", body.id).eq("status", body.previous_status).select("id").maybeSingle();
   dbError(result.error, "The promotion status wasn’t changed. Please try again.");
   if (!result.data) throw new BtbApiError("This campaign changed on another device. Reload the board before updating it.", 409);
   return { ok: true };
@@ -58,7 +58,7 @@ export const PATCH = btbRoute("marketing", true, async ({ db }, request) => {
 export const DELETE = btbRoute("marketing", true, async ({ db }, request) => {
   const body = await readBody(request);
   if (!isUuid(body.id)) throw new BtbApiError("Choose a saved campaign.");
-  const result = await db.from("marketing_promotions").delete().eq("restaurant_name", BTB_RESTAURANT).eq("id", body.id).select("id").maybeSingle();
+  const result = await db.from("marketing_promotions").delete().eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).eq("id", body.id).select("id").maybeSingle();
   dbError(result.error, "The promotion wasn’t deleted. Please try again.");
   if (!result.data) throw new BtbApiError("This campaign is no longer available. Reload the board.", 404);
   return { ok: true };

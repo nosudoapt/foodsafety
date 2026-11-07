@@ -8,7 +8,7 @@ export const GET = btbRoute("checklists", false, async ({ db }, request) => {
   const date = params.get("date");
   const before = params.get("before");
   if (date && !isIsoDate(date) || before && !isIsoDate(before)) throw new BtbApiError("Choose a valid date.");
-  let query = db.from("btb_shift_checks").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT);
+  let query = db.from("btb_shift_checks").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).is("location_id", null);
   if (date) query = query.eq("check_date", date);
   if (before) query = query.lt("check_date", before);
   const result = await query.order("check_date", { ascending: false }).order("check_type").limit(date ? 2 : 61);
@@ -25,7 +25,7 @@ export const POST = btbRoute("checklists", true, async ({ db, identity }, reques
   if (!isIsoDate(body.date) || body.date > btbToday() || !["opening", "closing"].includes(String(body.type)) || !isVersion(body.version)) throw new BtbApiError("Choose today or an earlier checklist date.");
   if (typeof body.notes !== "string" || body.notes.length > 2000 || !Array.isArray(body.changes) || body.changes.length > 40) throw new BtbApiError("Keep notes under 2,000 characters and review your checklist changes.");
   const type = body.type as CheckType;
-  const saved = await db.from("btb_shift_checks").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).eq("check_date", body.date).eq("check_type", type).maybeSingle();
+  const saved = await db.from("btb_shift_checks").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).eq("check_date", body.date).eq("check_type", type).maybeSingle();
   dbError(saved.error, "The current checklist could not be verified.");
   const current = saved.data as BtbShiftCheck | null;
   if ((current?.version ?? 0) !== body.version) throw new BtbApiError("This checklist changed on another device. Reload the saved version before applying your draft.", 409);

@@ -3,7 +3,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OWNER_TIER_ROLES } from "@/lib/roles";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
+import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { btbCanView } from "@/lib/btb-access";
 import { BTB_RESTAURANT, isBtbRole } from "@/lib/btb-roles";
 

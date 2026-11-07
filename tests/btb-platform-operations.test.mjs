@@ -1,0 +1,24 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {createPlatformDatabase,seedPlatform,IDS,call} from "./helpers/btb-platform-database.mjs";
+test("daily operations preserve attribution, evidence rules, revisions and separate Celsius/PPM",async(t)=>{
+  const db=await createPlatformDatabase("operations"); t.after(()=>db.close()); await seedPlatform(db);
+  const context={p_actor:IDS.manager,p_session:1,p_location:IDS.a};
+  await call(db,"btb_platform_configure_operations",{...context,p_profile:IDS.uploader,p_data:{effective_from:"2026-11-01",kind:"opening",tasks:[{id:"a",text:"Existing task",requires_value:true}]}});
+  const check={...context,p_actor:IDS.staff,p_date:"2026-11-06",p_kind:"opening",p_version:0,p_notes:"Ready"};
+  await assert.rejects(call(db,"btb_platform_save_check",{...check,p_changes:[{id:"a",completed:true}]}),/Task value required/);
+  const saved=await call(db,"btb_platform_save_check",{...check,p_changes:[{id:"a",completed:true,value:"Recorded",completed_by_name:"Forged"}]});
+  assert.equal(saved.completed,true); assert.equal(saved.items[0].completed_by_name,"staff");
+  await assert.rejects(call(db,"btb_platform_save_check",{...check,p_changes:[]}),/changed/);
+  assert.equal((await db.query("SELECT * FROM btb_check_revisions")).rows.length,1);
+  await call(db,"btb_platform_configure_operations",{...context,p_profile:IDS.uploader,p_data:{effective_from:"2026-11-01",equipment:[{name:"Freezer 1",type:"freezer",min:null,max:null}]}});
+  const eq=(await db.query("SELECT id FROM equipment")).rows[0].id;
+  const reading={...context,p_actor:IDS.staff,p_profile:IDS.uploader,p_data:{kind:"temperature",date:"2026-11-06",slot:"11:00",equipment_id:eq,value:-18,version:0}};
+  const temp=await call(db,"btb_platform_save_reading",reading);
+  assert.equal(temp.temperature,-18); assert.equal(temp.is_safe,null); assert.equal(temp.unit,"C");
+  await assert.rejects(call(db,"btb_platform_save_reading",reading),/changed/);
+  const ppm=await call(db,"btb_platform_save_reading",{...reading,p_data:{kind:"sanitizer",date:"2026-11-06",slot:"11:00",value:300,version:0}});
+  assert.equal(ppm.unit,"PPM"); assert.equal(ppm.ppm,300); assert.equal(ppm.is_safe,null);
+  await assert.rejects(call(db,"btb_platform_save_reading",{...reading,p_location:IDS.b}),/Location not permitted/);
+  await assert.rejects(call(db,"btb_platform_configure_operations",{...context,p_profile:IDS.uploader,p_data:{effective_from:"2026-11-01",sanitizer:{chemical:"Test",min:100,max:300}}}),/Corporate must/);
+});

@@ -10,6 +10,7 @@ export async function requireEditableMonth(db: SupabaseClient, month: string): P
   const { data, error } = await db
     .from("inventory_month_snapshots")
     .select("status")
+    .is("location_id", null)
     .eq("count_month", month)
     .maybeSingle();
 
@@ -32,6 +33,7 @@ export async function requireItemWithoutFinalizedHistory(
   const { data: counts, error: countError } = await db
     .from("inventory_counts")
     .select("count_month")
+    .is("location_id", null)
     .eq("item_id", itemId);
 
   if (countError) return { ok: false, status: 500, error: `could not check item history: ${countError.message}` };
@@ -41,6 +43,7 @@ export async function requireItemWithoutFinalizedHistory(
   const { data: finalized, error: snapshotError } = await db
     .from("inventory_month_snapshots")
     .select("count_month")
+    .is("location_id", null)
     .eq("status", "finalized")
     .in("count_month", months)
     .limit(1);

@@ -21,7 +21,7 @@ export const POST = btbRoute("marketing", true, async ({ db, identity }, request
 export const DELETE = btbRoute("marketing", true, async ({ db }, request) => {
   const body = await readBody(request);
   if (!isUuid(body.id)) throw new BtbApiError("Choose a saved post.");
-  const result = await db.from("social_media_calendar").delete().eq("restaurant_name", BTB_RESTAURANT).eq("id", body.id).select("id").maybeSingle();
+  const result = await db.from("social_media_calendar").delete().eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).eq("id", body.id).select("id").maybeSingle();
   dbError(result.error, "The post wasn’t removed. Please try again.");
   if (!result.data) throw new BtbApiError("This post is no longer available. Reload the planner.", 404);
   return { ok: true };

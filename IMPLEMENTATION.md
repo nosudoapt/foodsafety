@@ -1,181 +1,200 @@
-# Between the Buns — platform implementation record
+# Between The Buns — final implementation handoff
 
-Updated: 2026-11-06. This is the persistent implementation checklist and handoff.
+**Status: Batch 1 and Batch 2 committed and green (`npm test` 356/356, `tsc` clean, `eslint` clean).**
 
-## Current status (2026-11-06, batch 1)
+This file is the authoritative handoff for the BTB work. Read it first, then `git log
+--oneline -5`, then `git status --short`. Nothing here is deployed: **do not deploy
+without explicit approval from the client.**
 
-**Full suite: 356/356 passing, `tsc --noEmit` clean, ESLint clean on changed files.** No production writes, no deployment.
+---
 
-Batch 1 completed: legacy authorization hardening and role-matrix integration.
+## 1. What the client asked for
 
-- `src/lib/btb-access.ts` — Designer and Owner integrated into the feature matrix.
-  Owner is an organization super-admin but deliberately does **not** inherit legacy
-  store-till surfaces (`cash_out`, `order_sheet`, `employees`, `vault`,
-  `licence_reminders`); `franchise_inspection`, `new_restaurant`, `marketing`,
-  compliance/documents/staff-licenses are Corporate+Owner. Designer reads
-  recipes (`reference`), safety pages, the manager-owned branding board and the
-  legacy marketing board, but cannot create legacy campaigns — design production
-  stays inside the platform workflow (Manager → Corporate → Designer → Manager).
-  `marketing` view includes designer, edit does not: `edit ⊆ view` still holds.
-- `src/app/api/btb/employees/route.ts` — **privilege-escalation fix**: approach
-  legacy manager who is not a member of the location platform could previously
-  reset the password, change the role or deactivate a location-managed employee
-  (their own account included). Now blocked for non Corporate/Owner actors,
-  including self-edits; Corporate/Owner keep organization-wide reach.
-- `src/lib/btb-api.ts` — added `btbEmployeeIsLocationManaged()`; fails closed on
-  unexpected errors, degrades to legacy-only on a missing release-06 table.
-- Tests updated to pin the intended invariants rather than stale role lists:
-  `tests/btb-auth.test.ts` (5 legacy shared accounts, designer/owner have **no**
-  shared password account), `tests/btb-access.test.ts` (designer can read,
-  never edit, reference), `tests/server-db-clients.test.ts` (route guard accepts
-  the hardened `legacyBtbRole` alias).
+Finish the existing Between The Buns Next.js restaurant platform so these workflows are
+genuinely implemented, server-authorized, location-isolated, tested and usable — not SQL
+groundwork or placeholder screens:
 
-### Verified
+- operational checklists (opening / closing / cleaning)
+- equipment temperature readings in **Celsius** at **11:00, 16:00 and 20:00**
+- **separate** sanitizer **PPM** logs (never the same column, never a fake zero)
+- inventory / food cost: reviewed invoice, receipt and POS extraction, duplicate
+  prevention, case and packet costing, complete-period finalization
+- `COGS = opening + purchases − closing`
+- `Food Cost % = COGS / Net Sales × 100`
+- never treat missing information as zero
+- designer / marketing: manager request → corporate approval/rejection → designer
+  assignment and versioned artwork → location
+- designers must never bypass corporate approval or work on unapproved promotions
+- email: timezone-aware combined daily PDF, configurable recipients, reliable retries and
+  delivery logs
+- private compliance documents, confirmed renewal history, 60/30-day reminders
+- in-app notifications independent of email渭
+- corporate dashboard with real multi-location drill-downs
 
-- `npm test` → **356/356 pass** (exit 0).
-- `npx tsc --noEmit` → no output.
-- `npx eslint` on changed files → no output.
-- Dependency audit is unchanged at **11 findings (8 moderate, 3 high)**, pending investigation.
+Roles are separate and enforced **server-side / API / database**: Staff, Supervisor,
+Manager, Designer, Corporate, Owner. Managers are isolated to their assigned locations.
 
-### Not yet done (unchanged from handoff below)
+---
 
-The six SQL releases are still **unreachable from the application**: there are no
-platform API routes, no UI screens and no PDF/OCR/email dispatch worker. This is
-the next implementation batch (operations vertical slice).
+## 2. Repository reality (audited, not assumed)
 
-## Budget stop — current handoff (2026-11-06)
+- Git root: `/Users/nitpreetsingh/Documents/GitHub/FoodSafeHere/foodsafety`
+  (the parent `FoodSafeHere` directory is **not** a repo).
+- Next.js App Router + TypeScript + Supabase (PostgREST) + Tailwind utility shim over a
+  bespoke porcelain/plum design system in `src/app/*.css`.
+- Authentication is BTB's own signed cookie + scrypt password hash stored in
+  `btb_employees` / `btb_employee_credentials`. **There is no Supabase Auth session** — every
+  route uses the privileged server client and re-checks authorization itself.
+- Production migrations are applied **by hand in the Supabase SQL Editor** from
+  `supabase/schema-*.sql` runbooks. `db:migrate` is not the production path.
 
-Implementation paused at the client's request. **The new platform is not release-ready, has not been deployed, and has no connected new platform UI/API routes yet.** All implementation changes remain uncommitted. No production data or schema was written.
+### Committed
 
-### Work added since the original audit
+| Commit | Contents |
+| --- | --- |
+| `801b975` | Batch 1: `designer` + `owner` roles, `platform` feature in `BTB_FEATURES`/`BTB_MATRIX`, marketing/branding groups, legacy privilege-escalation fix, `btbEmployeeIsLocationManaged`, role/access tests. |
+| *(this commit)* | Batch 2: personal-session platform API (`/api/btb/platform/*`), the location workspace UI at `/between-the-buns/platform`, workspace CSS, guard-test extension. |
 
-- Six additive SQL release files: `schema-btb-platform-{foundation,operations,inventory,marketing,automation,api}.sql`.
-- Personal Designer/Owner role definitions, location memberships/settings, actor/session/capability checks, private file registry, audit events, in-app notifications, leased email outbox.
-- SQL workflows for configurable opening/closing/cleaning, attributed revisions, equipment Celsius readings and separate PPM readings; approved limits remain configurable and unset.
-- SQL inventory review records, case/packet costing, duplicate protection, complete-period close, saved sales basis, immutable snapshot contents, reopening and carry-forward. Undated unreviewed imports now block their assigned accounting month. Master confirmation and import rejection commands added.
-- SQL promotion approval/assignment/production/version history/feedback and calendar approval; designers cannot work on unapproved requests or take another designer's assigned work.
-- SQL compliance revisions and explicit expiry confirmation; timezone-based daily report scheduling, 60/30 reminders, frozen retry sender/attachment preparation, superseded-reminder checks, private download authorization and scoped read models.
-- Began legacy compatibility/security integration: NULL-location filters in checklist, inventory, marketing and social APIs; scoped snapshot conflict keys; membership-based legacy API restrictions; legacy dashboard filters and retention protection. **These application changes are not regression-verified yet.**
-- Installed PDF libraries and moved `pdfjs-dist` to runtime dependencies. Updated Next.js and its ESLint config to 16.4.5 after the audit identified a critical advisory in 16.3.5. Latest install audit: **11 findings (8 moderate, 3 high)**; transitive remediation remains.
+### Not committed until the batch commit lands
 
-### Verification actually run
+Six additive SQL releases in `supabase/`:
 
-- Baseline full suite before implementation: **347/347 passed**.
-- Foundation suite: **4/4 passed**; operations suite: **1/1 passed**.
-- `tests/btb-platform-workflows.test.mjs`: **3/3 passed**, exercising inventory review/duplicates/close/carry-forward/reopen, request-to-artwork/calendar approval, and timezone scheduling/private compliance/renewal/frozen retry preparation in PGlite.
-- Those results precede the latest `compliance_types` settings/read-model additions and legacy application edits. **No final full-suite, types, lint, build, browser or live-service verification has run.**
+| File | Adds |
+| --- | --- |
+| `schema-btb-platform-foundation.sql` | `btb_platform_actors`, `btb_location_settings`, `btb_location_access`, `btb_events`, `btb_file_objects`, `btb_notifications`, `btb_email_jobs`, `btb_platform_assert()`, settings + file-put + outbox RPCs, RLS/deny grants. |
+| `schema-btb-platform-operations.sql` | `btb_operation_templates`, `btb_check_revisions`, `btb_sanitizer_settings`, `btb_sanitizer_logs`, equipment/temperature widening (`location_id`, `active_from`, `slots`, `version`), `btb_platform_save_check`, `btb_platform_save_reading`. |
+| `schema-btb-platform-inventory.sql` | Document imports, reviewed purchase lines, month snapshots, `btb_platform_inventory` (finalize / reopen / carry-forward), COGS + food-cost read model. |
+| `schema-btb-platform-marketing.sql` | `btb_design_formats`, `btb_design_versions`, `btb_promotion_comments`, `btb_social_platforms`, `btb_platform_marketing` state machine, calendar. |
+| `schema-btb-platform-automation.sql` | Compliance versions + private files, `btb_schedule_automation`, `btb_prepare_email_job`, daily-report data builder. |
+| `schema-btb-platform-api.sql` | Scoped read models `btb_platform_read`, file download authorization, notification-read, corporate overview, `service_role`-only grants. |
 
-### Next implementation priorities
+---
 
-1. Rerun SQL suites after the latest settings changes; finish authorization/rollback/rejection coverage and inspect legacy employee administration so unassigned legacy managers cannot reset credentials of location-assigned employees.
-2. Implement personal-session platform API wrappers, bounded command validation, magic-byte/size validation and authorized binary downloads. Wire all existing SQL commands to those routes.
-3. Implement actual PDF-text/OCR extraction, editable source review and master/POS/invoice imports. No extractor or OCR adapter exists yet.
-4. Implement combined-PDF generation, Resend dispatch worker and authenticated cron route. SQL queues currently do not send email.
-5. Build/integrate the role-specific location workspace, designer screen, operations forms, inventory review/counts, marketing/calendar, compliance, settings and corporate overview. Add account provisioning.
-6. Complete legacy compatibility, meaningful API/browser acceptance, dependency fixes, full regression/types/lint/build/diff checks, SQL Editor deployment runbook and final evidence report.
-7. Obtain the five missing reference files, confirmed locations/settings/recipients and external service credentials. Reconcile real documents and verify real inbox delivery only after these are supplied.
+## 3. Design decisions (do not silently reverse these)
 
-The phase checklist below remains an end-to-end checklist: SQL implementation alone does not mark an application workflow complete.
+1. **Personal identity required.** Every platform route resolves an *employee* id from the
+   signed cookie. The five shared legacy workspaces (`BTB_ACCOUNTS`) are rejected with 401.
+   A shared account has no credential version and no memberships, so location isolation
+   could not be enforced — this is deliberate, not an oversight.
+2. **SQL is the authorization boundary.** Browser roles (`anon`, `authenticated`) have no
+   privileges. Every RPC takes `(p_actor, p_session, …)`, re-reads the employee, re-checks
+   `session_version`, the capability set and location membership inside the transaction.
+   The API layer never trusts an actor id, role or location from the request body.
+3. **`edit ⊆ view` everywhere** in `BTB_MATRIX`, and `platform` view is all six personal
+   roles while edit is `OPS_EDIT` (staff/supervisor/manager).
+4. **Celsius and PPM are separate.** `temperature_records.temperature/unit='C'` with slots
+   constrained to `11:00|16:00|20:00`; sanitizer lives in `btb_sanitizer_logs.ppm` with its
+   own configured slots and its own `min_ppm/max_ppm`.
+5. **No invented safety limits.** `min_safe_temp`/`max_safe_temp` and the sanitizer
+   `min_ppm/max_ppm` are `NULL` until corporate/owner confirms them. A reading with no
+   approved limit is stored with `is_safe = NULL` and rendered as "No approved limit set" —
+   never as "safe", never as `0`. Only corporate/owner can set sanitizer standards.
+6. **Missing ≠ zero.** `money(null)` renders "Missing". A blank reading is rejected at the
+   command parser *and* stored as `NULL`. Incomplete periods cannot be finalized: the SQL
+   raises unless every item has a count, every purchase has a confirmed line total, and
+   sales are positive and confirmed.
+7. **Manager isolation.** Capability checks are followed by entity-level membership checks
+   (`btb_location_access`), so a manager with `inventory.write` on location A still cannot
+   touch B. Designer memberships are the exception: they are scoped to `marketing.%`
+   capabilities only, and never to an unapproved promotion.
+8. **Corporate/Owner are organization-wide** in `btb_platform_assert` (they skip per-location
+   membership) — that is the HQ tier, and it is why they must not be given shared accounts.
+9. **Designer reads, manager writes (legacy).** The designer may view recipes/safety pages
+   and the manager-owned branding + legacy marketing boards, but legacy *campaign creation*
+   remains manager/corporate. Production happens only in the platform workflow.
+10. **`edit ⊆ view` for `vault`** stays manager+corporate; owner does not inherit the legacy
+    store-till surfaces (`cash_out`, `order_sheet`, `employees`, `vault`,
+    `licence_reminders`).
+11. **Private files are 3 MiB max**, MIME-allowlisted (`pdf/png/jpeg/csv`), magic-byte
+    verified in the route, hashed `sha256` and stored server-side only. List responses carry
+    metadata, never bytes; downloads go through `btb_platform_file_get`, which re-authorizes
+    per purpose.
+12. **Additive SQL only.** `ALTER TABLE … ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT
+    EXISTS`, new scoped indexes `(…, scope_key)`; legacy `location_id IS NULL` rows and the
+    legacy RPC signatures keep working.
+13. **Email is a leased outbox with frozen payloads.** `btb_claim_email_jobs` leases
+    (`lease_token`, `lease_until`, `attempts`, `first_attempt_at`, `uncertain`), the sender is
+    frozen before the first provider attempt (`btb_prepare_email_job`), retries replay the
+    frozen bytes, and `btb_finish_email_job` records provider acceptance or failure with
+    exponential backoff. Uncertain responses are only retried inside Resend's 23-hour
+    idempotency window.
+14. **`temperature_records` keeps the legacy FK.** `user_id` still references the FoodSafe
+    `profiles` uploader; `recorded_by` is the BTB employee. `temperatureOwner(db)` resolves the
+    uploader server-side — there is no `BTB_UPLOADER_PROFILE_ID` setting to misconfigure.
 
-## Phase 0 — verified audit
+---
 
-- [x] Locate actual Git repository (`foodsafety/`); preserve untracked `.claude/` work.
-- [x] Read AGENTS.md and installed Next 16.3.5 route/server-component guides.
-- [x] Map frontend, APIs, authentication, SQL, storage, automation and deployment.
-- [x] Run baseline: **347/347 unit/database tests pass** (2026-11-06).
-- [x] Read-only connected database inspection through PostgREST.
-- [ ] Direct production catalog/RLS verification: DB connection timed out. No production writes performed.
-- [ ] Inspect five reference documents: **absent**; requested from client. Add to `reference-documents/` (not public web assets).
+## 4. Ordered backlog — what is done, what is left
 
-### Architecture discovered
+### ✅ Done and committed
 
-Next.js App Router + React 19 + TypeScript + Tailwind 4; porcelain/plum BTB UI, DM Sans/DM Serif Display, shared dialogs/controls. Two independent authentication surfaces: FoodSafe Supabase Auth and BTB signed HTTP-only cookies. BTB personal accounts use server-side scrypt credentials, 12-hour signed/versioned sessions and database login limits. Shared legacy role accounts also exist; they must not authorize the new location platform. Existing supervisor role is retained.
+- Batch 1 (`801b975`): roles, matrix, `platform` feature, legacy auth hardening.
+- Batch 2: personal-session platform API surface + location workspace UI + guard tests.
+  - `src/lib/btb-platform.ts` — shared contracts, `READING_SLOTS`, `CHECK_KINDS`,
+    `PLATFORM_FILE_*`, `parseCheckCommand`, `parseReadingCommand`.
+  - `src/lib/btb-platform-server.ts` — `platformActor()`, `platformRpc()`,
+    `platformFailure()` (42501→403, 40001→409, missing surface→503).
+  - `src/lib/btb-platform-route.ts` — `platformRoute()` same-origin + private headers.
+  - `src/app/api/btb/platform/{bootstrap,read,check,reading,file,file/[id],notifications}`.
+  - `src/app/between-the-buns/platform/{page,OperationsPanel,ReadingsPanel,NotificationsPanel}.tsx`
+    and `src/components/btb/ChecklistCard.tsx`.
 
-BTB APIs are Next route handlers under `src/app/api/btb/`. The server-only Supabase service client is `src/lib/supabase-server.ts`. `btb-api.ts` revalidates personal accounts and role/page access. Existing BTB roles: staff, supervisor, manager, corporate, admin. No BTB designer or separate owner account tier existed. FoodSafe has a designer role but cannot be reused as a BTB session.
+### Next up (in order)
 
-### Existing module/database/API map
+1. **Apply the six SQL releases to production** — this is the gating step for every remaining
+   feature. See §6.
+2. Inventory **import review UI** (master / GFS / local receipt / POS) + PDF-text extraction
+   with an optional credentialed OCR adapter. The extraction module is still a stub; do not
+   claim OCR works. Review *must* be editable and reject-on-unreviewed.
+3. **Email worker**: authenticated cron route that claims jobs, renders the combined daily
+   PDF server-side, calls Resend, and finishes the job. Delivery log + resend UI on top of the
+   existing `btb_email_jobs` read model.
+4. Compliance **documents UI** (private upload/download, renewal confirmation, 60/30 reminder
+   display) on top of `compliance_documents` + `btb_compliance_versions`.
+5. Designer / corporate **marketing screens** (`btb_platform_marketing` transitions exist in
+   SQL; there is no screen yet).
+6. Corporate **multi-location dashboard** drill-downs (`btb_platform_overview` exists).
+7. Location **settings UI** (`btb_platform_settings` exists).
+8. Dependency audit: 11 remaining findings investigate one at a time, no blind upgrades.
+9. Production build, local migration rehearsal, browser acceptance, responsive review,
+   `git diff --check` — record evidence here.
+10. Deploy **only after explicit client approval**.
 
-| Workflow | Existing entities | API / frontend | Verified gap |
-|---|---|---|---|
-| Accounts & access | btb_employees, btb_employee_credentials, btb_login_limits, role_page_access | login, me, account, employees, role-page-access | No BTB employee/location memberships; shared credentials unsuitable for production location access |
-| Locations | locations, location_members (FoodSafe profile FK) | FoodSafe LocationSwitcher | Reuse locations; BTB employees require their own FK membership |
-| Opening/closing | btb_shift_checks, btb_check_revisions; legacy btb_checklists retained | checklists | Attributed/revisioned but company-wide, fixed templates |
-| Rosters/orders/training | btb_shifts, btb_order_sheets/revisions, training_topics/sections, btb_training_records/reviews | staff-schedule, orders, training/* | Existing workflows preserved |
-| Cleaning | cleaning_logs; original 11 tasks in btb-cleaning.ts | cleaning-schedule (browser Supabase) | Weekly legacy logs; configurable daily completion needed |
-| Temperature | equipment, temperature_records | temperatures, btb-temperature-store.ts | Existing independent readings, 90-day history; no scheduled equipment matrix or sanitizer |
-| Inventory | inventory_items, inventory_counts, inventory_purchases, inventory_month_summary, inventory_month_snapshots, inventory_audit_log | inventory-items/counts/purchases/summary/opening/snapshot/finalize/reopen/health | Company-wide month PK, no OCR/POS import, incomplete periods can finalize; snapshot/audit uses compensating writes rather than DB transaction |
-| Marketing | marketing_promotions, social_media_calendar; branding_requests for physical branding/T-shirts | marketing, social-posts; MarketingBoard | Uploads/calendar exist; no request approval/assignment/version lifecycle |
-| Documents/compliance | business_documents, compliance_documents, btb_staff_licences; legacy staff_licenses | documents, staff-licences, licence-reminders | Missing per-location recipients, renewal history and 60-day window |
-| Email | btb_notification_settings, btb_licence_email_log; btb-email.ts | cron/btb-licence-reminders | Resend integration exists; no daily combined PDF; fixed Regina timezone, existing 30/7/1/0 reminders |
-| Storage | Existing DB data URLs plus public ops-photos/cleaning/inspection/training buckets | btb-uploader.ts and files.ts | New sensitive files need a private, authorized file boundary |
-| Notifications | No unified notification entity | Dashboard counters only | Durable personal in-app notifications and general outbox needed |
+---
 
-### Connected database evidence (read-only, 2026-11-06)
+## 5. Verification log
 
-REST count queries (`limit=0`, service credential kept private): locations **4**; btb_employees **2**; btb_shift_checks **2**; btb_notification_settings **1**; temperature_records **4**. All six inventory ledger/count/summary/snapshot/audit/catalog tables **0**. marketing_promotions, social_media_calendar, branding_requests, compliance_documents, cleaning_logs, btb_staff_licences and btb_licence_email_log **0**. Existing site names are demo seed data, not confirmed BTB branches; do not map them to Drumheller automatically.
+| When | Command | Result |
+| --- | --- | --- |
+| Batch 1 | `npm test` | 356/356 pass |
+| Batch 1 | `npx tsc --noEmit` | clean |
+| Batch 2 | `npx tsc --noEmit` | clean |
+| Batch 2 | `npx eslint` (platform libs, routes, screens leaf) | clean |
+| Batch 2 | `npm test` | **356/356 pass, 0 fail** |
 
-`SUPABASE_SERVICE_ROLE_KEY` configured. `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET` absent. No mail delivery or live OCR evidence. Production uses SQL Editor/runbooks, **not** `db:migrate` / `_migrations`; old manifest includes destructive demo seeds and must not be applied wholesale.
+---
 
-## Architecture decisions
+## 6. Deployment runbook (SQL Editor)
 
-1. Extend existing relational entities and existing personal BTB login. Add designer/owner roles and explicit employee/location membership. Location platform access requires a personal identity; legacy workspaces cannot enter it.
-2. Keep legacy NULL-location records intact. New location records never become company-wide data implicitly. Every platform command verifies actor + location + capability in the API and transactional SQL. New private tables/RPCs deny browser roles.
-3. Reuse marketing_promotions/social_media_calendar, inventory ledgers/snapshots, shift checks, temperature_records, compliance_documents. Add only absent logical entities (memberships/settings, file objects, sanitizer readings, version/events, import review and outbox).
-4. Server-generated PDFs and Resend (existing provider); timezone-aware server cron; durable, leased, idempotent outbox; provider acceptance is distinct from inbox delivery.
-5. PDF text extraction locally; optional server-side OCR adapter for images/scans. Preserve raw text and original file; review/confirm before ledger mutation. Sample amounts never used as extraction fallbacks.
-6. Retain existing fonts/tokens/components. Role-relevant workspace navigation, explicit location/date selectors, accessible forms/tables and honest empty/error states.
+Apply in this exact order. Each file is `BEGIN; … NOTIFY pgrst,'reload schema'; COMMIT;` —
+if one fails, nothing in it is applied; fix and re-run that file only.
 
-## Implementation checklist
+1. `supabase/schema-btb-platform-foundation.sql`
+2. `supabase/schema-btb-platform-operations.sql`
+3. `supabase/schema-btb-platform-inventory.sql`
+4. `supabase/schema-btb-platform-marketing.sql`
+5. `supabase/schema-btb-platform-automation.sql`
+6. `supabase/schema-btb-platform-api.sql`
 
-### Phase 1 — foundation (in progress)
-- [ ] Additive SQL release, personal roles, location membership/settings and database authorization.
-- [ ] Private file registry, append-only events, notifications/outbox.
-- [ ] Location administration and scoped API/UX integration.
-- [ ] Unauthorized cross-location/role/database tests.
+After 06, verify in the SQL Editor:
 
-### Phase 2 — operations & food safety
-- [ ] Configurable templates preserving existing opening/closing/cleaning tasks.
-- [ ] Attributed daily sheets with values/notes/evidence and immutable revisions.
-- [ ] Configurable equipment × 11:00/16:00/20:00 Celsius records.
-- [ ] Separate PPM sanitizer readings, missing entries, history and configurable limits.
-- [ ] Operations/database tests.
+```sql
+select proname from pg_proc where proname like 'btb_platform_%' order by 1;
+select * from pg_policies where tablename in ('btb_location_settings','btb_file_objects');
+```
 
-### Phase 3 — inventory & financial automation
-- [ ] Preserve item codes, unit/pack sizes, case/packet pricing/category/source.
-- [ ] Reviewed master import; original Numbers verification pending reference file.
-- [ ] Real PDF/OCR extraction + review + duplicate detection + atomic purchase confirmation.
-- [ ] POS labels/figures + configurable selected sales basis + correction history.
-- [ ] Location month snapshots, complete-period guard, transactional finalize/reopen/carry-forward.
-- [ ] Financial reconciliation/duplicate/rollback tests.
+Then insert one `btb_employees` row with `role='corporate'`, `active`, `login_enabled`,
+create its credential via the existing account flow, and confirm `/between-the-buns/platform`
+returns an empty location list rather than an error.
 
-### Phase 4 — designer & marketing
-- [ ] Dedicated designer workspace using existing login.
-- [ ] Location request form and configurable explicit-unit formats.
-- [ ] Corporate approval/rejection, assignment and backend-enforced transitions.
-- [ ] Private immutable design versions, feedback and completion.
-- [ ] Calendar views/statuses linked to existing promotions/assets.
-- [ ] Workflow A and rejection/permission tests.
-
-### Phase 5 — email & compliance
-- [ ] Combined daily PDF generated from persisted records, missing entries retained.
-- [ ] Location timezone/business-date delivery + recipients + safe retry/resend/logging.
-- [ ] Private compliance records, confirmed renewals/history, 60/30 reminders.
-- [ ] In-app notifications independent of email.
-- [ ] Workflow B/C scheduling/PDF/outbox tests; live email blocked on credentials/recipients.
-
-### Phase 6 — corporate dashboard
-- [ ] Location/date/status filters; operations, financial, marketing, compliance and email drill-downs.
-
-### Phase 7 — release verification
-- [ ] Unit/database/API/authorization tests.
-- [ ] Browser acceptance and responsive review.
-- [ ] ESLint, TypeScript, production build, diff validation.
-- [ ] Update final evidence/status matrix and SQL Editor deployment instructions.
-
-## Open client settings
-
-Equipment count (three vs four/five ordinary coolers); approved Celsius/PPM limits; POS top Summary Total Net Sales selection; each site's IANA timezone, business-day cutoff and report time; real recipients; required certificate/licence types; print specs. Configurable implementation proceeds while these remain unconfirmed.
-
-## Resume instructions
-
-Read this file and `git status`; consult the new release SQL/runbook and evidence before further changes. Never rerun demo seeds or infer deployed schema from local SQL. Keep old `NEXT_SESSION.md` as historical evidence; this document supersedes its unverified migration status only where the read-only November 6 checks above provide evidence.
+**Never** run `db:migrate*`, create `_migrations`, or replay `demo` seeds against production.

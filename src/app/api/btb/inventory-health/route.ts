@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
+import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { MONTH_END_EDIT_ROLES, requireRole } from "@/lib/btb-inventory-api";
 import { hasServiceRoleKey, inventoryDb } from "@/lib/supabase-server";
 
@@ -39,7 +39,8 @@ export async function GET() {
 
   const checks = await Promise.all(
     REQUIRED_TABLES.map(async (table) => {
-      const { count, error } = await db.from(table).select("*", { count: "exact", head: true });
+      const query = db.from(table).select("*", { count: "exact", head: true });
+      const { count, error } = await (table === "role_page_access" ? query : query.is("location_id", null));
       return { table, count: count ?? 0, error: error?.message ?? null };
     }),
   );

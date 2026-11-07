@@ -178,6 +178,8 @@ const ROUTE_FEATURE: Record<string, string> = {
   marketing: "marketing",
   "new-restaurant": "new_restaurant",
   vault: "vault",
+  // The personal-account location workspace. Never shown to shared accounts.
+  platform: "platform",
   emergency: "emergency",
   protocols: "protocols",
   handbook: "handbook",

@@ -38,6 +38,9 @@ export const BTB_FEATURES = [
   "marketing",
   "new_restaurant",
   "vault",
+  // The location platform: per-location shifts, inventory, promotions and
+  // compliance. Personal accounts only — the shared workspaces never see it.
+  "platform",
 ] as const;
 
 export type BtbFeature = (typeof BTB_FEATURES)[number];
@@ -63,6 +66,9 @@ const CORP: readonly BtbRole[] = ["corporate", "owner"];               // franch
 const MARKETING_VIEW: readonly BtbRole[] = ["manager", "designer", "corporate", "owner"];
 const MARKETING_EDIT: readonly BtbRole[] = ["manager", "corporate", "owner"]; // designers deliver through the platform workflow
 const BRANDING_VIEW: readonly BtbRole[] = ["supervisor", "manager", "designer", "corporate", "owner"];
+// The location platform is the personal-account surface. Everyone who works a
+// location has it; the shared workspaces (and admin) never appear here.
+const PLATFORM: readonly BtbRole[] = ["staff", "supervisor", "manager", "designer", "corporate", "owner"];
 
 // view = who sees the card at all; edit = who can create/edit/delete.
 // edit is always a subset of view. Kept explicit so intent is auditable.
@@ -109,6 +115,9 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   new_restaurant:    { view: CORP, edit: CORP },
   // Vendor/utility logins — legacy store management tier and HQ.
   vault:             { view: MGR, edit: MGR },
+  // Location platform. Staff enter their own readings and duties; only the
+  // management tier configures templates, equipment, limits and catalogues.
+  platform:          { view: PLATFORM, edit: OPS_EDIT },
 };
 
 /** True if the role can at least see the feature. */

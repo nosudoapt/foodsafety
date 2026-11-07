@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { verifiedBtbRole as roleFromSession } from "@/lib/btb-api";
+import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 import { persistWithAudit, snapshotRestoreFields, type SnapshotRow } from "@/lib/inventory-audit-persist";
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
   const { data: later, error: laterError } = await db
     .from("inventory_month_snapshots")
     .select("count_month")
+    .is("location_id", null)
     .eq("status", "finalized")
     .gt("count_month", count_month);
   if (laterError) return NextResponse.json({ error: laterError.message }, { status: 500 });
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
   const { data: existing, error: existingError } = await db
     .from("inventory_month_snapshots")
     .select("*")
+    .is("location_id", null)
     .eq("count_month", count_month)
     .maybeSingle();
   if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
@@ -67,6 +69,7 @@ export async function POST(req: Request) {
       const { data, error } = await db
         .from("inventory_month_snapshots")
         .update({ status: "draft", reopened_by: role, reopened_at: reopenedAt, reopen_reason: why })
+        .is("location_id", null)
         .eq("count_month", count_month)
         .eq("status", "finalized") // guard the transition
         .select()
@@ -89,6 +92,7 @@ export async function POST(req: Request) {
       const { data, error } = await db
         .from("inventory_month_snapshots")
         .update(snapshotRestoreFields(prior))
+        .is("location_id", null)
         .eq("count_month", count_month)
         .eq("status", "draft")
         .eq("version", written.version ?? prior.version ?? 1)

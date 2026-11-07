@@ -299,3 +299,52 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
   .btb-print-landscape { page: btb-landscape; }
   .btb-print-page { break-inside: avoid; }
 }
+
+/* Location workspace (personal accounts): duties, readings shop agenda inbox. */
+.ops-shell { display: grid; gap: 16px; min-width: 0; }
+.ops-toolbar-left { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; min-width: 0; }
+.ops-module-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--r-pill); }
+.ops-module-tabs > button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted-2); font-size: .875rem; font-weight: 500; cursor: pointer; transition: background-color var(--t-fast), color var(--t-fast); }
+.ops-module-tabs > button:hover { background: var(--surface); color: var(--ink); }
+.ops-module-tabs > button[aria-current="page"] { background: var(--surface); color: var(--brand); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
+.ops-date-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ops-date-nav .ui-input { width: auto; }
+.ops-panel { display: grid; gap: 18px; min-width: 0; }
+.ops-panel > .ui-card { min-width: 0; }
+.ops-section-title { font: 400 1.65rem/1.3 var(--font-display); letter-spacing: -.02em; }
+.ops-checklist-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.ops-reading-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.ops-panel h3 { display: flex; align-items: center; gap: 10px; font-size: 1.0625rem; font-weight: 600; }
+.ops-panel h3 > svg { color: var(--brand); flex: none; }
+.ops-panel h4 { font-size: .9375rem; font-weight: 600; }
+.ops-task { display: grid; gap: 10px; padding: 16px 24px; border-bottom: 1px solid var(--line-soft); }
+.ops-task:last-of-type { border-bottom: 0; }
+.ops-task .ops-checkbox { min-height: 32px; align-items: flex-start; color: var(--ink); font-size: .875rem; line-height: 1.65; cursor: pointer; }
+.ops-task .ops-checkbox input { margin-top: 2px; }
+.ops-evidence { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ops-file { display: inline-flex; align-items: center; width: auto; min-height: 40px; padding: 0 14px; cursor: pointer; font-size: .8125rem; }
+.ops-file:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.ops-equipment { display: grid; gap: 10px; padding: 16px 0; border-top: 1px solid var(--line-soft); }
+.ops-equipment:first-of-type { border-top: 0; }
+.ops-slot-list { display: flex; flex-wrap: wrap; gap: 10px; }
+.ops-slot { display: grid; gap: 6px; min-width: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); text-align: left; }
+.ops-slot--saved { border-color: var(--ok-line, var(--line)); }
+.ops-slot__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ops-slot--button { cursor: pointer; transition: border-color var(--t-fast), background-color var(--t-fast); }
+.ops-slot--button:hover { border-color: var(--muted); }
+.ops-slot--selected { border-color: var(--brand); background: var(--brand-soft); }
+.ops-slot small { display: block; max-width: 26ch; }
+.ops-form-card { display: grid; gap: 16px; padding: 20px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper); }
+.ops-notification { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 18px; padding: 20px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
+.ops-notification > div { min-width: 0; flex: 1; }
+.ops-notification h3 { font-size: .9375rem; font-weight: 600; }
+.ops-notification p { margin-top: 8px; font-size: .875rem; line-height: 1.7; color: var(--muted-2); overflow-wrap: anywhere; }
+.ops-notification--unread { border-color: var(--brand); background: var(--brand-soft); }
+.ops-notification__actions { display: flex; align-items: flex-start; gap: 8px; }
+@media (max-width: 1100px) {
+  .ops-checklist-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 780px) {
+  .ops-checklist-grid, .ops-reading-grid { grid-template-columns: minmax(0, 1fr); }
+  .ops-date-nav { width: 100%; justify-content: flex-start; }
+}
