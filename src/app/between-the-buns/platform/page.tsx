@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, FileText, Info, MapPin } from "lucide-react";
+import { BadgeCheck, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, FileText, Info, MapPin } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
 import { IndividualLoginNotice, LoadState } from "@/components/btb/Feedback";
@@ -14,6 +14,7 @@ import OperationsPanel, { type OperationsData } from "./OperationsPanel";
 import NotificationsPanel, { type NotificationData } from "./NotificationsPanel";
 import InventoryPanel from "./InventoryPanel";
 import ReportsPanel, { type ReportsData } from "./ReportsPanel";
+import CompliancePanel, { type ComplianceData } from "./CompliancePanel";
 
 const shiftDate = (date: string, days: number) =>
   new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
@@ -34,7 +35,7 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
   const active = locationId || locations[0]?.id || "";
   const role = bootstrap.data?.identity.role ?? identity?.role ?? null;
   const modules = useMemo(
-    () => (["operations", "inventory", "reports", "notifications"] as PlatformModule[])
+    () => (["operations", "inventory", "compliance", "reports", "notifications"] as PlatformModule[])
       .filter((item) => !role || platformCan(role, item)),
     [role],
   );
@@ -53,6 +54,11 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
     module === "notifications" && active ? `/api/btb/platform/read?module=notifications&location=${active}` : null,
   );
 
+  const compliance = useBtbData<ComplianceData>(
+    module === "compliance" && active
+      ? `/api/btb/platform/read?module=compliance&location=${active}`
+      : null,
+  );
   const reports = useBtbData<ReportsData>(
     module === "reports" && active && isIsoDate(date)
       ? `/api/btb/platform/read?module=reports&location=${active}&date=${date}`
@@ -92,6 +98,9 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
               </button>}
               {modules.includes("inventory") && <button type="button" aria-current={module === "inventory" ? "page" : undefined} onClick={() => setModule("inventory")}>
                 <Boxes size={16} aria-hidden="true" /> Inventory &amp; food cost
+              </button>}
+              {modules.includes("compliance") && <button type="button" aria-current={module === "compliance" ? "page" : undefined} onClick={() => setModule("compliance")}>
+                <BadgeCheck size={16} aria-hidden="true" /> Compliance
               </button>}
               {modules.includes("reports") && <button type="button" aria-current={module === "reports" ? "page" : undefined} onClick={() => setModule("reports")}>
                 <FileText size={16} aria-hidden="true" /> Reports &amp; delivery
@@ -157,7 +166,9 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
                 error={inventory.error}
                 reload={inventory.reload}
               />
-            : module === "reports"
+            : module === "compliance"
+              ? <CompliancePanel locationId={active} data={compliance.data} loading={compliance.loading} error={compliance.error} reload={compliance.reload} />
+              : module === "reports"
               ? <ReportsPanel date={date} locationId={active} data={reports.data} loading={reports.loading} error={reports.error} reload={reports.reload} />
               : <NotificationsPanel data={inbox.data} loading={inbox.loading} error={inbox.error} reload={inbox.reload} />
       )}
