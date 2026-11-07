@@ -348,3 +348,24 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
   .ops-checklist-grid, .ops-reading-grid { grid-template-columns: minmax(0, 1fr); }
   .ops-date-nav { width: 100%; justify-content: flex-start; }
 }
+/* Inventory & food cost workspace */
+.ops-readiness { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.ops-readiness li { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.ops-readiness li > span { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--r-pill); }
+.ops-readiness li strong { display: block; font-size: .875rem; font-weight: 600; }
+.ops-readiness li p { margin: 2px 0 0; font-size: .8125rem; }
+.ops-ready > span { background: var(--ok-soft); color: var(--ok); }
+.ops-pending > span { background: var(--warn-soft); color: var(--warn); }
+.ops-basis-list { display: grid; gap: 8px; margin: 12px 0; }
+.ops-figure { display: grid; gap: 6px; padding: 16px; border: 1px dashed var(--line); border-radius: var(--r-md); background: var(--paper); }
+.ops-figure__value { font-size: 1.5rem; font-weight: 600; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.ops-import { display: grid; gap: 14px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); }
+.ops-import__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.ops-import__head strong { display: block; margin-top: 6px; font-size: .9375rem; }
+.ops-import__lines { display: grid; gap: 10px; }
+.ops-line { display: grid; grid-template-columns: 2fr .8fr .6fr .6fr .8fr .8fr auto; gap: 8px; align-items: center; }
+.ops-line .ui-input { width: 100%; min-width: 0; }
+.ui-stats-inline { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 900px) {
+  .ops-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

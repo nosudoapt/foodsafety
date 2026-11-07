@@ -1,6 +1,7 @@
 # Between The Buns — final implementation handoff
 
-**Status: Batch 1 and Batch 2 committed and green (`npm test` 356/356, `tsc` clean, `eslint` clean).**
+**Status: Batch 1, Batch 2 and Batch 3 committed and green (`npm test` 376/376 on Node 22, `tsc` clean,
+`eslint` clean). The six platform SQL releases are applied to production.**
 
 This file is the authoritative handoff for the BTB work. Read it first, then `git log
 --oneline -5`, then `git status --short`. Nothing here is deployed: **do not deploy
@@ -28,7 +29,7 @@ groundwork or placeholder screens:
 - email: timezone-aware combined daily PDF, configurable recipients, reliable retries and
   delivery logs
 - private compliance documents, confirmed renewal history, 60/30-day reminders
-- in-app notifications independent of email渭
+- in-app notifications independent of email
 - corporate dashboard with real multi-location drill-downs
 
 Roles are separate and enforced **server-side / API / database**: Staff, Supervisor,
@@ -45,19 +46,27 @@ Manager, Designer, Corporate, Owner. Managers are isolated to their assigned loc
 - Authentication is BTB's own signed cookie + scrypt password hash stored in
   `btb_employees` / `btb_employee_credentials`. **There is no Supabase Auth session** — every
   route uses the privileged server client and re-checks authorization itself.
-- Production migrations are applied **by hand in the Supabase SQL Editor** from
-  `supabase/schema-*.sql` runbooks. `db:migrate` is not the production path.
+- Production migrations are applied from `supabase/schema-*.sql` runbooks over a direct
+  `postgres` connection (`SUPABASE_DB_URL`), rehearsed in one transaction then applied per file.
+  `db:migrate` is still not the production path and `_migrations` must not be created.
 
 ### Committed
 
 | Commit | Contents |
 | --- | --- |
 | `801b975` | Batch 1: `designer` + `owner` roles, `platform` feature in `BTB_FEATURES`/`BTB_MATRIX`, marketing/branding groups, legacy privilege-escalation fix, `btbEmployeeIsLocationManaged`, role/access tests. |
-| *(this commit)* | Batch 2: personal-session platform API (`/api/btb/platform/*`), the location workspace UI at `/between-the-buns/platform`, workspace CSS, guard-test extension. |
+| `96a2db5` | Batch 2: personal-session platform API (`/api/btb/platform/*`), the location workspace UI at `/between-the-buns/platform`, workspace CSS, guard-test extension. |
+| *(this commit)* | Batch 3: inventory & food-cost contracts + maths, `/api/btb/platform/inventory` and `/import`, the inventory review workspace, **and the six SQL releases applied to production**. |
 
-### Not committed until the batch commit lands
+### SQL releases — APPLIED to production (not pending)
 
-Six additive SQL releases in `supabase/`:
+All six are live on the production database, verified after apply: 18 `btb_platform_*`
+functions present, every private table created, **zero** functions executable by `anon` /
+`authenticated`, and an `anon` RLS probe returns 0 rows for BTB equipment / temperature /
+compliance and `permission denied (42501)` on every private BTB table. `service_role` reads
+normally. Apply evidence is in §6.
+
+| File | Adds |
 
 | File | Adds |
 | --- | --- |
@@ -139,14 +148,42 @@ Six additive SQL releases in `supabase/`:
   - `src/app/between-the-buns/platform/{page,OperationsPanel,ReadingsPanel,NotificationsPanel}.tsx`
     and `src/components/btb/ChecklistCard.tsx`.
 
+### Batch 3 (this commit)
+
+- `src/lib/btb-platform-inventory.ts` — shared, secret-free contracts: `InventoryData`,
+  `foodCost()` (missing input ⇒ `null`, never a zero-filled COGS), `salesTotal()` (basis label
+  must appear exactly once; repeats/absence are rejected, not summed), `parseQuantity()` /
+  `lineValue()` / `closingValue()` (blank ≠ 0), `textOf` / `numberOf` / `rowsOf` /
+  `purchaseLineDraft` / `purchaseLinesProblem` for untrusted extraction output47, `btbMonth` /
+  `isMonthKey` / `shiftMonth` / `monthLabel`, `money()` ("Missing" for null), and
+  `inventoryReadiness()` — the seven prerequisites the SQL `finalize` actually enforces.
+- `src/app/api/btb/platform/inventory/route.ts` — one transactional command per request
+  (`items`, `confirm_master`, `reject_import`, `confirm_purchase`, `void_purchase`, `counts`,
+  `inputs`, `confirm_sales`, `finalize`, `reopen`); SQL re-authorizes the actor, `session_version`,
+  membership and month lock.
+- `src/app/api/btb/platform/import/route.ts` — stages a reviewed extraction; requires the source
+  text **or** an explicit extraction-failure reason, and a named extractor. It never invents values.
+- `src/app/between-the-buns/platform/InventoryPanel.tsx` — review workspace: readiness strip, food
+  cost card (COGS / net sales / %), POS-basis confirm, document review queue with per-document
+  editable vendor / reference / date / total / lines and confirm-or-reject-with-reason, closing
+  count grid (cases + packets, blank ≠ 0), purchase ledger with GFS/local totals and void reason,
+  finalize / reopen. Wired into `page.tsx` behind `platformCan(role, "inventory")` with an accounting
+  month selector.
+- `src/app/btb-operations.css` — `ops-readiness`, `ops-basis-list`, `ops-figure`, `ops-import`,
+  `ops-line`, `ui-stats-inline`.
+- `tests/btb-platform-inventory.test.ts` — 20 tests: formula fixture (5000/2000/4000 ⇒ COGS 3000,
+  25%), COGS without sales, every missing input ⇒ `null` + named, `undefined` ≠ 0, real zero
+  purchases, zero/negative sales withheld, `money` missing vs zero, basis selection and duplicate
+  rejection, month shifting across year boundaries, blank ≠ 0, junk rejection, line/closing valuing,
+  and the action list matching the SQL state machine.
+
+**Extraction is still not implemented.** The import route stores the caller's text and reports
+`extraction_error` into the review queue; a person types the reviewed values. No OCR provider is
+configured, so **no OCR result is claimed**. This is the honest failure path the schema supports.
+
 ### Next up (in order)
 
-1. **Apply the six SQL releases to production** — this is the gating step for every remaining
-   feature. See §6.
-2. Inventory **import review UI** (master / GFS / local receipt / POS) + PDF-text extraction
-   with an optional credentialed OCR adapter. The extraction module is still a stub; do not
-   claim OCR works. Review *must* be editable and reject-on-unreviewed.
-3. **Email worker**: authenticated cron route that claims jobs, renders the combined daily
+1. **Email worker**: authenticated cron route that claims jobs, renders the combined daily
    PDF server-side, calls Resend, and finishes the job. Delivery log + resend UI on top of the
    existing `btb_email_jobs` read model.
 4. Compliance **documents UI** (private upload/download, renewal confirmation, 60/30 reminder
@@ -171,13 +208,24 @@ Six additive SQL releases in `supabase/`:
 | Batch 2 | `npx tsc --noEmit` | clean |
 | Batch 2 | `npx eslint` (platform libs, routes, screens leaf) | clean |
 | Batch 2 | `npm test` | **356/356 pass, 0 fail** |
+| Applied | six releases, one transaction rehearsal | 6/6 OK, `ROLLBACK` clean |
+| Applied | six releases, per-file commits | 6/6 APPLIED (4.4 s + 410/510/410/420/335 ms) |
+| Applied | `pg_proc` / `information_schema` verify | 18 `btb_platform_*` funcs, 0 missing tables, 0 browser-executable funcs |
+| Applied | `anon` RLS probe | 0 rows BTB equipment/temp/compliance; `42501` on every private table; `service_role` reads OK |
+| Batch 3 | `npx tsc --noEmit` | clean |
+| Batch 3 | `npx eslint` (inventory lib, routes, panel, tests) | clean |
+| Batch 3 | `npm test` (Node 20) | 367/376 — 9 fail only on `ERR_TEST_FAILURE` "native WebSocket not found" |
+| Batch 3 | `npm test` (Node 22 via `npx --package=node@22`) | **376/376 pass, 0 fail** |
 
 ---
 
-## 6. Deployment runbook (SQL Editor)
+## 6. Deployment record — SQL is APPLIED
 
-Apply in this exact order. Each file is `BEGIN; … NOTIFY pgrst,'reload schema'; COMMIT;` —
-if one fails, nothing in it is applied; fix and re-run that file only.
+**The six releases below are already applied to production.** They no longer need to be
+pasted into the Supabase SQL Editor. They are recorded here as the runbook used, so any
+future environment (staging, a new project) can be brought up the same way.
+
+Order (dependency-sensitive):
 
 1. `supabase/schema-btb-platform-foundation.sql`
 2. `supabase/schema-btb-platform-operations.sql`
@@ -186,15 +234,46 @@ if one fails, nothing in it is applied; fix and re-run that file only.
 5. `supabase/schema-btb-platform-automation.sql`
 6. `supabase/schema-btb-platform-api.sql`
 
-After 06, verify in the SQL Editor:
+Each file is `BEGIN; … NOTIFY pgrst,'reload schema'; COMMIT;` and is idempotent
+(`IF NOT EXISTS` / `CREATE OR REPLACE` / `DROP POLICY IF EXISTS`), so a re-run is safe but
+unnecessary.
+
+### How it was applied
+
+Over a direct `postgres` connection (`SUPABASE_DB_URL`, pooler, `ssl: require`,
+`prepare: false`), **not** `db:migrate` and not the SQL Editor:
+
+1. **Preflight** — PostgreSQL 17.6, `gen_random_uuid()` available, IANA tz data present
+   (`America/Edmonton`), and the live row counts captured: 4 locations (Ancoats, Deansgate,
+   Piccadilly, The Grill House), 9 profiles, 2 employees, 2 shift checks, 4 temperature records.
+2. **Rehearsal** — all six releases executed in a single transaction, then `ROLLBACK`; 6/6 OK,
+   no data changed.
+3. **Apply** — each file committed in its own transaction, in order: 6/6 `APPLIED`.
+4. **Verify** — 18 `btb_platform_*` functions; 0 missing tables; **0** functions executable by
+   `anon` or `authenticated`.
+5. **RLS probe** — `anon` sees 0 BTB equipment/temperature/compliance rows, and
+   `permission denied (42501)` on every private BTB table; `service_role` reads normally.
+
+Pre-existing FoodSafe tables (`equipment`, `temperature_records`, `compliance_documents`,
+`locations`, `profiles`) still grant `anon` `SELECT`, because they hold non-BTB rows too. The
+releases add **restrictive** `btb_location_private` policies so BTB rows in those tables are
+invisible to browser roles while legacy rows are unaffected — verify with the probe below rather
+than by reading `has_table_privilege` alone.
 
 ```sql
-select proname from pg_proc where proname like 'btb_platform_%' order by 1;
-select * from pg_policies where tablename in ('btb_location_settings','btb_file_objects');
+-- browser roles must see 0 BTB rows
+begin; set local role anon;
+select count(*) from equipment where restaurant_name='Between the Buns';
+select count(*) from temperature_records where restaurant_name='Between the Buns';
+rollback;
 ```
 
-Then insert one `btb_employees` row with `role='corporate'`, `active`, `login_enabled`,
-create its credential via the existing account flow, and confirm `/between-the-buns/platform`
-returns an empty location list rather than an error.
-
 **Never** run `db:migrate*`, create `_migrations`, or replay `demo` seeds against production.
+
+### Remaining production bootstrap
+
+No `btb_employees` row is `role='corporate'` or `role='owner'`, and both existing employees have
+`login_enabled = false`, so **nobody can sign in to the HQ surfaces yet**. This is a data step,
+not a code step: insert/re-activate one personal employee per HQ person (`role in ('corporate','owner')`,
+`active`, `login_enabled`, a location membership for corporate) and set its credential through the
+existing account flow. It must be a personal account — never a `BTB_ACCOUNTS` shared workspace.

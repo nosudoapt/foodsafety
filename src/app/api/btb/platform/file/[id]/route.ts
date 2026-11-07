@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { BtbApiError, PRIVATE_HEADERS } from "@/lib/btb-api";
 import { isUuid } from "@/lib/btb-team";
 import { platformRoute, platformRpc } from "@/lib/btb-platform-route";
