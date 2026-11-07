@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BadgeCheck, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, FileText, Info, MapPin } from "lucide-react";
+import { BadgeCheck, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, FileText, Info, MapPin, Megaphone } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
 import { IndividualLoginNotice, LoadState } from "@/components/btb/Feedback";
@@ -15,6 +15,8 @@ import NotificationsPanel, { type NotificationData } from "./NotificationsPanel"
 import InventoryPanel from "./InventoryPanel";
 import ReportsPanel, { type ReportsData } from "./ReportsPanel";
 import CompliancePanel, { type ComplianceData } from "./CompliancePanel";
+import MarketingPanel from "./MarketingPanel";
+import type { MarketingData } from "@/lib/btb-platform-marketing";
 
 const shiftDate = (date: string, days: number) =>
   new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
@@ -35,7 +37,7 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
   const active = locationId || locations[0]?.id || "";
   const role = bootstrap.data?.identity.role ?? identity?.role ?? null;
   const modules = useMemo(
-    () => (["operations", "inventory", "compliance", "reports", "notifications"] as PlatformModule[])
+    () => (["operations", "inventory", "marketing", "compliance", "reports", "notifications"] as PlatformModule[])
       .filter((item) => !role || platformCan(role, item)),
     [role],
   );
@@ -54,6 +56,11 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
     module === "notifications" && active ? `/api/btb/platform/read?module=notifications&location=${active}` : null,
   );
 
+  const marketing = useBtbData<MarketingData>(
+    module === "marketing" && active
+      ? `/api/btb/platform/read?module=marketing&location=${active}`
+      : null,
+  );
   const compliance = useBtbData<ComplianceData>(
     module === "compliance" && active
       ? `/api/btb/platform/read?module=compliance&location=${active}`
@@ -98,6 +105,9 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
               </button>}
               {modules.includes("inventory") && <button type="button" aria-current={module === "inventory" ? "page" : undefined} onClick={() => setModule("inventory")}>
                 <Boxes size={16} aria-hidden="true" /> Inventory &amp; food cost
+              </button>}
+              {modules.includes("marketing") && <button type="button" aria-current={module === "marketing" ? "page" : undefined} onClick={() => setModule("marketing")}>
+                <Megaphone size={16} aria-hidden="true" /> Marketing
               </button>}
               {modules.includes("compliance") && <button type="button" aria-current={module === "compliance" ? "page" : undefined} onClick={() => setModule("compliance")}>
                 <BadgeCheck size={16} aria-hidden="true" /> Compliance
@@ -166,7 +176,16 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
                 error={inventory.error}
                 reload={inventory.reload}
               />
-            : module === "compliance"
+            : module === "marketing"
+              ? <MarketingPanel
+                  locationId={active}
+                  data={marketing.data}
+                  person={{ employeeId: identity?.employeeId ?? "", name: identity?.name ?? "Team", role: role ?? "" }}
+                  loading={marketing.loading}
+                  error={marketing.error}
+                  reload={marketing.reload}
+                />
+              : module === "compliance"
               ? <CompliancePanel locationId={active} data={compliance.data} loading={compliance.loading} error={compliance.error} reload={compliance.reload} />
               : module === "reports"
               ? <ReportsPanel date={date} locationId={active} data={reports.data} loading={reports.loading} error={reports.error} reload={reports.reload} />
