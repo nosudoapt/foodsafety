@@ -216,18 +216,46 @@ configured, so **no OCR result is claimed**. This is the honest failure path the
 - Also fixed: `FoodCostCard` summed an empty purchase list to `$0.00` when purchases were
   unconfirmed; it now shows **Missing** until `purchases_confirmed` (or a finalized snapshot).
 
+### Batch 5 (this commit) - compliance, marketing, corporate overview and settings
+
+- `src/app/api/btb/platform/compliance/route.ts` + `CompliancePanel.tsx` + `compliance` tab -
+  private certificate register per location: upload through the guarded file route, explicit
+  expiry confirmation checkbox (saving is blocked without it), 60/30-day countdown badges,
+  authorised-only downloads, and versioned renewal history with the person and reason.
+  Staff and supervisors can register only their own certificates; the SQL function enforces
+  reminder recipients, responsible person and file ownership, not the screen.
+- `src/app/api/btb/platform/marketing/route.ts` + `MarketingPanel.tsx` + `marketing` tab +
+  `src/lib/btb-platform-marketing.ts` - one screen for the whole pipeline: manager brief
+  (purpose, dates, delivery, explicit size/unit, file type, priority, instructions), submit,
+  corporate approve/reject (a different approver; rejection needs a reason), designer claim
+  and start, versioned artwork upload with download, comment thread, audit history.
+  `marketingActions()`/`nextStep()` only decide what to *offer*; the SQL state machine remains
+  the authority, and a designer cannot claim, start, upload or complete before corporate
+  approval exists.
+- `src/app/api/btb/platform/overview/route.ts` + `/platform/overview` - corporate daily
+  summary per location: complete checklists, Celsius/PPM reading counts, promotions awaiting
+  approval and in production, certificates expired / inside 60 days / missing a file or date,
+  report sends and failures, and the month's food cost only when the period is finalised
+  (otherwise blank, never zero). Versioned settings persisted with an optimistic version guard;
+  read route permits `settings` without a location id because the model is corporate-wide.
+- `src/app/api/btb/platform/settings/route.ts` + `/platform/settings` - create or edit a
+  location: IANA timezone, business-day start and report time, four recipient lists (validated
+  and de-duplicated case-insensitively), reminder days, compliance types, sales basis label,
+  assigned employees, and the explicit `settings_confirmed` switch. Email format and count are
+  checked here; membership, role and version are re-checked inside `btb_platform_settings`.
+
 ### Next up (in order)
 
-1. Compliance **documents UI** (private upload/download, renewal confirmation, 60/30 reminder
-   display) on top of `compliance_documents` + `btb_compliance_versions`.
-5. Designer / corporate **marketing screens** (`btb_platform_marketing` transitions exist in
-   SQL; there is no screen yet).
-6. Corporate **multi-location dashboard** drill-downs (`btb_platform_overview` exists).
-7. Location **settings UI** (`btb_platform_settings` exists).
-8. Dependency audit: 11 remaining findings investigate one at a time, no blind upgrades.
-9. Production build, local migration rehearsal, browser acceptance, responsive review,
-   `git diff --check` — record evidence here.
-10. Deploy **only after explicit client approval**.
+1. HQ account bootstrap: no `corporate`/`owner` employee, both employees `login_enabled=false`
+   (needs the client's go-ahead; this is data, not code).
+2. Browser walkthrough + responsive review of the seven platform modules.
+3. `.env.local` needs `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET` before live delivery
+   can be proven.
+4. Dependency audit: 2 high remain, both eslint-toolchain only; `eslint-config-next` major bump
+   deferred.
+5. Deploy **only after explicit client approval**.
+6. Open client settings: 3 vs 4/5 coolers, approved Celsius/PPM limits, sales basis, timezones,
+   report times, recipients, compliance types, print specs.
 
 ---
 
