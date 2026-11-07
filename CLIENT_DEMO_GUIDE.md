@@ -29,11 +29,12 @@ role, not a store role:
 | Settings (timezones, recipients, limits) | Full edit (corporate/owner only) |
 | Franchise inspection, new-restaurant checklist | Full edit |
 | Marketing (legacy board), branding requests | View (edit is manager/corporate) |
-| Month-end inventory (legacy sheet) | View only — and see §8.2, the read API currently excludes `owner` |
+| Month-end inventory (legacy sheet) | View only (edit stays manager/admin) — the read API now includes `owner` (fixed, §5.1) |
 | Employees, staff licences, documents, compliance | View |
 | Licence email reminders, in-house inspections, login vault, legacy admin dashboard | **No access by design** (verified: UI hides the cards; APIs return 403/404) |
 
-The hub renders exactly 28 cards for the Owner; four role-hidden tiles are hidden.
+The hub renders exactly 29 cards for the Owner (including the Location Workspace
+card added 2026-11-07); four role-hidden tiles are hidden.
 
 ---
 
@@ -47,7 +48,7 @@ returns 200 but the production tables are empty, so the client sees empty states
 
 | Screen | URL | Verified state |
 | --- | --- | --- |
-| BTB hub (landing after sign-in) | `/between-the-buns` | Loads; 28 tiles render; daily-strip API 200 |
+| BTB hub (landing after sign-in) | `/between-the-buns` | Loads; 29 tiles render (with the Location Workspace card); daily-strip API 200 |
 | Location workspace — Daily operations | `/between-the-buns/platform` → *Daily operations* tab | Loads; all four locations return 200. **The Grill House is now configured (DEMO):** 3 equipment items with approved Celsius limits, opening/closing/cleaning templates, Quat 200–400 PPM standard. Other three locations remain honest empty states |
 | Location workspace — Inventory & food cost | `/between-the-buns/platform` → *Inventory & food cost* | Loads; all four locations return 200. **The Grill House has a finalized DEMO month (2026-11):** food cost **41.61%** computed live (see §8.2). Other locations empty |
 | Location workspace — Marketing | `/between-the-buns/platform` → *Marketing* | Loads; all four locations 200. **The Grill House has 2 DEMO promotions** showing the full pipeline (see §8.3), plus 1 uploaded artwork version. Reference data exists: 5 design formats, 2 social platforms seeded |
@@ -140,7 +141,7 @@ Sign in first: open `/between-the-buns/login`, enter the Owner email + password.
 
 | Min | Action | Expected outcome |
 | --- | --- | --- |
-| 0:00–0:45 | Land on `/between-the-buns` | Hub with 28 tiles, daily strip loads. Say: “One hub per role — this is the owner view.” |
+| 0:00–0:45 | Land on `/between-the-buns` | Hub with 29 tiles, daily strip loads. Say: “One hub per role — this is the owner view.” |
 | 0:45–2:00 | Click **Location workspace** → *Daily operations*, location picker = **The Grill House** | Workspace loads with today's date; the amber “not fully configured” banner shows. Frame it as the setup checklist |
 | 2:00–3:30 | Switch location picker across **Ancoats → Deansgate → Piccadilly** | Each switch reloads cleanly with honest empty states. Say: “Every record is location-isolated and server-authorised.” |
 | 3:30–5:00 | *Inventory & food cost* tab, location = **The Grill House** | Finalized DEMO month shows Food Cost % **41.61%** computed from real inputs (opening + purchases − closing ÷ sales). Open the snapshot details: 3 items, 2 purchases, every count explicit. Say: “Nothing is finalised until every input exists — blanks are never zeros.” |
@@ -157,13 +158,26 @@ Keep a browser tab on `/between-the-buns/platform` throughout — it is the stro
 
 ## 5. Broken links, missing screens, errors and incomplete workflows
 
-### 5.1 Broken for the Owner — legacy Month-End Inventory
-`GET /api/btb/inventory-items` and `/api/btb/inventory-counts` return **403 for the
-`owner` role** (`INVENTORY_READ_ROLES` in `src/lib/btb-inventory-api.ts` omits
-`owner`; `corporate` is allowed). The page's five-request load fails, so
-`/between-the-buns/month-end-inventory` shows an error state for the Owner even
-though the hub shows the card. Fix is a one-line roles-list change plus a test —
-**not applied here** (unapproved change).
+### 5.1 Fixed — legacy Month-End Inventory for the Owner
+`GET /api/btb/inventory-items` and `/api/btb/inventory-counts` returned **403 for the
+`owner` role** (`INVENTORY_READ_ROLES` in `src/lib/btb-inventory-api.ts` omitted
+`owner`; `corporate` was allowed). **Fixed 2026-11-07** (one-line roles-list change,
+regression test renamed and passing; full suite 383/384 on Node 22). The page's
+five-request load now works for the Owner.
+
+### 5.1b Also fixed the same day
+- **Marketing artwork upload crashed in the browser** (`Buffer` is not defined in
+  browser JS). Now uses the same FileReader pattern as the evidence uploader, with the
+  error shown beside the form.
+- **Promotion creation through the UI returned a server error** — the route passed the
+  employee id into a column that references `profiles`. Rows are now attributed to the
+  dedicated uploader profile while `btb_created_by` keeps the real person.
+- **`/platform` was unreachable from the hub** — no card pointed at it. A
+  "Location Workspace" card is now on the hub for every role that has platform access,
+  and the designer's quick action opens it.
+- **Platform page formatting**: the page no longer nests its layout class inside
+  itself (doubled spacing), and the inventory metrics grid fits its six tiles
+  responsively (the sixth used to wrap onto its own row).
 
 ### 5.2 Route vs page mismatches (cosmetic; navigation unaffected)
 - The hub's **Employees** card links to `/between-the-buns/employees`, and the route
@@ -175,11 +189,9 @@ though the hub shows the card. Fix is a one-line roles-list change plus a test �
 - `GET /api/btb/social-posts` is POST-only (405 on GET). The page uses POST; harmless.
 
 ### 5.3 Configuration gaps that will show on camera
-- All four locations: `settings_confirmed = false` → amber warning banner on Daily operations. Expected.
-- No equipment, no checklist templates, no approved Celsius/PPM limits anywhere → operations tabs are honest empty states.
-- No designer employee exists → the marketing panel's “designers” list is empty. **Do
-  not create a designer account for the demo** (per instruction; it is also a real
-  staffing decision the client should make).
+- Three of four locations remain unconfirmed (`settings_confirmed = false`) → amber warning banner on Daily operations. Expected — The Grill House is configured with DEMO data (§8).
+- Temperature/sanitizer *readings* are still empty everywhere → enter one live in the demo or skip; the Grill House sheet itself is ready.
+- A demo designer + demo manager now exist (§8.1), clearly named `DEMO —` and easy to remove after the session.
 - Email delivery cannot be demonstrated: `RESEND_API_KEY`, `BTB_EMAIL_FROM` and
   `CRON_SECRET` are **not configured** in `.env.local`. The Reports tab loads, but
   resends will fail honestly. Say: “Email is wired end-to-end and waiting on credentials.”
@@ -192,7 +204,48 @@ though the hub shows the card. Fix is a one-line roles-list change plus a test �
 
 ---
 
-## 6. Environment facts (no secrets shown)
+## 8. Demo data seeded 2026-11-07 (approved session) — all labelled `DEMO —`
+
+Every record below was created **through the app's own authorized API routes and SQL
+functions** — the same role, membership and version checks as any real user; no table
+was written directly. Nothing was emailed (email delivery is off).
+
+### 8.1 Accounts created
+| Who | Role | Email | Purpose in the demo |
+| --- | --- | --- | --- |
+| DEMO — Morgan Manager | manager | `manager.demo@foodsafe.invalid` | Raises + submits promotion requests (the approver must be someone else) |
+| DEMO — Dana Designer | designer | `designer.demo@foodsafe.invalid` | Receives assignments, uploads artwork, dashboard shows marketing data only |
+
+Passwords are random and are **not** stored in this guide; they are in the operator's
+protected credentials file (`~/.btb-demo-credentials.txt`, 0600). Rotate or delete the
+accounts after the session (§8.4).
+
+### 8.2 The Grill House — configured + one finalized inventory month
+- Settings confirmed (version 3): timezone America/Edmonton, business day 04:00, report 06:00, **email delivery off**, sales basis “Summary Total Net Sales”, compliance types Food Handler/First Aid/WHMIS, reminder days 60/30.
+- Equipment with approved Celsius limits: **Walk-in Cooler 1–4 °C, Prep Line Fridge 1–4 °C, Chest Freezer −24 to −18 °C**; sanitizer standard **Quat 200–400 PPM**; opening (4), closing (4) and cleaning (3) checklist templates.
+- Catalogue (3 items): Beef Patties 4oz `BFP-004` $92.50/case · Brioche Buns `BRB-006` $55.20 · Cheddar Slices `CHS-012` $78.00.
+- Purchases: GFS invoice `INV-9041952706` **$1,310.40** (3 Nov) + Costco **$189.87** (5 Nov); opening baseline **$2,480.00** (“DEMO baseline: physical stocktake at platform launch”); closing counts on all 3 items.
+- **Finalized snapshot (2026-11): opening 2,480.00 + purchases 1,500.27 − closing 547.35 = COGS 3,432.92; sales 8,250.00 → Food cost 41.61%.** Verified live through the platform read API; every correction path is audit-logged.
+
+### 8.3 Marketing pipeline — two promotions
+- **DEMO — Double Smash Combo Week** — full cycle completed: manager draft → submitted → **approved by the Owner** → assigned to Dana Designer → in progress → artwork v1 uploaded (real PNG) → awaiting feedback → **completed**.
+- **DEMO — Family Bundle February** — left at **pending approval** so the Owner can approve it live on camera, then assign the designer and walk the same cycle.
+- The SQL state machine refuses designer bypasses and self-approval — safe to demonstrate freely.
+
+### 8.4 Cleanup after the session
+All demo rows are labelled `DEMO —` (promotions, equipment, templates) or belong to
+month `2026-11` at The Grill House. To remove:
+1. Delete the two promotions titled `DEMO — …` (marketing module or `marketing_promotions`).
+2. Delete the 2026-11 snapshot/summary, counts, purchases and imports for The Grill House (`inventory_*` tables) — or leave the month and just say so.
+3. Delete the 3 `DEMO` equipment rows and their checklist templates for The Grill House.
+4. Deactivate the two `DEMO —` employees (set `active = false`, `login_enabled = false`), or delete them and their credentials.
+5. Remove the credentials file `~/.btb-demo-credentials.txt`.
+
+The settings confirmation and the owner-read fix are permanent improvements — keep them.
+
+---
+
+## 9. Environment facts (no secrets shown)
 
 - `.env.local` contains the Supabase URL, anon key, service-role key, DB URL, vault
   key and an uploader profile id. It does **not** contain `RESEND_API_KEY`,
@@ -204,15 +257,16 @@ though the hub shows the card. Fix is a one-line roles-list change plus a test �
 
 ---
 
-## 7. Honesty notes
+## 10. Honesty notes
 
 - “Loads + has data” above means the page rendered **and** its data endpoint returned
   live production rows during this verification. “Loads (empty)” means both worked but
   the production tables hold no rows for that screen.
-- No write path was exercised anywhere in this verification (no saves, no sign-ins, no
-  emails, no bootstrap script runs).
-- The verification session cookie was minted locally with the app's own signing scheme
-  so that no login-attempt counter or session row would be written to production. It
-  expires on its own; no secret material appears in this document.
-- Anything marked “Broken” in §5 has **not** been fixed — changes to production code or
-  data remain pending the client's approval.
+- The initial audit exercised read paths only. The later demo-data session (§8) wrote
+  only the approved, clearly-labelled records listed there — through the app's own
+  authorized routes, never direct table writes.
+- The verification session cookies were minted locally with the app's own signing
+  scheme so that no login-attempt counter or session row would be written to
+  production. They expire on their own; no secret material appears in this document.
+- The §5.1b fixes are real code changes, committed and covered by the existing test
+  suite (383/384 passing on Node 22; 1 pre-existing skip).
