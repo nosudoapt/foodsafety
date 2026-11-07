@@ -15,7 +15,7 @@ export const GET = platformRoute([], async ({ db, employeeId, sessionVersion }, 
   const date = params.get("date");
   const month = params.get("month");
   if (!isPlatformReadModule(model)) throw new BtbApiError("Choose a workspace module.");
-  if (!isUuid(location)) throw new BtbApiError("Choose a location.");
+  if (model !== "settings" && !isUuid(location)) throw new BtbApiError("Choose a location.");
   if (date != null && !isIsoDate(date)) throw new BtbApiError("Choose a valid date.");
   if (month != null && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new BtbApiError("Choose a valid accounting month.");
   return platformRpc(db, "btb_platform_read", {
