@@ -369,3 +369,17 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
 @media (max-width: 900px) {
   .ops-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* Marketing & corporate workspace layout */
+.ops-marketing-grid { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); gap: 28px; align-items: start; }
+@media (max-width: 900px) { .ops-marketing-grid { grid-template-columns: 1fr; } }
+.ops-promotion { display: flex; flex-direction: column; gap: 8px; width: 100%; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: inherit; text-align: left; cursor: pointer; transition: border-color var(--t-fast), background-color var(--t-fast); }
+.ops-promotion:hover { border-color: var(--brand); }
+.ops-promotion.is-active { border-color: var(--brand); background: var(--brand-soft); }
+.ops-toolbar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.ops-link { display: inline-flex; align-items: center; gap: 6px; color: var(--brand-2); font-weight: 600; text-decoration: none; }
+.ops-link:hover { text-decoration: underline; }
+.ui-list-row { display: flex; align-items: flex-start; gap: 14px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.ui-list-row:last-child { border-bottom: 0; }
+.ui-list-row > div { min-width: 0; }
+.ui-text-warning { color: var(--warning, #9a6700); }

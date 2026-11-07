@@ -337,3 +337,14 @@ No `btb_employees` row is `role='corporate'` or `role='owner'`, and both existin
 not a code step: insert/re-activate one personal employee per HQ person (`role in ('corporate','owner')`,
 `active`, `login_enabled`, a location membership for corporate) and set its credential through the
 existing account flow. It must be a personal account — never a `BTB_ACCOUNTS` shared workspace.
+
+`scripts/bootstrap-btb-hq.mjs` performs that step when explicitly approved:
+`--list` shows locations and employees; the write mode creates or repairs one
+corporate/owner sign-in with the app's verified scrypt format, prompts for its
+password (never invents one), prints the plan and requires `CONFIRM`. It touches
+only that person's employee, credential and membership rows. Run:
+
+    node scripts/bootstrap-btb-hq.mjs --list
+    node scripts/bootstrap-btb-hq.mjs --email you@example.com --name "Your Name" \
+      --role owner --location <location-uuid> [--create]
+
