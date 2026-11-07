@@ -181,12 +181,44 @@ normally. Apply evidence is in §6.
 `extraction_error` into the review queue; a person types the reviewed values. No OCR provider is
 configured, so **no OCR result is claimed**. This is the honest failure path the schema supports.
 
+### Batch 4 (this commit) - daily email + PDF + reports workspace
+
+- `src/lib/btb-daily-report.ts` - client-safe, secret-free report model: checklist
+  coverage (`checklistLines()`), and the PDF's pure text machinery (`pdfText()` ASCII folding,
+  `fixText()` missing-vs-zero, `limitLabel()` never invents an approved range, `verdict()`
+  saved-verdict-first with a re-check fallback and "No approved limit set" when none exists).
+- `src/lib/btb-daily-pdf.ts` - pdf-lib renderer: paginated `Sheet` (word wrap, long-word
+  split, auto page break before ANY line crosses the bottom margin - nothing is silently
+  clipped), headings, bullets, key/value rows, page x-of-y footers, and
+  `renderDailyReportPdf()` producing checklists / Celsius temperatures / sanitizer PPM from
+  the stored daily snapshot.
+- `src/lib/btb-email-worker.ts` - general outbox worker mirroring the licence dispatcher:
+  `btb_schedule_automation` enqueue, then claim (5-min lease, 5-attempt cap) -> prepare
+  (freezes sender + attachment) -> Resend POST with the frozen `btb-<job.id>` idempotency key
+  -> `btb_finish_email_job`. Uncertain network/5xx/missing-provider-id outcomes finish as
+  **uncertain (never accepted)** so the retry resumes with the identical frozen payload inside
+  Resend's 23 h idempotency window. `daily` renders the PDF before prepare and refuses to send
+  without it; `expiry`/`notification` send their stored text body.
+- `src/app/api/cron/btb-daily-reports/route.ts` - `CRON_SECRET` + `timingSafeEqual` bearer
+  gate, strict time budget, honest run summary (enqueued/claimed/accepted/skipped/failed + errors).
+- `src/app/api/btb/platform/resend/route.ts` - manager/corporate resend request with a
+  required reason and per-request UUID key; SQL refuses without configured recipients.
+- `src/app/between-the-buns/platform/ReportsPanel.tsx` + tab in `page.tsx` behind
+  `platformCan(role, "reports")` - report coverage preview (missing tasks counted, not zeroed),
+  full delivery log (status, attempts, uncertain flag, provider id / error, timestamps), and an
+  audited resend form.
+- `tests/btb-daily-report.test.ts` - 8 tests: ASCII folding (quotes, dashes, ellipsis,
+  degree/emoji/nbsp), whitespace collapse before folding, Missing vs real 0, no invented limits,
+  saved-verdict-first / re-check / no-bounds cases, absent checklist = "Not saved" with the
+  full outstanding list, silent completion, and a full `renderDailyReportPdf()` E2E asserting a
+  real PDF document (must be run with `REPORT_PDF_E2E=1 --conditions=react-server` because
+  `server-only` guards the module).
+- Also fixed: `FoodCostCard` summed an empty purchase list to `$0.00` when purchases were
+  unconfirmed; it now shows **Missing** until `purchases_confirmed` (or a finalized snapshot).
+
 ### Next up (in order)
 
-1. **Email worker**: authenticated cron route that claims jobs, renders the combined daily
-   PDF server-side, calls Resend, and finishes the job. Delivery log + resend UI on top of the
-   existing `btb_email_jobs` read model.
-4. Compliance **documents UI** (private upload/download, renewal confirmation, 60/30 reminder
+1. Compliance **documents UI** (private upload/download, renewal confirmation, 60/30 reminder
    display) on top of `compliance_documents` + `btb_compliance_versions`.
 5. Designer / corporate **marketing screens** (`btb_platform_marketing` transitions exist in
    SQL; there is no screen yet).

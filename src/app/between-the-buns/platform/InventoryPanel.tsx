@@ -99,9 +99,9 @@ function FoodCostCard({ data }: { data: InventoryData }) {
       })));
 
   const opening = snapshot?.status === "finalized" ? snapshot.opening_value : summary?.opening_value ?? null;
-  const purchases = snapshot?.status === "finalized"
-    ? snapshot.purchases
-    : (data.purchases ?? []).filter((row) => !row.voided_at).reduce((total, row) => total + row.amount, 0);
+  const purchases = snapshot?.status === "finalized" || summary?.purchases_confirmed
+    ? snapshot?.status === "finalized" ? snapshot.purchases : (data.purchases ?? []).filter((row) => !row.voided_at).reduce((total, row) => total + row.amount, 0)
+    : null;
   const sales = snapshot?.status === "finalized" ? snapshot.sales : summary?.sales ?? null;
   const result = foodCost(opening, purchases, closing, sales);
 

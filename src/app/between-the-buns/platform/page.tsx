@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Info, MapPin } from "lucide-react";
+import { Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, FileText, Info, MapPin } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
 import { IndividualLoginNotice, LoadState } from "@/components/btb/Feedback";
@@ -13,6 +13,7 @@ import { btbMonth, isMonthKey, monthLabel, shiftMonth, type InventoryData } from
 import OperationsPanel, { type OperationsData } from "./OperationsPanel";
 import NotificationsPanel, { type NotificationData } from "./NotificationsPanel";
 import InventoryPanel from "./InventoryPanel";
+import ReportsPanel, { type ReportsData } from "./ReportsPanel";
 
 const shiftDate = (date: string, days: number) =>
   new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
@@ -33,7 +34,7 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
   const active = locationId || locations[0]?.id || "";
   const role = bootstrap.data?.identity.role ?? identity?.role ?? null;
   const modules = useMemo(
-    () => (["operations", "inventory", "notifications"] as PlatformModule[])
+    () => (["operations", "inventory", "reports", "notifications"] as PlatformModule[])
       .filter((item) => !role || platformCan(role, item)),
     [role],
   );
@@ -50,6 +51,12 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
   );
   const inbox = useBtbData<NotificationData>(
     module === "notifications" && active ? `/api/btb/platform/read?module=notifications&location=${active}` : null,
+  );
+
+  const reports = useBtbData<ReportsData>(
+    module === "reports" && active && isIsoDate(date)
+      ? `/api/btb/platform/read?module=reports&location=${active}&date=${date}`
+      : null,
   );
 
   const location = useMemo(() => locations.find((item) => item.id === active), [locations, active]);
@@ -85,6 +92,9 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
               </button>}
               {modules.includes("inventory") && <button type="button" aria-current={module === "inventory" ? "page" : undefined} onClick={() => setModule("inventory")}>
                 <Boxes size={16} aria-hidden="true" /> Inventory &amp; food cost
+              </button>}
+              {modules.includes("reports") && <button type="button" aria-current={module === "reports" ? "page" : undefined} onClick={() => setModule("reports")}>
+                <FileText size={16} aria-hidden="true" /> Reports &amp; delivery
               </button>}
               {modules.includes("notifications") && <button type="button" aria-current={module === "notifications" ? "page" : undefined} onClick={() => setModule("notifications")}>
                 <Info size={16} aria-hidden="true" /> Notifications
@@ -147,7 +157,9 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
                 error={inventory.error}
                 reload={inventory.reload}
               />
-            : <NotificationsPanel data={inbox.data} loading={inbox.loading} error={inbox.error} reload={inbox.reload} />
+            : module === "reports"
+              ? <ReportsPanel date={date} locationId={active} data={reports.data} loading={reports.loading} error={reports.error} reload={reports.reload} />
+              : <NotificationsPanel data={inbox.data} loading={inbox.loading} error={inbox.error} reload={inbox.reload} />
       )}
     </div>
   </div>;
