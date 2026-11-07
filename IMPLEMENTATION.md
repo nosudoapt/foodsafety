@@ -347,4 +347,11 @@ only that person's employee, credential and membership rows. Run:
     node scripts/bootstrap-btb-hq.mjs --list
     node scripts/bootstrap-btb-hq.mjs --email you@example.com --name "Your Name" \
       --role owner --location <location-uuid> [--create]
+    node scripts/set-btb-password.mjs --email you@example.com
+
+Applied 2026-11-07: `nitpreetsingh05@gmail.com` (Nitpreet Singh) exists as an active, login-enabled
+`owner`, member of all four locations, and `btb_location_settings` now has one row per location
+(`America/Edmonton`, **`settings_confirmed = false`**) so HQ loads without enabling any report email.
+The password is **not** set: the supplied one was 8 characters and the minimum is 10. Set a 10-128
+character password with `scripts/set-btb-password.mjs`, then sign in at `/between-the-buns/login`.
 

@@ -52,7 +52,7 @@ async function hashPassword(password) {
 }
 
 const args = argsOf(process.argv.slice(2));
-if (args.help || args.list) {
+if (args.help) {
   console.log("Usage: node scripts/bootstrap-btb-hq.mjs --email <email> --name <name> [--role owner|corporate] [--location <uuid>] [--password <secret>] [--create]");
   console.log("       node scripts/bootstrap-btb-hq.mjs --list    (show locations and employees)");
   process.exit(0);
@@ -63,19 +63,19 @@ const role = String(args.role ?? "owner").trim();
 const location = typeof args.location === "string" ? args.location : "";
 const create = args.create === true;
 
-if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Pass a valid --email.");
-if (!name) throw new Error("Pass the person's --name.");
-if (role !== "owner" && role !== "corporate") throw new Error("Only --role owner or --role corporate is HQ access.");
-
 const sql = postgres(dbUrl(), { prepare: false, ssl: "require", max: 1 });
 if (args.list) {
-  const places = await sql`SELECT id, name, timezone, settings_confirmed FROM btb_location_settings ORDER BY name`;
+  const places = await sql`SELECT s.location_id AS id, l.name, s.timezone, s.settings_confirmed FROM btb_location_settings s JOIN locations l ON l.id = s.location_id ORDER BY l.name`;
   console.table(places);
   const team = await sql`SELECT id, name, email, role, active, login_enabled FROM btb_employees ORDER BY name`;
   console.table(team);
   await sql.end();
   process.exit(0);
 }
+
+if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("Pass a valid --email.");
+if (!name) throw new Error("Pass the person's --name.");
+if (role !== "owner" && role !== "corporate") throw new Error("Only --role owner or --role corporate is HQ access.");
 const rl = readline.createInterface({ input: stdin, output: stdout });
 try {
   const [existing] = await sql`SELECT id, name, role, active, login_enabled FROM btb_employees WHERE restaurant_name = 'Between the Buns' AND email = ${email}`;
