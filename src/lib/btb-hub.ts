@@ -45,6 +45,7 @@ export interface BtbCard {
 // → management.
 export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/admin", title: "Admin Dashboard", desc: "Assign page access per role.", iconKey: "layoutGrid", accent: "red", feature: "admin_dashboard" },
+  { href: "/between-the-buns/platform", title: "Location Workspace", desc: "Per-location operations, inventory, marketing and compliance.", iconKey: "layoutGrid", accent: "purple", feature: "platform" },
   { href: "/between-the-buns/prep-list", title: "Daily Prep Sheet", desc: "3-section sheet — Produce, Sauces, Freezer. Par/OH/Make boxes.", iconKey: "layoutGrid", accent: "red", feature: "prep_list" },
   { href: "/between-the-buns/checklists", title: "Opening & Closing", desc: "Open/close duties — Front & Kitchen, ticked per shift.", iconKey: "listChecks", accent: "amber", feature: "checklists" },
   { href: "/between-the-buns/branding-requests", title: "Branding Requests", desc: "Signage, menus and T-shirts in sizes S–XXXL.", iconKey: "sparkles", accent: "amber", feature: "branding_requests" },

@@ -76,7 +76,7 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
   const personal = !!identity?.employeeId;
 
   return <div className="ops-workspace">
-    <div className="btb-screen ops-workspace">
+    <div className="btb-screen">
       <PageHeader
         title="Location workspace"
         subtitle="Opening, closing and cleaning duties, scheduled Celsius checks, sanitizer PPM and the record behind every day."

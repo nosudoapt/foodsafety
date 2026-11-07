@@ -105,6 +105,7 @@ function PromotionDetail({ promotion, data, person, locationId, busy, onCommand 
   const [designer, setDesigner] = useState(promotion.assigned_to ?? "");
   const [comment, setComment] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const assets = data.assets.filter((row) => row.promotion_id === promotion.id);
   const comments = data.comments.filter((row) => row.promotion_id === promotion.id);
   const history = data.history.filter((row) => row.entity_id === promotion.id);
@@ -114,16 +115,30 @@ function PromotionDetail({ promotion, data, person, locationId, busy, onCommand 
     if (!file) return;
     setUploading(true);
     try {
-      const buffer = await file.arrayBuffer();
+      // Browser-safe base64 (FileReader), matching the evidence uploader —
+      // Buffer is not defined in the browser and crashed this upload.
+      const content = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("The file could not be read. Choose it again and retry."));
+        reader.onload = () => {
+          const result = String(reader.result ?? "");
+          const comma = result.indexOf(",");
+          if (comma < 0) reject(new Error("The file could not be read. Choose it again and retry."));
+          else resolve(result.slice(comma + 1));
+        };
+        reader.readAsDataURL(file);
+      });
       const saved = await fetchJson<{ file: { id: string } }>("/api/btb/platform/file", jsonRequest({
         location_id: locationId,
         purpose: "artwork",
         name: file.name,
         mime: file.type || "application/pdf",
-        content_base64: Buffer.from(buffer).toString("base64"),
+        content_base64: content,
       }));
       await onCommand("upload", { file_id: saved.file.id, version: promotion.version, notes: reason });
       setReason("");
+    } catch (cause) {
+      setUploadError(messageOf(cause));
     } finally { setUploading(false); }
   }
 
@@ -180,6 +195,7 @@ function PromotionDetail({ promotion, data, person, locationId, busy, onCommand 
         <input type="file" accept="application/pdf,image/png,image/jpeg" disabled={uploading || !!busy} onChange={(event) => void upload(event.target.files?.[0] ?? null)} />
       </label>
       <Input value={reason} maxLength={500} placeholder="Describe this version (required for revisions)" onChange={(event) => setReason(event.target.value)} />
+      {uploadError && <p className="ui-notice ui-notice--error" role="alert">{uploadError}</p>}
     </div>}
 
     <h3 className="ops-section-title">Comments</h3>

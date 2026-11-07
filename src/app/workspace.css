@@ -477,7 +477,7 @@ a.dash-metric:hover { border-color: var(--brand); background: white; }
 .inventory-month { display: flex; align-items: center; gap: 10px; color: var(--muted-2); font-size: 0.875rem; }
 .inventory-month select, .inventory-field select { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface); color: var(--ink); }
 .inventory-success { background: var(--ok-soft); color: var(--ok); }
-.inventory-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.inventory-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
 .inventory-metrics .ui-stat { min-width: 0; padding: 20px; align-items: flex-start; }
 .inventory-metrics .ui-stat__value { font-size: clamp(1.3rem, 2.5vw, 1.8rem); overflow-wrap: anywhere; }
 .inventory-sectionbar, .inventory-savebar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 18px 24px; }

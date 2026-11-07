@@ -18,7 +18,7 @@ import {
 // month_end_inventory is view-ALL / edit-MGR_ONLY (src/lib/btb-access.ts).
 // ---------------------------------------------------------------------------
 
-const ALL = ["staff", "supervisor", "manager", "corporate", "admin"];
+const ALL = ["staff", "supervisor", "manager", "corporate", "owner", "admin"];
 const UUID = "3f1d2a4c-9b8e-4f70-a1c2-3d4e5f607182";
 const UUID_2 = "4f1d2a4c-9b8e-4f70-a1c2-3d4e5f607183";
 
@@ -45,7 +45,7 @@ test("requireRole: manager and admin allowed", () => {
   assert.equal(requireRole("admin", MONTH_END_EDIT_ROLES).ok, true);
 });
 
-test("requireRole: any of the five roles may read", () => {
+test("requireRole: any signed-in BTB role may read (owner included — regression: the owner hub card failed its data load)", () => {
   for (const role of ALL) assert.equal(requireRole(role, ALL).ok, true);
 });
 

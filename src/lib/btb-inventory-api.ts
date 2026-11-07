@@ -12,7 +12,7 @@ import { isMonthKey } from "./month-end-inventory";
 
 /** Edit roles for month_end_inventory (mirrors btb-access.ts MGR_ONLY). */
 export const MONTH_END_EDIT_ROLES = ["manager", "admin"] as const;
-export const INVENTORY_READ_ROLES = ["staff", "supervisor", "manager", "corporate", "admin"] as const;
+export const INVENTORY_READ_ROLES = ["staff", "supervisor", "manager", "corporate", "owner", "admin"] as const;
 
 export interface AuthDenied {
   ok: false;

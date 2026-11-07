@@ -1,5 +1,6 @@
 import { BtbApiError, readBody } from "@/lib/btb-api";
 import { isIsoDate, isUuid } from "@/lib/btb-team";
+import { requireBtbUploader } from "@/lib/btb-uploader";
 import { MARKETING_ACTIONS, type MarketingAction } from "@/lib/btb-platform-marketing";
 import { platformRoute, platformRpc } from "@/lib/btb-platform-route";
 
@@ -30,11 +31,16 @@ export const POST = platformRoute(["POST"], async ({ db, employeeId, sessionVers
     if (!dimension || !(Number(dimension.width) > 0) || !(Number(dimension.height) > 0)) throw new BtbApiError("Give the required artwork size.");
     if (typeof data.format_id === "string" && data.format_id !== "" && !isUuid(data.format_id)) throw new BtbApiError("Choose a format.");
   }
+  // marketing_promotions.user_id and social_media_calendar.user_id reference
+  // profiles(id), not btb_employees: attribute the rows to the dedicated
+  // uploader profile (the same identity the other marketing write routes use)
+  // while btb_created_by keeps the real person.
+  const profile = await requireBtbUploader(db);
   const result = await platformRpc(db, "btb_platform_marketing", {
     p_actor: employeeId,
     p_session: sessionVersion,
     p_location: location,
-    p_profile: employeeId,
+    p_profile: profile,
     p_action: action,
     p_data: body.data ?? {},
   }, "This marketing request could not be saved.");
