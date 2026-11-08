@@ -3,7 +3,7 @@ import { attributionName, BTB_RESTAURANT, btbToday } from "@/lib/btb-team";
 import { parseTemperature, temperatureInRange, type BtbTemperatureRecord } from "@/lib/btb-temperatures";
 import { temperatureOwner } from "@/lib/btb-temperature-store";
 
-const COLUMNS = "id,record_type,equipment_name,food_item,temperature,min_safe_temp,max_safe_temp,unit,is_safe,notes,recorded_at";
+const COLUMNS = "id,record_type,equipment_name,food_item,temperature,min_safe_temp,max_safe_temp,unit,is_safe,notes,recorded_at,business_date,slot";
 
 export const GET = btbRoute("temperatures", false, async ({ db }) => {
   const owner = await temperatureOwner(db);
@@ -13,7 +13,7 @@ export const GET = btbRoute("temperatures", false, async ({ db }) => {
     .gte("recorded_at", cutoff).order("recorded_at", { ascending: false }).order("id").range(from, to),
   "Temperature history couldn’t be loaded. Please try again.");
   return { records, today: btbToday() };
-});
+}, { allowLocationWorkspace: true });
 
 export const POST = btbRoute("temperatures", true, async ({ db, identity }, request) => {
   const parsed = parseTemperature(await readBody(request, 16_000));
@@ -50,4 +50,4 @@ export const POST = btbRoute("temperatures", true, async ({ db, identity }, requ
   dbError(result.error, "The reading wasn’t saved. Your entries are still here; please try again.");
   if (!result.data) throw new BtbApiError("The save could not be confirmed. Keep this form and retry.", 503);
   return { record: result.data };
-});
+}, { allowLocationWorkspace: true });

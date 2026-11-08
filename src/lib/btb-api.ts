@@ -100,14 +100,14 @@ export async function btbEmployeeIsLocationManaged(db: SupabaseClient, employeeI
 
 export interface BtbApiContext { db: SupabaseClient; identity: BtbIdentity }
 
-export async function requireBtbAccess(feature?: BtbFeature, edit = false): Promise<BtbApiContext> {
+export async function requireBtbAccess(feature?: BtbFeature, edit = false, options?: { allowLocationWorkspace?: boolean }): Promise<BtbApiContext> {
   const value = (await cookies()).get(BTB_COOKIE)?.value;
   if (!value) throw new BtbApiError("Please sign in to continue.", 401);
   const db = inventoryDb();
   const identity = await btbIdentityFromSession(value, db);
   if (!identity) throw new BtbApiError("Your session has ended. Please sign in again.", 401);
   if (feature) {
-    if (!["corporate", "owner"].includes(identity.role) && await btbUsesLocationWorkspace(identity, db)) throw new BtbApiError("Use your assigned location workspace for this workflow.", 403);
+    if (!options?.allowLocationWorkspace && !["corporate", "owner"].includes(identity.role) && await btbUsesLocationWorkspace(identity, db)) throw new BtbApiError("Use your assigned location workspace for this workflow.", 403);
     if (!btbCanView(feature, identity.role) || (edit && !btbCanEdit(feature, identity.role))) throw new BtbApiError("Your role cannot make this change.", 403);
     const card = BTB_CARDS.find((item) => item.feature === feature);
     if (card && identity.role !== "admin") {
@@ -133,13 +133,13 @@ export function requireBtbOrigin(request: Request, message = "Open this form in 
   if (origin !== expected.origin) throw new BtbApiError(message, 403);
 }
 
-export function btbRoute(feature: BtbFeature | undefined, edit: boolean, handler: (context: BtbApiContext, request: Request) => Promise<unknown>) {
+export function btbRoute(feature: BtbFeature | undefined, edit: boolean, handler: (context: BtbApiContext, request: Request) => Promise<unknown>, options?: { allowLocationWorkspace?: boolean }) {
   return async (request: Request) => {
     try {
       if (edit || !["GET", "HEAD"].includes(request.method)) {
         requireBtbOrigin(request);
       }
-      const data = await handler(await requireBtbAccess(feature, edit), request);
+      const data = await handler(await requireBtbAccess(feature, edit, options), request);
       return NextResponse.json(data, { headers: PRIVATE_HEADERS });
     } catch (error) { return apiFailure(error); }
   };
