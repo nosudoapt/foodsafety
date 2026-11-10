@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   MONTH_END_EDIT_ROLES,
+  assertEditableItem,
   isDateInMonth,
   isUuid,
   nextSnapshotVersion,
@@ -12,6 +13,7 @@ import {
   requireRole,
   MAX_COUNT_ROWS,
 } from "../src/lib/btb-inventory-api";
+import { INVENTORY_UNIT_VALUES } from "../src/lib/inventory-master-list";
 
 // ---------------------------------------------------------------------------
 // Authorization: the server-resolved BTB role decides, never the request body.
@@ -144,34 +146,68 @@ test("parseSummarySave: invalid month rejected", () => {
 // Add-item validation
 // ---------------------------------------------------------------------------
 
-test("parseNewItem: trims name, defaults unit, and accepts blank cost as zero", () => {
-  const p = parseNewItem({ name: "  Sesame buns  ", unit: "", unit_cost: "" });
+test("parseNewItem: trims name, accepts a dropdown unit, and takes blank cost as zero", () => {
+  const p = parseNewItem({ name: "  Sesame buns  ", unit: "case", unit_cost: "" });
   assert.equal(p.ok, true);
   if (p.ok) {
     assert.equal(p.value.name, "Sesame buns");
-    assert.equal(p.value.unit, "ea");
+    assert.equal(p.value.unit, "case");
     assert.equal(p.value.unit_cost, 0);
     assert.equal(p.value.position, null);
   }
 });
 
+test("parseNewItem: a unit outside the dropdown is rejected, never coerced to ea", () => {
+  for (const unit of ["", "   ", "furlongs", "KG", "kilograms"]) {
+    assert.equal(parseNewItem({ name: "buns", unit }).ok, false, `unit ${JSON.stringify(unit)}`);
+  }
+  // Every unit the relation offers is accepted as-is.
+  for (const unit of INVENTORY_UNIT_VALUES) {
+    assert.equal(parseNewItem({ name: "buns", unit }).ok, true, `unit ${unit}`);
+  }
+});
+
 test("parseNewItem: invalid/negative costs are rejected, never silently zeroed", () => {
   for (const unit_cost of ["junk", -1, "-0.01", Infinity]) {
-    assert.equal(parseNewItem({ name: "buns", unit_cost }).ok, false);
+    assert.equal(parseNewItem({ name: "buns", unit: "ea", unit_cost }).ok, false);
   }
 });
 
 test("parseNewItem: blank or oversized name rejected", () => {
-  assert.equal(parseNewItem({ name: "   " }).ok, false);
+  assert.equal(parseNewItem({ name: "   ", unit: "ea" }).ok, false);
   assert.equal(parseNewItem({}).ok, false);
-  assert.equal(parseNewItem({ name: "x".repeat(201) }).ok, false);
+  assert.equal(parseNewItem({ name: "x".repeat(201), unit: "ea" }).ok, false);
 });
 
 test("parseNewItem: position must be a non-negative integer to be honoured", () => {
-  const p = parseNewItem({ name: "buns", position: 7 });
+  const p = parseNewItem({ name: "buns", unit: "ea", position: 7 });
   assert.equal(p.ok && p.value.position, 7);
-  const q = parseNewItem({ name: "buns", position: -1 });
+  const q = parseNewItem({ name: "buns", unit: "ea", position: -1 });
   assert.equal(q.ok && q.value.position, null);
+});
+
+// ---------------------------------------------------------------------------
+// Append-only master list
+// ---------------------------------------------------------------------------
+
+test("a master item may not be renamed; its unit and cost still may be", () => {
+  const master = { name: "Allo tiki", protected: true };
+  assert.equal(assertEditableItem(master, "Allo tiki").ok, true);
+  assert.equal(assertEditableItem(master, "  Allo tiki  ").ok, true, "whitespace is not a rename");
+  const renamed = assertEditableItem(master, "Allo Tiki");
+  assert.equal(renamed.ok, false);
+  if (!renamed.ok) assert.match(renamed.error, /cannot be renamed/);
+});
+
+test("a locally added item keeps its name editable", () => {
+  assert.equal(assertEditableItem({ name: "Birria", protected: false }, "Birria consommé").ok, true);
+  assert.equal(assertEditableItem({ name: "Birria", protected: null }, "Birria consommé").ok, true);
+});
+
+test("editing an item that no longer exists reports not found", () => {
+  const missing = assertEditableItem(null, "Allo tiki");
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.match(missing.error, /not found/);
 });
 
 test("purchase dates must be real calendar dates inside the selected month", () => {

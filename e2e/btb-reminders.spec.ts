@@ -50,8 +50,10 @@ test("reminder settings retain failed edits and send each due licence to manager
   expect(settings.manager_emails).toEqual(["manager@example.test"]);
   expect(settings.corporate_emails).toEqual(["corporate@example.test", "manager@example.test"]);
   const dueTable = page.getByRole("table").first();
-  await expect(dueTable.getByRole("row")).toHaveCount(3);
+  await expect(dueTable.getByRole("row")).toHaveCount(4);
   await expect(dueTable).toContainText("Alexandra Employee · Food handler certificate");
+  await expect(dueTable).toContainText("GST Return (tax)");
+  await expect(dueTable).not.toContainText(/Future renewal|No expiry|Site-only|Other restaurant|site filing/);
   await expect(dueTable).not.toContainText(/Future renewal|No expiry|Site-only|Other restaurant/);
   await page.getByRole("button", { name: "Send due reminders now" }).click();
   await expect(page.getByRole("status")).toContainText("4 emails accepted by the provider. 0 failed. 0 waiting");
@@ -74,7 +76,7 @@ test("reminder settings retain failed edits and send each due licence to manager
 
 for (const failure of ["reject", "accepted-then-500"] as const) {
   test(`a ${failure} delivery retries with the same provider key and frozen message`, async ({ request, fixture }) => {
-    await fixture.configure({ tables: { compliance_documents: [businessDocument()] }, emailFailures: [failure] });
+    await fixture.configure({ tables: { compliance_documents: [businessDocument()], corporate_dates: [] }, emailFailures: [failure] });
     await apiSignIn(request);
     await enableReminders(request);
     const response = await request.post(endpoint, { data: { action: "run" } });
@@ -110,7 +112,7 @@ test("simultaneous scheduled and manager dispatches lease each email only once",
 });
 
 test("persistent provider failures stop after three claims and uncertain old deliveries are not replayed", async ({ request, fixture }) => {
-  await fixture.configure({ tables: { compliance_documents: [businessDocument()] }, emailFailures: Array.from({ length: 6 }, () => "reject" as const) });
+  await fixture.configure({ tables: { compliance_documents: [businessDocument()], corporate_dates: [] }, emailFailures: Array.from({ length: 6 }, () => "reject" as const) });
   await apiSignIn(request);
   await enableReminders(request);
   const failed = await request.post(endpoint, { data: { action: "run" } });

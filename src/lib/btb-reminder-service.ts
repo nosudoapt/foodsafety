@@ -20,8 +20,9 @@ export async function loadReminderDocuments(db: SupabaseClient): Promise<Reminde
   const [business, staff, corporate] = await Promise.all([
     readAll<{ id: string; name: string; expiry_date: string }>((from, to) => db.from("compliance_documents").select("id,name,expiry_date").eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).not("expiry_date", "is", null).order("id").range(from, to), "Business licence dates could not be loaded."),
     readAll<{ id: string; staff_name: string; license_type: string; expiry_date: string }>((from, to) => db.from("btb_staff_licences").select("id,staff_name,license_type,expiry_date").eq("restaurant_name", BTB_RESTAURANT).not("expiry_date", "is", null).order("id").range(from, to), "Staff certificate dates could not be loaded."),
-    // Tax / renewal deadlines (corporate_dates), company-wide rows included.
-    readAll<{ id: string; title: string; category: string; due_date: string; recurrence: string }>((from, to) => db.from("corporate_dates").select("id,title,category,due_date,recurrence").order("id").range(from, to), "Tax and renewal deadlines could not be loaded."),
+    // Tax / renewal deadlines (corporate_dates): company-wide rows, like the
+    // business licences; site-scoped rows show in the location record instead.
+    readAll<{ id: string; title: string; category: string; due_date: string; recurrence: string }>((from, to) => db.from("corporate_dates").select("id,title,category,due_date,recurrence").is("location_id", null).order("id").range(from, to), "Tax and renewal deadlines could not be loaded."),
   ]);
   return [
     ...business.map((row): ReminderDocument => ({ ...row, source: "business" })),

@@ -22,7 +22,7 @@ export default function BtbHub({ role: initialRole }: { role: BtbRole }) {
 
 function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtbWorkspace>["rows"] }) {
   const view = BTB_DASHBOARD_VIEWS[role];
-  const cards = accessibleBtbCards(role, rows);
+  const cards = accessibleBtbCards(role, rows).filter((card) => card.hub !== false);
   const [query, setQuery] = useState("");
   const [revision, setRevision] = useState(0);
   const [snapshot, setSnapshot] = useState<{ revision: number; data: BtbOverview | null; error: string } | null>(null);

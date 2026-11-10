@@ -9,6 +9,7 @@
 // MGR_ONLY, so writes require manager/admin while reads need any valid role.
 
 import { isMonthKey } from "./month-end-inventory";
+import { isInventoryUnit } from "./inventory-master-list";
 
 /** Edit roles for month_end_inventory (mirrors btb-access.ts MGR_ONLY). */
 export const MONTH_END_EDIT_ROLES = ["manager", "admin"] as const;
@@ -152,8 +153,12 @@ export function parseNewItem(body: unknown): Parsed<NewItem> {
   if (!name) return { ok: false, error: "name required" };
   if (name.length > MAX_NAME_LEN) return { ok: false, error: "name too long" };
 
-  const unit = typeof b.unit === "string" && b.unit.trim() ? b.unit.trim() : "ea";
-  if (unit.length > 40) return { ok: false, error: "unit too long" };
+  // The unit is the quantity dropdown's value. Anything else would render as a
+  // blank cell on the count sheet, so an unknown unit is a rejected request
+  // rather than a silently-coerced "ea".
+  const rawUnit = typeof b.unit === "string" ? b.unit.trim() : "";
+  if (!isInventoryUnit(rawUnit)) return { ok: false, error: "choose a unit from the list" };
+  const unit = rawUnit;
 
   const rawCost = b.unit_cost;
   const parsedCost = rawCost === undefined || rawCost === null || rawCost === ""
@@ -168,6 +173,19 @@ export function parseNewItem(body: unknown): Parsed<NewItem> {
     typeof b.position === "number" && Number.isInteger(b.position) && b.position >= 0 ? b.position : null;
 
   return { ok: true, value: { name, unit, unit_cost: parsedCost.value, position } };
+}
+
+/**
+ * Whether an existing row may be edited. The master list is append-only: a
+ * protected item keeps its name forever. Unit, category and cost stay
+ * correctable, because those are data fixes, not removals.
+ */
+export function assertEditableItem(current: { name: string; protected?: boolean | null } | null, nextName: string): Parsed<null> {
+  if (!current) return { ok: false, error: "item not found" };
+  if (current.protected && current.name.trim() !== nextName.trim()) {
+    return { ok: false, error: "master inventory items cannot be renamed — add the corrected name as a new item" };
+  }
+  return { ok: true, value: null };
 }
 
 /** Optional manual sales input used by finalization; blank really means null. */

@@ -38,6 +38,8 @@ export interface BtbCard {
   accent: "red" | "amber" | "purple" | "green";
   /** The access-matrix feature this card maps to (drives visibility). */
   feature: BtbFeature;
+  /** false = route reachable but not a hub tile (it lives in a combined card). */
+  hub?: boolean;
 }
 
 // One card per hub tile. Visibility is derived from btb-access (btbCanView),
@@ -69,11 +71,13 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/protocols", title: "Operational Protocols", desc: "Step-by-step procedures for the whole team.", iconKey: "fileText", accent: "purple", feature: "protocols" },
   { href: "/between-the-buns/handbook", title: "Employee Handbook", desc: "Policies & e-signature acknowledgement.", iconKey: "bookCheck", accent: "red", feature: "handbook" },
   { href: "/between-the-buns/manuals", title: "Print & Procedure Manuals", desc: "Downloadable manuals by category.", iconKey: "printer", accent: "amber", feature: "manuals" },
-  // Compliance & administration (management)
-  { href: "/between-the-buns/compliance", title: "Compliance & Renewals", desc: "Licenses, permits & agreements with expiry alerts.", iconKey: "shield", accent: "red", feature: "compliance" },
-  { href: "/between-the-buns/documents", title: "Business Documents", desc: "Forms, SOPs, brand assets & menus — plain files, no expiry.", iconKey: "file", accent: "amber", feature: "documents" },
-  { href: "/between-the-buns/staff-licenses", title: "Staff Licenses & Certs", desc: "Food-handler cards & certifications with expiry.", iconKey: "idCard", accent: "purple", feature: "staff_licenses" },
-  { href: "/between-the-buns/licence-reminders", title: "Licence Email Reminders", desc: "Expiry emails to managers and corporate, with delivery history.", iconKey: "shield", accent: "amber", feature: "licence_reminders" },
+  // Compliance & administration (management) — ONE card for the whole
+  // compliance family. The sibling routes still exist (and keep their page
+  // access rules), they are sections inside /compliance, not hub cards.
+  { href: "/between-the-buns/compliance", title: "Compliance, docs & reminders", desc: "Licences & permits, tax & filing dates, staff certificates, business documents and expiry reminder emails — in one place.", iconKey: "shield", accent: "red", feature: "compliance" },
+  { href: "/between-the-buns/documents", title: "Business Documents", desc: "Forms, SOPs, brand assets & menus — plain files, no expiry.", iconKey: "file", accent: "amber", feature: "documents", hub: false },
+  { href: "/between-the-buns/staff-licenses", title: "Staff Licenses & Certs", desc: "Food-handler cards & certifications with expiry.", iconKey: "idCard", accent: "purple", feature: "staff_licenses", hub: false },
+  { href: "/between-the-buns/licence-reminders", title: "Licence Email Reminders", desc: "Expiry emails to managers and corporate, with delivery history.", iconKey: "shield", accent: "amber", feature: "licence_reminders", hub: false },
   { href: "/between-the-buns/inspections", title: "In-House Inspections", desc: "Self-audit checklists with scoring & history.", iconKey: "clipboardCheck", accent: "green", feature: "inspections" },
   { href: "/between-the-buns/franchise-inspection", title: "Franchise Inspection", desc: "Weighted rubric — scoring, photo proofs & history.", iconKey: "clipboardCheck", accent: "red", feature: "franchise_inspection" },
   { href: "/between-the-buns/marketing", title: "Marketing", desc: "Promotions & the social media calendar.", iconKey: "megaphone", accent: "amber", feature: "marketing" },
@@ -82,10 +86,11 @@ export const BTB_CARDS: readonly BtbCard[] = [
 ];
 
 export function cardsForRole(role: string): BtbCard[] {
-  return BTB_CARDS.filter((card) => btbCanView(card.feature, role as BtbRole));
+  return BTB_CARDS.filter((card) => card.hub !== false && btbCanView(card.feature, role as BtbRole));
 }
 
-/** Cards this role cannot see — used to explain the gap instead of hiding it silently. */
+/** Cards this role cannot see — used to explain the gap instead of hiding it silently.
+ * Non-hub routes (sections of a combined card) are excluded: they aren't gaps. */
 export function hiddenCardsForRole(role: string): BtbCard[] {
-  return BTB_CARDS.filter((card) => !btbCanView(card.feature, role as BtbRole));
+  return BTB_CARDS.filter((card) => card.hub !== false && !btbCanView(card.feature, role as BtbRole));
 }

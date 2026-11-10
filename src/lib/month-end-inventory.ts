@@ -7,10 +7,17 @@ export interface InventoryItem {
   id: string;
   name: string;
   unit: string;
+  /** Pack size printed on the master sheet ("2.27 kg", "1/9 D"). Reference only. */
+  unit_size?: string | null;
   category?: string | null;
   unit_cost: number;
   position: number;
   location_id?: string | null;
+  /**
+   * Seeded from the owner's master workbook. The name is permanent: the item
+   * can be counted, re-priced or re-categorised, never renamed or removed.
+   */
+  protected?: boolean;
 }
 
 export interface InventoryCount {

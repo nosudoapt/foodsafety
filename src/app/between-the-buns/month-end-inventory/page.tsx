@@ -7,6 +7,7 @@ import { Badge, Button, Card, Input, PageHeader, StatTile } from "@/components/u
 import { monthDates, monthlyTotal, dailyTotal, type PurchaseEntry } from "@/lib/inventory-purchases";
 import { computeAccounting, nullableAmount } from "@/lib/inventory-accounting";
 import { countQty, lineValue, monthLabel, prevMonth, recentMonths, thisMonth, toLines, totalValue, type InventoryItem } from "@/lib/month-end-inventory";
+import { INVENTORY_UNITS, MASTER_INVENTORY_ITEMS, inventoryUnitLabel } from "@/lib/inventory-master-list";
 import { changedInventoryCounts, inventoryCountPayload, loadInventoryMonth, type InventoryMonthData, type InventorySnapshot } from "@/lib/inventory-workspace";
 import { fetchJson, RequestError } from "@/lib/fetch-json";
 
@@ -153,7 +154,12 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
   };
 
   const removeItem = (item: InventoryItem) => {
-    if (!canEdit || saving || !window.confirm(`Remove ${item.name}? Its draft counts will also be removed.`)) return;
+    if (!canEdit || saving) return;
+    if (item.protected) {
+      setError(`${item.name} is on the master inventory list. Count it as 0 instead of removing it.`);
+      return;
+    }
+    if (!window.confirm(`Remove ${item.name}? Its draft counts will also be removed.`)) return;
     void mutate<{ ok: boolean }>("remove", `/api/btb/inventory-items?id=${encodeURIComponent(item.id)}`, undefined, (response) => {
       if (!response.ok) throw new Error("Removal not confirmed");
       update((current) => ({ ...current, items: current.items.filter((row) => row.id !== item.id), counts: current.counts.filter((row) => row.item_id !== item.id), prevCounts: current.prevCounts.filter((row) => row.item_id !== item.id) }));
@@ -184,7 +190,11 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
   const previous = new Map((data?.prevCounts ?? []).map((row) => [row.item_id, row.qty]));
   const live = (id: string) => draft[id] !== undefined ? countQty(draft[id]) : stored.get(id) ?? 0;
   const lines = toLines(data?.items ?? [], data?.counts ?? []);
-  const matchingLines = lines.filter(({ item }) => `${item.name} ${item.category ?? ""}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const matchingLines = lines.filter(({ item }) => `${item.name} ${item.category ?? ""} ${item.unit}`.toLowerCase().includes(search.trim().toLowerCase()));
+  const editing = data?.items.find((item) => item.id === editingItem) ?? null;
+  // Master names already on the sheet — the picker hides them rather than
+  // letting a second click create a duplicate line.
+  const masterTaken = new Set((data?.items ?? []).map((item) => item.name.trim().toLowerCase()));
   const total = totalValue(lines.map(({ item }) => ({ item, qty: live(item.id) })));
   const priorTotal = totalValue(lines.map(({ item }) => ({ item, qty: previous.get(item.id) ?? 0 })));
   const ledger = monthlyTotal(data?.purchases ?? []);
@@ -230,7 +240,7 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
               const value = draft[item.id] ?? String(stored.get(item.id) ?? 0);
               const invalid = value === "" || !Number.isFinite(Number(value)) || Number(value) < 0;
               const before = previous.get(item.id);
-              return <tr key={item.id}><th scope="row"><strong>{item.name}</strong>{item.category && <small>{item.category}</small>}</th><td>{item.unit}</td><td>{money(item.unit_cost)}</td><td><Input type="number" inputMode="decimal" step="0.01" min="0" aria-label={`Quantity for ${item.name}`} aria-invalid={invalid} value={value} readOnly={!canEdit} disabled={!!saving} onChange={(event) => { setNotice(""); setDraft((current) => ({ ...current, [item.id]: event.target.value })); }} />{invalid && <small className="inventory-field-error">Enter 0 or more</small>}</td><td>{invalid ? "—" : money(lineValue(live(item.id), item.unit_cost))}</td><td>{before === undefined || invalid ? "—" : `${live(item.id) - before > 0 ? "+" : ""}${countQty(value) - before}`}</td>{canEdit && <td><div className="inventory-row-actions"><button disabled={!!saving} aria-label={`Edit ${item.name}`} onClick={() => { setEditingItem(item.id); setItemForm({ name: item.name, unit: item.unit, unit_cost: String(item.unit_cost) }); document.getElementById("inventory-item-form")?.scrollIntoView({ block: "center" }); document.getElementById("inventory-item-name")?.focus(); }}><Pencil size={16} aria-hidden="true" /></button><button disabled={!!saving} aria-label={`Remove ${item.name}`} onClick={() => removeItem(item)}><Trash2 size={16} aria-hidden="true" /></button></div></td>}</tr>;
+              return <tr key={item.id}><th scope="row"><strong>{item.name}</strong>{(item.category || item.unit_size) && <small>{[item.category, item.unit_size].filter(Boolean).join(" · ")}</small>}</th><td>{item.unit}</td><td>{money(item.unit_cost)}</td><td><Input type="number" inputMode="decimal" step="0.01" min="0" aria-label={`Quantity for ${item.name} in ${inventoryUnitLabel(item.unit)}`} aria-invalid={invalid} value={value} readOnly={!canEdit} disabled={!!saving} onChange={(event) => { setNotice(""); setDraft((current) => ({ ...current, [item.id]: event.target.value })); }} />{invalid && <small className="inventory-field-error">Enter 0 or more</small>}</td><td>{invalid ? "—" : money(lineValue(live(item.id), item.unit_cost))}</td><td>{before === undefined || invalid ? "—" : `${live(item.id) - before > 0 ? "+" : ""}${countQty(value) - before}`}</td>{canEdit && <td><div className="inventory-row-actions"><button disabled={!!saving} aria-label={`Edit ${item.name}`} onClick={() => { setEditingItem(item.id); setItemForm({ name: item.name, unit: item.unit, unit_cost: String(item.unit_cost) }); document.getElementById("inventory-item-form")?.scrollIntoView({ block: "center" }); document.getElementById("inventory-item-name")?.focus(); }}><Pencil size={16} aria-hidden="true" /></button>{item.protected ? <span className="inventory-locked" title="On the master list — count 0 instead of removing"><LockKeyhole size={15} aria-hidden="true" /><span className="sr-only">{item.name} is on the master inventory list and cannot be removed</span></span> : <button disabled={!!saving} aria-label={`Remove ${item.name}`} onClick={() => removeItem(item)}><Trash2 size={16} aria-hidden="true" /></button>}</div></td>}</tr>;
             })}</tbody></table>
         </div>
         {!matchingLines.length && <div className="ui-empty"><Layers size={26} aria-hidden="true" /><h3>{search ? "No matching items" : "No inventory items yet"}</h3><p>{search ? "Try another item name." : readOnly ? "Items added by your manager will appear here." : "Add an item below to start the count sheet."}</p></div>}
@@ -240,12 +250,13 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
       {canEdit && <details className="inventory-item" open={editingItem ? true : undefined}>
         <summary><PackagePlus size={18} aria-hidden="true" />{editingItem ? "Edit inventory item" : "Add an inventory item"}</summary>
         <form id="inventory-item-form" onSubmit={saveItem}><fieldset disabled={!!saving} className="inventory-form-grid">
-          <label className="inventory-field inventory-field--wide">Item name<Input id="inventory-item-name" required maxLength={200} value={itemForm.name} onChange={(event) => setItemForm((current) => ({ ...current, name: event.target.value }))} placeholder="Sesame buns" /></label>
-          <label className="inventory-field">Unit<Input maxLength={40} value={itemForm.unit} onChange={(event) => setItemForm((current) => ({ ...current, unit: event.target.value }))} /></label>
+          <label className="inventory-field inventory-field--wide">Item name<Input id="inventory-item-name" required maxLength={200} value={itemForm.name} readOnly={!!editingItem && !!editing?.protected} onChange={(event) => setItemForm((current) => ({ ...current, name: event.target.value }))} placeholder="Sesame buns" />{editingItem && editing?.protected && <small>Master list name — cannot be changed.</small>}</label>
+          <label className="inventory-field">Unit<select value={itemForm.unit} onChange={(event) => setItemForm((current) => ({ ...current, unit: event.target.value }))}>{INVENTORY_UNITS.map((unit) => <option key={unit.value} value={unit.value}>{unit.label}</option>)}</select><small>{INVENTORY_UNITS.find((unit) => unit.value === itemForm.unit)?.note}</small></label>
           <label className="inventory-field">Unit cost $<Input type="number" min="0" step="0.01" inputMode="decimal" value={itemForm.unit_cost} onChange={(event) => setItemForm((current) => ({ ...current, unit_cost: event.target.value }))} placeholder="0.00" /></label>
           <Button type="submit" disabled={!!saving}>{saving === "item" ? "Saving item…" : editingItem ? "Save item" : "Add item"}</Button>
           {itemChanged && <Button variant="ghost" disabled={!!saving} onClick={() => { setItemForm(emptyItem); setEditingItem(null); }}>Clear item form</Button>}
         </fieldset></form>
+        {!editingItem && <MasterListPicker taken={masterTaken} onPick={(item) => setItemForm({ name: item.name, unit: item.unit, unit_cost: "" })} />}
       </details>}
 
       <section className="dash-panel" aria-labelledby="purchases-title"><div className="dash-panel__header"><div><h2 id="purchases-title">2. Reconcile purchases</h2><p>Daily invoices and local purchases for {monthLabel(month)}</p></div><Badge>{data.purchases.length} {data.purchases.length === 1 ? "entry" : "entries"}</Badge></div>
@@ -273,5 +284,33 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
       </Card>
       <p className="dash__provenance">Inventory is shared across the BTB company. Counts are retained for 24 months. Finalized figures come from the saved snapshot; unavailable opening inventory remains “—”.</p>
     </>}
+  </div>;
+}
+
+/**
+ * The master list as a picker. Every name from the owner's workbook is already
+ * seeded by the database migration — this panel exists so a name that somehow
+ * is not on the sheet yet (a new GFS product, a fresh workbook revision) can be
+ * pulled in without retyping it and without risking a different spelling.
+ * Names already counted are hidden; the list is never editable from here.
+ */
+function MasterListPicker({ taken, onPick }: { taken: ReadonlySet<string>; onPick: (item: (typeof MASTER_INVENTORY_ITEMS)[number]) => void }) {
+  const [filter, setFilter] = useState("");
+  const [open, setOpen] = useState(false);
+  const query = filter.trim().toLowerCase();
+  const available = useMemo(() => MASTER_INVENTORY_ITEMS.filter((item) => !taken.has(item.name.trim().toLowerCase())), [taken]);
+  const matches = query ? available.filter((item) => item.name.toLowerCase().includes(query)) : available;
+  return <div className="inventory-master-picker">
+    <div className="inventory-sectionbar">
+      <label className="dash-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search the master inventory list</span><input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} onFocus={() => setOpen(true)} placeholder={`Add from the master list… (${MASTER_INVENTORY_ITEMS.length} names)`} /></label>
+      <Button variant="ghost" onClick={() => setOpen((value) => !value)} aria-expanded={open}>{open ? "Hide list" : "Browse names"}</Button>
+    </div>
+    {open && <div className="inventory-master-list" role="listbox" aria-label="Master inventory names">
+      {matches.map((item) => <button key={item.name} type="button" role="option" aria-selected={false} onClick={() => onPick(item)}>
+        <span>{item.name}</span>
+        <small>{[inventoryUnitLabel(item.unit), item.unit_size, item.category].filter(Boolean).join(" · ")}</small>
+      </button>)}
+      {!matches.length && <p className="inventory-help">{available.length ? "No name matches that search." : "Every master-list name is already on the count sheet."}</p>}
+    </div>}
   </div>;
 }

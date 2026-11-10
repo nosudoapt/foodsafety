@@ -195,11 +195,13 @@ test("BTB compliance tabs use company scope even alongside an active FoodSafe se
   const renewals = page.getByRole("tab", { name: "Renewals", exact: true });
   await renewals.focus();
   await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
   await expect(page.getByRole("tab", { name: "Tax & filing dates" })).toBeFocused();
   await expect(page.getByRole("article", { name: "GST Return" })).toBeVisible();
   await expect(page.getByRole("article", { name: "FoodSafe site filing" })).toHaveCount(0);
   await page.keyboard.press("End");
-  await expect(page.getByRole("tab", { name: "Business documents" })).toBeFocused();
+  await expect(page.getByRole("tab", { name: "Email reminders" })).toBeFocused();
+  await page.getByRole("tab", { name: "Business documents" }).click();
   await expect(page.getByRole("article", { name: "BTB service standards" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Upload document", exact: true })).toBeEnabled();
   await page.setViewportSize({ width: 375, height: 812 });
@@ -218,7 +220,7 @@ test("saved BTB restrictions apply inside the combined compliance hub", async ({
   await fixture.configure({ tables: { role_page_access: [{ role: "supervisor", page: "documents", allowed: false }, { role: "supervisor", page: "tax-dates", allowed: false }] } });
   await signInBtb(page, "supervisor", "/between-the-buns/compliance");
   await expect(page.getByRole("article", { name: "BTB food premises licence", exact: true })).toBeVisible();
-  await expect(page.getByRole("tab")).toHaveCount(1);
+  await expect(page.getByRole("tab")).toHaveCount(2);
   await expect(page.getByRole("button", { name: "Add renewal", exact: true })).toHaveCount(0);
   expect((await fixture.state()).requests.some((request) => request.path.endsWith("/business_documents") || request.path.endsWith("/corporate_dates"))).toBeFalsy();
 });

@@ -46,6 +46,31 @@ test("saved restrictions apply to search, metrics and direct reference pages", a
   await expect(page.getByRole("heading", { name: "This page isn’t in your workspace." })).toBeVisible();
 });
 
+test("the compliance family is one combined card with every section", async ({ page, fixture }, info) => {
+  await signInBtb(page, "manager");
+  // One hub card now covers renewals, documents, certificates and reminders.
+  const tools = page.locator("#btb-tools");
+  await expect(tools.locator('a[href="/between-the-buns/compliance"]')).toHaveCount(1);
+  for (const standalone of ["documents", "staff-licenses", "licence-reminders"]) {
+    await expect(tools.locator(`a[href="/between-the-buns/${standalone}"]`)).toHaveCount(0);
+  }
+  await capture(page, info, "btb-compliance-card-single");
+  // The card opens the combined page with all five sections.
+  await page.goto("/between-the-buns/compliance");
+  await expect(page.getByRole("heading", { name: "Compliance, docs & reminders" })).toBeVisible();
+  for (const section of ["Renewals", "Staff certificates", "Tax & filing dates", "Business documents", "Email reminders"]) {
+    await expect(page.getByRole("tab", { name: section })).toBeVisible();
+  }
+  // Each section actually renders its real workspace inside the card.
+  await page.getByRole("tab", { name: "Staff certificates" }).click();
+  await expect(page.getByRole("heading", { name: "Staff licences & certificates" })).toBeVisible();
+  await page.getByRole("tab", { name: "Email reminders" }).click();
+  await expect(page.getByRole("heading", { name: "Who receives the reminders?" })).toBeVisible();
+  await page.getByRole("tab", { name: "Tax & filing dates" }).click();
+  await expect(page.getByRole("tabpanel", { name: "Tax & filing dates" })).toContainText(/deadline|GST|PST|payroll|date/i);
+  await capture(page, info, "btb-compliance-card-sections");
+});
+
 test("permission-load failures block tools and offer a working retry", async ({ page, fixture }) => {
   await fixture.configure({ failures: [{ table: "role_page_access", method: "GET" }] });
   await signInBtb(page, "manager", "/between-the-buns/month-end-inventory");

@@ -495,10 +495,18 @@ a.dash-metric:hover { border-color: var(--brand); background: white; }
 .inventory-table .ui-input { width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
 .inventory-table .ui-input[aria-invalid="true"] { border-color: var(--danger); }
 .inventory-field-error { display: block; color: var(--danger); font-size: 0.75rem; padding-top: 5px; }
-.inventory-row-actions { display: flex; gap: 4px; justify-content: flex-end; }
+.inventory-row-actions { display: flex; gap: 4px; justify-content: flex-end; align-items: center; }
 .inventory-row-actions button { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-sm); color: var(--muted); }
 .inventory-row-actions button:hover:not(:disabled) { background: var(--paper-2); color: var(--brand); }
 .inventory-row-actions button:disabled { opacity: 0.5; }
+/* A master-list row: permanent name, so the delete slot shows a padlock. */
+.inventory-locked { display: grid; place-items: center; width: 44px; height: 44px; color: var(--muted-2); opacity: 0.6; }
+.inventory-master-picker { padding: 0 0 24px; }
+.inventory-master-picker .inventory-sectionbar { border-bottom: none; padding: 0; }
+.inventory-master-list { display: grid; gap: 2px; max-height: 300px; overflow-y: auto; margin-top: 12px; padding: 8px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--paper); }
+.inventory-master-list button { display: flex; flex-direction: column; gap: 3px; width: 100%; padding: 9px 12px; border-radius: var(--r-sm); text-align: left; font-size: 0.8125rem; color: var(--ink); }
+.inventory-master-list button:hover { background: var(--surface); color: var(--brand); }
+.inventory-master-list button small { font-size: 0.7rem; color: var(--muted); }
 .inventory-item { border: 1px solid var(--line); border-radius: var(--r-md); background: var(--surface); padding: 0 24px; }
 .inventory-item summary { display: flex; align-items: center; gap: 10px; padding: 20px 0; font-size: 0.875rem; font-weight: 600; color: var(--brand); }
 .inventory-item summary::after { content: "+"; margin-left: auto; font-size: 1.2rem; }

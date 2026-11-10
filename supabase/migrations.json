@@ -38,7 +38,7 @@
     {
       "step": 8,
       "file": "schema-btb-public.sql",
-      "description": "Demo-grade. Opens the compliance/admin tables to public RLS so the cookie-authed Between the Buns surface (no Supabase session) can read/write them. NOT production row security \u2014 see the file header."
+      "description": "Demo-grade. Opens the compliance/admin tables to public RLS so the cookie-authed Between the Buns surface (no Supabase session) can read/write them. NOT production row security — see the file header."
     },
     {
       "step": 9,
@@ -48,7 +48,7 @@
     {
       "step": 10,
       "file": "schema-emergency-contacts.sql",
-      "description": "emergency_contacts.category + phone_2/phone_3/contact_name/email \u2014 the category directory (Electrician, Plumber, Grease Trap\u2026) with 3 preferences per entry."
+      "description": "emergency_contacts.category + phone_2/phone_3/contact_name/email — the category directory (Electrician, Plumber, Grease Trap…) with 3 preferences per entry."
     },
     {
       "step": 11,
@@ -63,47 +63,47 @@
     {
       "step": 13,
       "file": "schema-prep-sheet.sql",
-      "description": "prep_counts.pull \u2014 the Freezer pull & Dairy column of the new Daily Prep Sheet. Run last: until it's run the sheet still reads, but Save refuses with a message naming this file."
+      "description": "prep_counts.pull — the Freezer pull & Dairy column of the new Daily Prep Sheet. Run last: until it's run the sheet still reads, but Save refuses with a message naming this file."
     },
     {
       "step": 14,
       "file": "schema-marketing-fields.sql",
-      "description": "marketing_promotions.category / size / person_name / location_id \u2014 the promotion form's category, size, person and target site. Needs locations from #11; until it's run the marketing board hides those four inputs."
+      "description": "marketing_promotions.category / size / person_name / location_id — the promotion form's category, size, person and target site. Needs locations from #11; until it's run the marketing board hides those four inputs."
     },
     {
       "step": 15,
       "file": "schema-vault-categories.sql",
-      "description": "Widens login_vault.category to the Login Vault's flat category list (Debit machine, Internet, MYR POS, Bank login, Uber \u2026) while keeping every legacy bucket readable. Keep in sync with src/lib/vault-categories.ts."
+      "description": "Widens login_vault.category to the Login Vault's flat category list (Debit machine, Internet, MYR POS, Bank login, Uber …) while keeping every legacy bucket readable. Keep in sync with src/lib/vault-categories.ts."
     },
     {
       "step": 16,
       "file": "schema-cash-out.sql",
-      "description": "cash_outs \u2014 end-of-day till reconciliation (till, cash sale, delivery fees, tips, cash-out, safe drop) with a 30-day retention purge (purge_cash_outs())."
+      "description": "cash_outs — end-of-day till reconciliation (till, cash sale, delivery fees, tips, cash-out, safe drop) with a 30-day retention purge (purge_cash_outs())."
     },
     {
       "step": 17,
       "file": "schema-staff-schedule.sql",
-      "description": "staff_members + staff_shifts \u2014 weekly roster calendar (90-day retention on shifts via purge_staff_schedule()). Needs locations from #11."
+      "description": "staff_members + staff_shifts — weekly roster calendar (90-day retention on shifts via purge_staff_schedule()). Needs locations from #11."
     },
     {
       "step": 18,
       "file": "schema-tax-dates.sql",
-      "description": "corporate_dates \u2014 filing deadlines, payroll remittances, licences and renewals with optional monthly/quarterly/annual recurrence. location_id IS NULL = company-wide. Kept forever (a purged deadline would silently vanish from next year's view)."
+      "description": "corporate_dates — filing deadlines, payroll remittances, licences and renewals with optional monthly/quarterly/annual recurrence. location_id IS NULL = company-wide. Kept forever (a purged deadline would silently vanish from next year's view)."
     },
     {
       "step": 19,
       "file": "schema-training.sql",
-      "description": "training_topics + training_sections \u2014 the SOP/onboarding guide (sections are plain text: paragraphs + - checklist lines, published hides drafts from staff). Kept forever."
+      "description": "training_topics + training_sections — the SOP/onboarding guide (sections are plain text: paragraphs + - checklist lines, published hides drafts from staff). Kept forever."
     },
     {
       "step": 20,
       "file": "schema-month-end-inventory.sql",
-      "description": "inventory_items + inventory_counts \u2014 the closing count sheet (count_month is a YYYY-MM key, one row per item per month) with value and variance against the previous close. Retention: 24 months via purge_inventory_counts()."
+      "description": "inventory_items + inventory_counts — the closing count sheet (count_month is a YYYY-MM key, one row per item per month) with value and variance against the previous close. Retention: 24 months via purge_inventory_counts()."
     },
     {
       "step": 21,
       "file": "schema-branding-requests.sql",
-      "description": "branding_requests \u2014 signage/menu/uniform/packaging requests on a status board (open \u2192 in_review \u2192 in_progress \u2192 done/declined). Retention: finished requests older than 24 months via purge_branding_requests(); open work is never purged."
+      "description": "branding_requests — signage/menu/uniform/packaging requests on a status board (open → in_review → in_progress → done/declined). Retention: finished requests older than 24 months via purge_branding_requests(); open work is never purged."
     },
     {
       "step": 22,
@@ -113,22 +113,27 @@
     {
       "step": 24,
       "file": "schema-inventory-purchases.sql",
-      "description": "inventory_purchases \u2014 the daily purchase ledger (GFS invoices + local purchases) that feeds monthly COGS. One source of truth for eligible purchases; unique index blocks duplicate GFS invoice references."
+      "description": "inventory_purchases — the daily purchase ledger (GFS invoices + local purchases) that feeds monthly COGS. One source of truth for eligible purchases; unique index blocks duplicate GFS invoice references."
     },
     {
       "step": 25,
       "file": "schema-inventory-snapshots.sql",
-      "description": "inventory_month_snapshots \u2014 server-written month-end accounting snapshot (opening/purchases/closing/sales/COGS/food-cost %). Rows are never deleted; reopening flips status to 'draft' and records who/why so history is preserved."
+      "description": "inventory_month_snapshots — server-written month-end accounting snapshot (opening/purchases/closing/sales/COGS/food-cost %). Rows are never deleted; reopening flips status to 'draft' and records who/why so history is preserved."
     },
     {
       "step": 26,
       "file": "schema-inventory-audit.sql",
-      "description": "inventory_audit_log \u2014 append-only trail of finalize/reopen/correct actions with a JSONB copy of the figures at action time."
+      "description": "inventory_audit_log — append-only trail of finalize/reopen/correct actions with a JSONB copy of the figures at action time."
     },
     {
       "step": 27,
       "file": "schema-role-page-access.sql",
-      "description": "role_page_access \u2014 admin-edited role\u2192page matrix the BTB hub reads to decide which cards each role sees. Admin dashboard writes it."
+      "description": "role_page_access — admin-edited role→page matrix the BTB hub reads to decide which cards each role sees. Admin dashboard writes it."
+    },
+    {
+      "step": 28,
+      "file": "schema-inventory-master-list.sql",
+      "description": "Master inventory list — the 278 items from the owner's workbook seeded once, marked protected, and guarded append-only by a trigger: names may be added, never deleted or renamed. Unit/category/cost stay editable."
     }
   ]
 }

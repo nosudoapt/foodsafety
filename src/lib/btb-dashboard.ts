@@ -133,5 +133,5 @@ export function btbCardGroup(card: BtbCard): string {
 
 export function searchBtbCards(role: BtbRole, rows: readonly BtbPageAccess[] | null, query: string): BtbCard[] {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return accessibleBtbCards(role, rows).filter((card) => terms.every((term) => `${card.title} ${card.desc} ${btbCardGroup(card)}`.toLowerCase().includes(term)));
+  return accessibleBtbCards(role, rows).filter((card) => card.hub !== false && terms.every((term) => `${card.title} ${card.desc} ${btbCardGroup(card)}`.toLowerCase().includes(term)));
 }
