@@ -67,7 +67,11 @@ export async function createBtbDatabase(legacy = {}) {
   for (const [table, rows] of Object.entries(legacy)) await insertRows(db, table, rows);
   // Release 07 (schema-btb-platform-operations.sql) scopes shift checks with
   // location_id; the API filters .is("location_id", null).
-  try { await db.exec(operationsSchema); await db.exec(uploadsSchema); await db.exec("ALTER TABLE btb_shift_checks ADD COLUMN location_id uuid;"); }
+  try { await db.exec(operationsSchema); await db.exec(uploadsSchema);
+    // Release 07 / platform marketing scope rows with location_id; the BTB API
+    // filters .is("location_id", null) on both tables.
+    await db.exec("ALTER TABLE btb_shift_checks ADD COLUMN location_id uuid; ALTER TABLE social_media_calendar ADD COLUMN location_id uuid;");
+  }
   catch (error) { await db.close(); throw error; }
   return db;
 }

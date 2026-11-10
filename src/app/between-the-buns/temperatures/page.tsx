@@ -114,12 +114,12 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
         date={sheetDate}
         onDateChange={changeSheetDate}
         maxDate={today}
+        static={readOnly}
         cells={(label, slot) => {
-          const key = `${label}|${slot}`;
-          const saved = savedCells.get(key);
+          const saved = savedCells.get(`${label}|${slot}`);
           if (saved) return { saved: true, text: cellText(saved), unsafe: !saved.is_safe };
           if (readOnly) return { saved: false, text: "" };
-          return { saved: false, text: drafts[key] ?? "", draft: true };
+          return { saved: false, text: drafts[`${label}|${slot}`] ?? "", draft: true };
         }}
         onDraft={(label, slot, value) => setDraft(`${label}|${slot}`, value)}
       />
