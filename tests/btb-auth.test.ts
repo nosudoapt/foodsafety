@@ -16,7 +16,6 @@ import {
   tokenValid,
 } from "../src/lib/btb-auth";
 import { cardsForRole, hiddenCardsForRole, BTB_CARDS } from "../src/lib/btb-hub";
-import { demoPassword } from "../src/lib/demo-server";
 
 // Compiled tests run from .test-dist/tests/, so the project root is two levels up.
 const ROOT = join(__dirname, "..", "..");
@@ -35,7 +34,7 @@ test("BTB defines five legacy shared roles plus personal designer/owner roles", 
   }
   for (const account of BTB_ACCOUNTS) {
     assert.ok(isBtbRole(account.role));
-    assert.match(account.email, /@foodsafe\.demo$/);
+    assert.match(account.email, /@btb\.demo$/);
     assert.ok(account.name && account.restaurant);
   }
   assert.equal(new Set(BTB_ACCOUNTS.map((a) => a.email)).size, BTB_ACCOUNTS.length);
@@ -49,24 +48,19 @@ test("one shared password unlocks every BTB account", () => {
     // email matching is case/whitespace tolerant
     assert.equal(accountForCredentials(` ${account.email.toUpperCase()} `, btbPassword())?.role, account.role);
   }
-  assert.equal(accountForCredentials("manager@foodsafe.demo", "wrong"), null);
-  assert.equal(accountForCredentials("nobody@foodsafe.demo", btbPassword()), null);
+  assert.equal(accountForCredentials("manager@btb.demo", "wrong"), null);
+  assert.equal(accountForCredentials("nobody@btb.demo", btbPassword()), null);
   assert.equal(accountForCredentials("", ""), null);
 });
 
 test("one password works on both sign-in pages, but each checks its own list", () => {
-  // Deliberate: the user asked for one credential across the green demo and
-  // BTB. When the FoodSafe demo password is not overridden they use the same
-  // value — otherwise owner@… + password would work on one page and not the other.
-  if (!process.env.DEMO_PASSWORD) {
-    assert.equal(btbPassword(), demoPassword(), "both surfaces must share a default password");
-  }
+  // BTB maintains its own single shared workspace password.
   assert.equal(btbPasswordIsDefault(), process.env.NODE_ENV !== "production");
 
   // BTB still validates against BTB_ACCOUNTS only — an address it doesn't
   // know fails even with the correct shared password.
-  assert.ok(accountForCredentials("manager@foodsafe.demo", btbPassword()));
-  assert.equal(accountForCredentials("nobody@foodsafe.demo", btbPassword()), null);
+  assert.ok(accountForCredentials("manager@btb.demo", btbPassword()));
+  assert.equal(accountForCredentials("nobody@btb.demo", btbPassword()), null);
 });
 
 test("production logins need no BTB environment settings and retain private, role-bound sessions", () => {
@@ -79,7 +73,7 @@ test("production logins need no BTB environment settings and retain private, rol
     for (const account of auth.BTB_ACCOUNTS) {
       assert.equal(auth.accountForCredentials(account.email, "admin1234").role, account.role);
     }
-    assert.equal(auth.accountForCredentials("manager@foodsafe.demo", "wrong"), null);
+    assert.equal(auth.accountForCredentials("manager@btb.demo", "wrong"), null);
     assert.equal(auth.btbPasswordIsDefault(), false);
     const shared = auth.sessionValueFor("manager");
     const employee = auth.employeeSessionValueFor({ id: "50000000-0000-4000-8000-000000000001", role: "staff", version: 1 });
@@ -93,8 +87,8 @@ test("production logins need no BTB environment settings and retain private, rol
     }
     process.env.BTB_PASSWORD = "obsolete-env-password";
     process.env.BTB_SESSION_TOKEN = "obsolete-env-signing-key";
-    assert.equal(auth.accountForCredentials("manager@foodsafe.demo", "admin1234").role, "manager");
-    assert.equal(auth.accountForCredentials("manager@foodsafe.demo", "obsolete-env-password"), null);
+    assert.equal(auth.accountForCredentials("manager@btb.demo", "admin1234").role, "manager");
+    assert.equal(auth.accountForCredentials("manager@btb.demo", "obsolete-env-password"), null);
     assert.equal(auth.sessionValueFor("manager"), shared);
     assert.equal(auth.roleFromSession(employee), "staff");
     process.env.SUPABASE_SERVICE_ROLE_KEY = "rotated-test-backend-key";

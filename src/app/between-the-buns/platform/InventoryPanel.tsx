@@ -10,6 +10,7 @@ import {
   foodCost,
   inventoryReadiness,
   lineValue,
+  masterRowsProblem,
   money,
   monthLabel,
   numberOf,
@@ -22,6 +23,7 @@ import {
   SALES_BASIS,
   type InventoryData,
   type InventoryImport,
+  type MasterRowDraft,
   type PurchaseLineDraft,
   type SalesFigure,
 } from "@/lib/btb-platform-inventory";
@@ -227,6 +229,28 @@ const readFileBase64 = (file: File): Promise<string> => new Promise((resolve, re
   reader.readAsDataURL(file);
 });
 
+/** Normalise extracted master rows into editable review drafts. */
+const masterDrafts = (extracted: Record<string, unknown>): MasterRowDraft[] =>
+  rowsOf(extracted.items).map((raw) => {
+    const item = raw as Record<string, unknown>;
+    const draftCell = (value: unknown): string => {
+      if (typeof value === "number" && Number.isFinite(value)) return String(value);
+      if (typeof value === "string" && value.trim() !== "") return value.trim();
+      return "";
+    };
+    return {
+      item_number: draftCell(item.item_number),
+      name: draftCell(item.name),
+      source: draftCell(item.source) === "local" ? "local" : "gfs",
+      unit_size: draftCell(item.unit_size),
+      pack_size: draftCell(item.pack_size),
+      category: draftCell(item.category),
+      case_price: draftCell(item.case_price),
+      packet_price: draftCell(item.packet_price),
+      par_value: draftCell(item.par_value),
+    };
+  });
+
 function DocumentQueue({ locationId, month, data, reload }: {
   locationId: string;
   month: string;
@@ -253,15 +277,33 @@ function DocumentQueue({ locationId, month, data, reload }: {
         mime,
         content_base64,
       }));
+      // AI assist is a draft-maker, never a writer: it only prefills the review
+      // screen. When it is not configured (or fails) the document still lands
+      // in the queue for hand entry, with the reason recorded honestly.
+      let aiFailure = "";
+      let extracted: Record<string, unknown> | null = null;
+      let aiText = "";
+      try {
+        const draft = await fetchJson<{ extracted: Record<string, unknown>; text?: string }>(
+          "/api/btb/platform/inventory/extract",
+          jsonRequest({ location_id: locationId, file_id: saved.file.id, kind }),
+        );
+        extracted = draft.extracted;
+        aiText = draft.text ?? "";
+      } catch (cause) { aiFailure = messageOf(cause); }
       await fetchJson("/api/btb/platform/import", jsonRequest({
         location_id: locationId,
         month,
         kind,
         file_id: saved.file.id,
-        extractor: "manual-upload",
-        error: "No document extraction provider is configured. Read the source document and enter its reviewed values here.",
+        extractor: extracted ? "ai-assisted" : "manual-upload",
+        text: aiText || (extracted ? "AI extraction draft — every value must be checked against the source document." : ""),
+        extracted: extracted ?? {},
+        error: extracted ? null : aiFailure || "Extraction was not available. Read the source document and enter its reviewed values here.",
       }));
-      setNotice(`${file.name} was added to the review queue. Nothing reached the ledger yet.`);
+      setNotice(extracted
+        ? `${file.name} was read with AI help and added to the review queue. Check every figure against the document — nothing reached the ledger yet.`
+        : `${file.name} was added to the review queue. Nothing reached the ledger yet.`);
       reload();
     } catch (cause) { setFailure(messageOf(cause)); }
     finally { setBusy(false); }
@@ -332,13 +374,46 @@ function ImportReview({ row, locationId, month, reload }: {
     rowsOf(extracted.lines).map((line) => purchaseLineDraft(line)));
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
 
+  const [master, setMaster] = useState<MasterRowDraft[]>(() => masterDrafts(extracted));
+  const [updateExisting, setUpdateExisting] = useState(false);
+
   const reset = () => {
     setVendor(invoice.vendor);
     setReference(invoice.reference);
     setDate(invoice.date);
     setTotal(invoice.total);
     setLines(rowsOf(extracted.lines).map((line) => purchaseLineDraft(line)));
+    setMaster(masterDrafts(extracted));
+    setUpdateExisting(false);
     setReviewConfirmed(false);
+  };
+
+  const updateMaster = (index: number, key: keyof MasterRowDraft, value: string) => {
+    setMaster((current) => current.map((line, at) => at === index ? { ...line, [key]: value } : line));
+  };
+
+  const confirmMaster = () => {
+    if (row.kind !== "master") return;
+    setFailure(""); setNotice("");
+    const problem = masterRowsProblem(master);
+    if (problem) { setFailure(problem); return; }
+    if (!reviewConfirmed) { setFailure("Tick to confirm you checked these rows against the source document."); return; }
+    void post("confirm_master", {
+      import_id: row.id,
+      review_confirmed: true,
+      update_existing: updateExisting,
+      items: master.map((lineRow) => ({
+        item_number: lineRow.item_number.trim(),
+        name: lineRow.name.trim(),
+        source: lineRow.source,
+        unit_size: lineRow.unit_size.trim() || null,
+        pack_size: parseQuantity(lineRow.pack_size),
+        category: lineRow.category.trim() || null,
+        case_price: parseQuantity(lineRow.case_price),
+        packet_price: parseQuantity(lineRow.packet_price),
+        par_value: parseQuantity(lineRow.par_value),
+      })),
+    });
   };
 
   const updateLine = (index: number, key: keyof PurchaseLineDraft, value: string) => {
@@ -437,11 +512,37 @@ function ImportReview({ row, locationId, month, reload }: {
         <label>Possible duplicate explanation (only if this looks like one already entered)
           <Input value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} placeholder="e.g. separate delivery of the same order" /></label>
       </>}
+      {row.kind === "master" && <>
+        <p className="ops-meta">
+          {master.length} catalogue rows read from the sheet. Check names, pack sizes and prices against the
+          document — rows the sheet leaves unpriced must stay an explicit 0, never blank.
+        </p>
+        <div className="ops-import__lines">
+          <h4>Catalogue rows</h4>
+          {master.map((lineRow, index) => {
+            return <div className="ops-line" key={index}>
+              <Input aria-label={`Row ${index + 1} item number`} value={lineRow.item_number} disabled={busy} placeholder="Item #" onChange={(event) => updateMaster(index, "item_number", event.target.value)} />
+              <Input aria-label={`Row ${index + 1} description`} value={lineRow.name} disabled={busy} placeholder="Item description" onChange={(event) => updateMaster(index, "name", event.target.value)} />
+              <Badge accent={lineRow.source === "local" ? "amber" : "blue"}>{lineRow.source === "local" ? "LOCAL" : "GFS"}</Badge>
+              <Input aria-label={`Row ${index + 1} pack size`} value={lineRow.pack_size} disabled={busy} inputMode="decimal" placeholder="Pack" onChange={(event) => updateMaster(index, "pack_size", event.target.value)} />
+              <Input aria-label={`Row ${index + 1} case price`} value={lineRow.case_price} disabled={busy} inputMode="decimal" placeholder="Case $" onChange={(event) => updateMaster(index, "case_price", event.target.value)} />
+              <Input aria-label={`Row ${index + 1} packet price`} value={lineRow.packet_price} disabled={busy} inputMode="decimal" placeholder="Packet $" onChange={(event) => updateMaster(index, "packet_price", event.target.value)} />
+            </div>;
+          })}
+        </div>
+        <label className="ops-checkbox"><input type="checkbox" checked={updateExisting} disabled={busy} onChange={(event) => setUpdateExisting(event.target.checked)} />
+          <span>Also overwrite catalogue rows that already exist (leave unticked to only add new items).</span></label>
+        <label className="ops-checkbox"><input type="checkbox" checked={reviewConfirmed} disabled={busy} onChange={(event) => setReviewConfirmed(event.target.checked)} />
+          <span>I checked these rows against the original master sheet.</span></label>
+      </>}
       {failure && <p className="ui-notice ui-notice--error" role="alert">{failure}</p>}
       {notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
       <div className="ops-toolbar">
         {row.kind !== "sales" && row.kind !== "master" && <Button disabled={busy || !reviewConfirmed} onClick={confirmPurchase}>
           <Save size={16} aria-hidden="true" />{busy ? "Saving…" : "Confirm reviewed purchase"}
+        </Button>}
+        {row.kind === "master" && <Button disabled={busy || !reviewConfirmed} onClick={confirmMaster}>
+          <Save size={16} aria-hidden="true" />{busy ? "Saving…" : `Confirm catalogue (${master.length} rows)`}
         </Button>}
         <Button variant="danger" disabled={busy || !reason.trim()} onClick={() => void post("reject_import", { import_id: row.id, reason: reason.trim() })}>
           <Lock size={16} aria-hidden="true" />Reject with reason

@@ -94,21 +94,17 @@ export async function PATCH(req: Request) {
   return NextResponse.json({ item: data });
 }
 
+// No DELETE handler by design: the master inventory list is STATIC per the
+// owner's process — items are only ever added or updated; quantities change,
+// items never disappear. Removing an item would break audit history.</think><tool_call>edit<arg_key>newString</arg_key><arg_value>// No DELETE handler by design: the master inventory list is STATIC — items
+// are only ever added or updated; quantities change, items never disappear.
+// Removing an item would break audit history, so nothing may ever call
+// this route with destructive intent.
+
+/** Kept as a documented dead end so a client calling DELETE gets a clear answer. */
 export async function DELETE(req: Request) {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
-  const id = new URL(req.url).searchParams.get("id");
-  if (!isUuid(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
-
-  const db = inventoryDb();
-  const history = await requireItemWithoutFinalizedHistory(db, id);
-  if (!history.ok) return NextResponse.json({ error: history.error }, { status: history.status });
-
-  // Draft counts cascade in the DB. Finalized history is blocked above.
-  const { data, error } = await db.from("inventory_items").delete().is("location_id", null).eq("id", id).select("id").maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!data) return NextResponse.json({ error: "item not found" }, { status: 404 });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ error: "Inventory items cannot be deleted. Items are static — only quantities, prices and new items change." }, { status: 405 });
 }

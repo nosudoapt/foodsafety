@@ -159,11 +159,11 @@ test("reminder administration requires manager or corporate access and cron requ
   expect((await request.get(cron)).status()).toBe(401);
   expect((await request.get(cron, { headers: { Authorization: "Bearer incorrect" } })).status()).toBe(401);
   for (const role of ["staff", "supervisor", "admin"]) {
-    await apiSignIn(request, `${role}@foodsafe.demo`);
+    await apiSignIn(request, `${role}@btb.demo`);
     expect((await request.get(endpoint)).status(), role).toBe(403);
     expect((await request.post(endpoint, { data: { action: "run" } })).status(), role).toBe(403);
   }
-  await apiSignIn(request, "corporate@foodsafe.demo");
+  await apiSignIn(request, "corporate@btb.demo");
   const settings = await enableReminders(request);
   const stale = await request.post(endpoint, { data: { ...settings, version: settings.version - 1 } });
   expect(stale.status()).toBe(409);

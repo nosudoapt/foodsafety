@@ -109,7 +109,7 @@ Retention policy per feature is documented in `supabase/README.md` (rows 16–21
 
 1. Run the SQL files above (16–22, plus 11 and 13 if still pending).
 2. Dev server: `http://localhost:5001` (already running).
-3. BTB login: `POST /api/btb/login` with `manager@foodsafe.demo` / `admin1234`.
+3. BTB login: `POST /api/btb/login` with `* / `admin1234`.
 4. Open `/between-the-buns` — the five new admin-linked cards plus Staff Schedule
    and the hub tiles; confirm a `staff` role login only reads.
 

@@ -62,6 +62,7 @@ export async function createBtbDatabase(legacy = {}) {
     ALTER TABLE compliance_documents ADD COLUMN location_id uuid;
     ${readFileSync(new URL("schema-rbac.sql", schemaDirectory), "utf8").replaceAll("uuid_generate_v4()", "gen_random_uuid()")}
     ${readFileSync(new URL("schema-marketing-fields.sql", schemaDirectory), "utf8")}
+    ${declaration("schema-tax-dates.sql", "corporate_dates")}
   `);
   for (const [table, rows] of Object.entries(legacy)) await insertRows(db, table, rows);
   try { await db.exec(operationsSchema); await db.exec(uploadsSchema); }

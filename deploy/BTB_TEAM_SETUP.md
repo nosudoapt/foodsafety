@@ -113,7 +113,7 @@ training tables; both applications now read this content through the server.
 ## 3. Set up individual accounts
 
 1. Open `/between-the-buns/login`. Bootstrap through the existing shared manager
-   address, `manager@foodsafe.demo`, using the backend workspace password (`admin1234`).
+   address, `* using the backend workspace password (`admin1234`).
 2. Open **Employees** and add the manager's personal record: name, unique email,
    phone, optional position, **Manager** role and an initial 10–128-character
    password. Save, then sign in using that individual email/password.
@@ -240,7 +240,7 @@ Provision once per Supabase project using Node 22 and the existing server key:
 node scripts/provision-btb-uploader.mjs
 ```
 
-It creates/reuses the marked `btb-uploader@foodsafe.invalid` Auth identity, ensures
+It creates/reuses the marked `btb-uploader@btb.invalid` Auth identity, ensures
 its BTB staff profile exists, disables interactive sign-in and prints only the
 UUID setting to copy to local/Vercel configuration. It uses Auth APIs rather than
 the database-password connection. The connected project's uploader is already

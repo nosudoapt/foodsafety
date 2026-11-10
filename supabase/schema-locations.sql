@@ -68,7 +68,6 @@ CREATE INDEX IF NOT EXISTS idx_corrective_actions_location ON corrective_actions
 --    by created_at) is deterministic on every re-run.
 -- ---------------------------------------------------------------------------
 INSERT INTO locations (id, name, address, created_at) VALUES
-  ('10000000-0000-4000-8000-000000000001', 'The Grill House', '12 High Street, Manchester M1 1AA', '2026-01-01T09:00:00Z'),
   ('10000000-0000-4000-8000-000000000002', 'Piccadilly',      '48 Piccadilly, Manchester M1 1LS',   '2026-01-02T09:00:00Z'),
   ('10000000-0000-4000-8000-000000000003', 'Deansgate',       '210 Deansgate, Manchester M3 3NW',    '2026-01-03T09:00:00Z'),
   ('10000000-0000-4000-8000-000000000004', 'Ancoats',         '7 Redhill Street, Manchester M4 5BA', '2026-01-04T09:00:00Z')

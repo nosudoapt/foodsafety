@@ -5,7 +5,7 @@ export interface ReminderSettings {
   manager_emails: string[]; corporate_emails: string[]; enabled: boolean; lead_days: number[];
   version: number; updated_at: string; last_run_at: string | null; last_run_error: string | null;
 }
-export interface ReminderDocument { source: "business" | "staff"; id: string; name: string; expiry_date: string }
+export interface ReminderDocument { source: "business" | "staff" | "tax"; id: string; name: string; expiry_date: string }
 export interface ReminderJob {
   id: string; source: ReminderDocument["source"]; document_id: string; document_name: string; expiry_date: string;
   lead_days: number; recipient: string; status: "pending" | "sending" | "sent" | "failed"; attempts: number;
@@ -56,15 +56,20 @@ export function reminderStatusLabel(job: ReminderJob, now: number): string {
   return job.status === "sending" ? "Sending / awaiting result" : job.status === "failed" ? "Failed" : "Pending";
 }
 
+/** Label used in the email body and history table per reminder source. */
+export function reminderJobType(source: ReminderDocument["source"]): string {
+  return source === "staff" ? "Staff certificate" : source === "tax" ? "Tax / renewal deadline" : "Business licence / renewal";
+}
+
 /** Frozen job fields make every retry's provider payload identical. */
 export function reminderMessage(job: Pick<ReminderJob, "document_name" | "expiry_date" | "source" | "lead_days">): { subject: string; text: string } {
-  const type = job.source === "staff" ? "Staff certificate" : "Business licence / renewal";
+  const type = reminderJobType(job.source);
   return {
     subject: `BTB expiry reminder · ${job.expiry_date}`,
-    text: ["Between the Buns — licence expiry reminder", "", `${type}: ${job.document_name}`, `Expiry date: ${job.expiry_date}`,
-      job.lead_days === 0 ? "This is the expiry-date / overdue reminder." : `This reminder is for the ${job.lead_days}-day renewal window.`, "",
-      "Please arrange renewal and update the expiry date in the BTB workspace.",
-      job.source === "staff" ? "Open Staff Licences & Certificates to update this record." : "Open Compliance & Renewals to update this record.",
+    text: ["Between the Buns — licence expiry reminder", "", `${type}: ${job.document_name}`, `Due date: ${job.expiry_date}`,
+      job.lead_days === 0 ? "This is the due-date / overdue reminder." : `This reminder is for the ${job.lead_days}-day renewal window.`, "",
+      "Please arrange renewal and update the date in the BTB workspace.",
+      job.source === "staff" ? "Open Staff Licences & Certificates to update this record." : job.source === "tax" ? "Open Compliance & Renewals to update this record." : "Open Compliance & Renewals to update this record.",
       "", "This reminder is sent to the configured manager and corporate recipients."].join("\n"),
   };
 }

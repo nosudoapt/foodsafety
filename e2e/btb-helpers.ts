@@ -7,7 +7,7 @@ import type { TrainingSection } from "../src/lib/training";
 export const appOrigin = "http://127.0.0.1:5101";
 export const restaurant = "Between the Buns";
 
-export async function apiSignIn(request: APIRequestContext, email = "manager@foodsafe.demo", credential = email.endsWith("@foodsafe.demo") ? workspacePassword : password) {
+export async function apiSignIn(request: APIRequestContext, email = "manager@btb.demo", credential = email.endsWith("@btb.demo") ? workspacePassword : password) {
   const response = await request.post("/api/btb/login", { headers: { Origin: appOrigin }, data: { email, password: credential } });
   await expect(response).toBeOK();
 }

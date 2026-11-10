@@ -44,6 +44,10 @@ export function isPlatformReadModule(value: unknown): value is PlatformReadModul
 export const PLATFORM_FILE_PURPOSES = ["reference", "artwork", "evidence", "purchase", "sales", "compliance", "report"] as const;
 export type PlatformFilePurpose = (typeof PLATFORM_FILE_PURPOSES)[number];
 
+/** Document kinds the inventory import pipeline accepts. */
+export const IMPORT_KINDS = ["gfs", "local", "sales", "master"] as const;
+export type ImportKind = (typeof IMPORT_KINDS)[number];
+
 export function isPlatformFilePurpose(value: unknown): value is PlatformFilePurpose {
   return typeof value === "string" && (PLATFORM_FILE_PURPOSES as readonly string[]).includes(value);
 }

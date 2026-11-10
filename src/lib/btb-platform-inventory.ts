@@ -1,6 +1,8 @@
 // Shared, secret-free contracts for the inventory & food-cost module.
 // Imported by both the API route and the browser screen.
 
+import type { ImportKind } from "./btb-platform";
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -301,6 +303,71 @@ export interface PurchaseLineDraft {
   line_total: string;
 }
 
+/** Document kinds the AI extractor (and the import pipeline) understand. */
+export type ExtractKind = ImportKind;
+
+const draftNumber = (value: unknown): number | null =>
+  typeof value === "number" && Number.isFinite(value) ? value
+  : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value.replace(/[$,]/g, ""))) ? Number(value.replace(/[$,]/g, ""))
+  : null;
+const draftText = (value: unknown): string | null => (typeof value === "string" && value.trim() !== "" ? value.trim() : null);
+const draftRows = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+/**
+ * Shape-validate an AI draft before it reaches the review screen.
+ * Returns null when the structure is unusable. Copy semantics: numbers may
+ * arrive as printed currency strings ("$1,234.50"); anything missing stays
+ * null — a blank is never turned into zero and never invented.
+ */
+export function normalizeDraft(kind: ExtractKind, raw: unknown): Record<string, unknown> | null {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  if (kind === "sales") {
+    const figures = draftRows(source.figures)
+      .map((row) => row as Record<string, unknown>)
+      .filter((row) => draftText(row.label) !== null && draftNumber(row.value) !== null)
+      .map((row) => ({ label: draftText(row.label), value: draftNumber(row.value) }));
+    return figures.length ? { figures } : null;
+  }
+  if (kind === "master") {
+    const items = draftRows(source.items)
+      .map((row) => row as Record<string, unknown>)
+      .filter((row) => draftText(row.name) !== null)
+      .map((row) => ({
+        item_number: draftText(row.item_number),
+        name: draftText(row.name),
+        unit_size: draftText(row.unit_size),
+        pack_size: draftNumber(row.pack_size),
+        category: draftText(row.category),
+        case_price: draftNumber(row.case_price),
+        packet_price: draftNumber(row.packet_price),
+        par_value: draftNumber(row.par_value),
+        qty_case: draftNumber(row.qty_case),
+        qty_packet: draftNumber(row.qty_packet),
+      }));
+    return items.length ? { items } : null;
+  }
+  const lines = draftRows(source.lines)
+    .map((row) => row as Record<string, unknown>)
+    .filter((row) => draftText(row.description) !== null)
+    .map((row) => ({
+      description: draftText(row.description),
+      item_code: draftText(row.item_code),
+      cases: draftNumber(row.cases),
+      packets: draftNumber(row.packets),
+      unit_price: draftNumber(row.unit_price),
+      line_total: draftNumber(row.line_total),
+    }));
+  const draft = {
+    vendor: draftText(source.vendor),
+    reference: draftText(source.reference),
+    date: draftText(source.date),
+    total: draftNumber(source.total),
+    lines,
+  };
+  return draft.vendor || draft.total !== null || lines.length ? draft : null;
+}
+
 export function purchaseLineDraft(row: Record<string, unknown> = {}): PurchaseLineDraft {
   const qty = (key: string): string => {
     const n = numberOf(row[key]);
@@ -315,6 +382,48 @@ export function purchaseLineDraft(row: Record<string, unknown> = {}): PurchaseLi
     unit_price: qty("unit_price"),
     line_total: qty("line_total"),
   };
+}
+
+/**
+ * A reviewed master-catalogue row, normalised from extraction or hand entry.
+ * Every numeric cell is a string so the reviewer sees exactly what was read;
+ * blank means "not on the document" — the confirm step refuses blanks rather
+ * than silently turning them into zeros.
+ */
+export interface MasterRowDraft {
+  item_number: string;
+  name: string;
+  source: "gfs" | "local";
+  unit_size: string;
+  pack_size: string;
+  category: string;
+  case_price: string;
+  packet_price: string;
+  par_value: string;
+}
+
+/**
+ * Validate the reviewed master rows before they are sent to SQL.
+ * Returns the first problem as a human sentence, or null when every row is
+ * complete. An unpriced row must be an explicit 0, never a blank.
+ */
+export function masterRowsProblem(rows: readonly MasterRowDraft[]): string | null {
+  for (const [index, row] of rows.entries()) {
+    const where = `Row ${index + 1}${row.name ? ` (${row.name})` : ""}`;
+    if (!row.item_number.trim()) return `${where}: enter the item number.`;
+    if (!row.name.trim()) return `${where}: enter the item description.`;
+    const pack = parseQuantity(row.pack_size);
+    if (pack === null || pack <= 0) return `${where}: enter a pack size (1 for per-unit items).`;
+    // parseQuantity rejects negatives, so each cell is checked for a minus sign
+    // first to give the reviewer a precise message instead of "enter a number".
+    for (const [label, cell] of [["case price", row.case_price], ["packet price", row.packet_price]] as const) {
+      if (cell.trim().startsWith("-")) return `${where}: prices cannot be negative.`;
+    }
+    const casePrice = parseQuantity(row.case_price);
+    const packetPrice = parseQuantity(row.packet_price);
+    if (casePrice === null || packetPrice === null) return `${where}: enter both prices — type 0 deliberately for a row the sheet leaves unpriced.`;
+  }
+  return rows.length ? null : "This catalogue draft has no rows.";
 }
 
 /**

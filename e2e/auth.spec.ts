@@ -97,7 +97,7 @@ test("BTB sign-in keeps its return path local and its sign-out preserves the Foo
   await signInFoodSafe(page, "owner");
   await expect(page.getByRole("heading", { name: "Your business, at a glance." })).toBeVisible();
   await page.goto("/between-the-buns/login?next=%2Fdashboard");
-  await page.getByLabel("Team email").fill("manager@foodsafe.demo");
+  await page.getByLabel("Team email").fill("manager@btb.demo");
   await page.getByLabel("Workspace password", { exact: true }).fill("wrong-password");
   await page.getByRole("button", { name: "Open my workspace" }).click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("email and password don’t match");

@@ -48,9 +48,6 @@ disk and the numbered table below ever disagree.
 2. Append the next free `{"step": N, "file": …, "description": …}` to
    `migrations.json` **and** a row to the numbered table below.
 3. `npm run db:migrate:dry` to preview, then `npm run db:migrate`.
-4. Step 23 (`seed-demo.sql`) is a *reset*: it deletes and re-inserts the demo
-   accounts' sample rows, so it is tracked like any other step rather than
-   re-run every time. Re-seed deliberately with `npm run db:migrate -- --force`.
 
 ## Manual order (SQL Editor)
 

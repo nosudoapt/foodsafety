@@ -34,7 +34,7 @@ test("the corporate opening checklist preserves all sixteen sections and importe
   await page.reload();
   await expect(first).toBeChecked();
 
-  await apiSignIn(request, "corporate@foodsafe.demo");
+  await apiSignIn(request, "corporate@btb.demo");
   await expect(await request.post(endpoint, { data: { task_key: FRANCHISE_TASKS[0].key, version: 1, done: false } })).toBeOK();
   await first.uncheck();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("task changed");
@@ -72,7 +72,7 @@ test("the corporate opening checklist preserves all sixteen sections and importe
   await capture(page, info, "franchise-opening-mobile");
 
   for (const role of ["staff", "supervisor", "manager", "admin"]) {
-    await apiSignIn(request, `${role}@foodsafe.demo`);
+    await apiSignIn(request, `${role}@btb.demo`);
     expect((await request.get(endpoint)).status(), role).toBe(403);
     expect((await request.post(endpoint, { data: { task_key: FRANCHISE_TASKS[0].key, version: 3, done: true } })).status(), role).toBe(403);
   }

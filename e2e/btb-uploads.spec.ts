@@ -112,7 +112,7 @@ test("uploader APIs enforce independent sessions, role/page permissions and same
   await signInFoodSafe(page, "owner");
   expect((await page.request.post("/api/btb/documents", { data: { name: "FoodSafe cannot impersonate BTB", file } })).status()).toBe(401);
   for (const role of ["staff", "supervisor", "corporate", "admin"]) {
-    await apiSignIn(request, `${role}@foodsafe.demo`);
+    await apiSignIn(request, `${role}@btb.demo`);
     expect((await request.post("/api/btb/documents", { data: {} })).status(), `${role} document create`).toBe(403);
     expect((await request.delete("/api/btb/documents", { data: {} })).status(), `${role} document delete`).toBe(403);
     const read = await request.get("/api/btb/documents");

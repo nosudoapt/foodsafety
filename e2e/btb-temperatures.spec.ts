@@ -87,10 +87,10 @@ test("temperature endpoints enforce login, operational permissions and saved pag
   await expect(page.getByRole("button", { name: "Add reading", exact: true })).toHaveCount(0);
   expect((await page.request.post("/api/btb/temperatures", { data: input })).status()).toBe(403);
   for (const role of ["staff", "supervisor"] as const) {
-    await apiSignIn(request, `${role}@foodsafe.demo`);
+    await apiSignIn(request, `${role}@btb.demo`);
     await expect(await request.get("/api/btb/temperatures")).toBeOK();
   }
-  await apiSignIn(request, "admin@foodsafe.demo");
+  await apiSignIn(request, "admin@btb.demo");
   expect((await request.get("/api/btb/temperatures")).status()).toBe(403);
   await fixture.configure({ tables: { role_page_access: [{ role: "manager", page: "temperatures", allowed: false }] } });
   await signInBtb(page, "manager", "/between-the-buns/temperatures");

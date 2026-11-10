@@ -85,7 +85,7 @@ in [`deploy/README.md`](README.md).
 ## 3. Confirm BTB access and uploads
 
 1. Open `<production-url>/between-the-buns/login`.
-2. Sign in as `manager@foodsafe.demo` with the backend workspace password (`admin1234`).
+2. Sign in as `* with the backend workspace password (`admin1234`).
 3. Open **Employees** and create the manager's personal account. Sign in with it.
 4. Open **Business documents**, upload a small PDF, refresh and download it.
    Confirm **Added by** shows the manager's name.

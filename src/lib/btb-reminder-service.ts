@@ -17,11 +17,34 @@ export async function loadReminderSettings(db: SupabaseClient): Promise<Reminder
 }
 
 export async function loadReminderDocuments(db: SupabaseClient): Promise<ReminderDocument[]> {
-  const [business, staff] = await Promise.all([
+  const [business, staff, corporate] = await Promise.all([
     readAll<{ id: string; name: string; expiry_date: string }>((from, to) => db.from("compliance_documents").select("id,name,expiry_date").eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).not("expiry_date", "is", null).order("id").range(from, to), "Business licence dates could not be loaded."),
     readAll<{ id: string; staff_name: string; license_type: string; expiry_date: string }>((from, to) => db.from("btb_staff_licences").select("id,staff_name,license_type,expiry_date").eq("restaurant_name", BTB_RESTAURANT).not("expiry_date", "is", null).order("id").range(from, to), "Staff certificate dates could not be loaded."),
+    // Tax / renewal deadlines (corporate_dates), company-wide rows included.
+    readAll<{ id: string; title: string; category: string; due_date: string; recurrence: string }>((from, to) => db.from("corporate_dates").select("id,title,category,due_date,recurrence").order("id").range(from, to), "Tax and renewal deadlines could not be loaded."),
   ]);
-  return [...business.map((row): ReminderDocument => ({ ...row, source: "business" })), ...staff.map((row): ReminderDocument => ({ id: row.id, name: `${row.staff_name} · ${licenceTypeLabel(row.license_type)}`, expiry_date: row.expiry_date, source: "staff" }))].sort((a, b) => a.expiry_date.localeCompare(b.expiry_date) || a.name.localeCompare(b.name));
+  return [
+    ...business.map((row): ReminderDocument => ({ ...row, source: "business" })),
+    ...staff.map((row): ReminderDocument => ({ id: row.id, name: `${row.staff_name} · ${licenceTypeLabel(row.license_type)}`, expiry_date: row.expiry_date, source: "staff" })),
+    ...corporate.map((row): ReminderDocument => ({ id: row.id, name: `${row.title} (${row.category})`, expiry_date: nextDueDate(row.due_date, row.recurrence), source: "tax" })),
+  ].sort((a, b) => a.expiry_date.localeCompare(b.expiry_date) || a.name.localeCompare(b.name));
+}
+
+/** Recurring deadlines roll forward so an aged-out filing stays actionable. */
+export function nextDueDate(dueDate: string, recurrence: string, today = btbToday()): string {
+  if (!["monthly", "quarterly", "annual"].includes(recurrence)) return dueDate;
+  let due = dueDate;
+  const addStep = (value: string): string => {
+    const date = new Date(`${value}T00:00:00Z`);
+    if (Number.isNaN(date.getTime())) return value;
+    if (recurrence === "monthly") date.setUTCMonth(date.getUTCMonth() + 1);
+    else if (recurrence === "quarterly") date.setUTCMonth(date.getUTCMonth() + 3);
+    else date.setUTCFullYear(date.getUTCFullYear() + 1);
+    return date.toISOString().slice(0, 10);
+  };
+  let guard = 0;
+  while (due < today && guard++ < 10) due = addStep(due);
+  return due;
 }
 
 /** Transactional claims + frozen provider idempotency keys make concurrent runs safe. */

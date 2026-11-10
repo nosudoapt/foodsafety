@@ -94,13 +94,13 @@ const ROLE_STORIES = [
 
 const PLANS = [
   {
-    name: "Demo",
+    name: "Trial",
     price: "Free",
-    desc: "Explore the full platform with sample data. No signup required.",
-    cta: "Open demo",
-    href: "/app",
+    desc: "Start a 30-day trial. No card required.",
+    cta: "Start free trial",
+    href: "/auth/sign-up?trial=1",
     featured: false,
-    list: ["Full platform with sample data", "All log types", "No card, no signup"],
+    list: ["Full platform for 30 days", "All log types", "No card, no setup"],
   },
   {
     name: "Single site",
@@ -240,8 +240,8 @@ export default function Landing() {
                 <Link href="/auth/sign-up?trial=1" className="btn btn--primary">
                   Start 30-day trial <ArrowRight size={17} />
                 </Link>
-                <Link href="/app" className="btn btn--ink">
-                  Open the live demo
+                <Link href="/auth/sign-in" className="btn btn--ink">
+                  Sign in
                 </Link>
               </div>
 
@@ -466,8 +466,8 @@ export default function Landing() {
             <div>
               <h2 className="h2">Priced per site, not per seat</h2>
               <p className="lede" style={{ marginTop: 18 }}>
-                Start with a 30-day trial. No card required. Explore the
-                role-based demo before creating your workspace.
+                Start with a 30-day trial. No card required. Every log type is
+                included from day one.
               </p>
             </div>
           </div>
@@ -515,16 +515,16 @@ export default function Landing() {
               <div>
                 <h2 className="h2">Run a tighter kitchen.</h2>
                 <p className="lede">
-                  Start the free trial, or click straight into the live demo and
-                  poke at a real register with sample data.
+                  Start a trial, or sign in and poke at a real
+                  register with live data.
                 </p>
               </div>
               <div className="close__actions">
                 <Link href="/auth/sign-up?trial=1" className="btn btn--primary">
                   Start 30-day trial <ArrowRight size={17} />
                 </Link>
-                <Link href="/app" className="btn btn--ink">
-                  View demo
+                <Link href="/auth/sign-in" className="btn btn--ink">
+                  Sign in
                 </Link>
               </div>
             </div>
@@ -549,7 +549,7 @@ export default function Landing() {
                 <li><a href="#capabilities">Capabilities</a></li>
                 <li><a href="#live">Product preview</a></li>
                 <li><a href="#pricing">Pricing</a></li>
-                <li><Link href="/app">Demo</Link></li>
+                <li><Link href="/auth/sign-in">Sign in</Link></li>
               </ul>
             </div>
             <div>
@@ -564,7 +564,7 @@ export default function Landing() {
               <h3>Get started</h3>
               <ul>
                 <li><Link href="/auth/sign-up?trial=1">Free trial <ArrowUpRight size={12} style={{ display: "inline" }} /></Link></li>
-                <li><Link href="/app">Open demo</Link></li>
+                <li><Link href="/auth/sign-up?trial=1">Open trial</Link></li>
               </ul>
             </div>
           </div>

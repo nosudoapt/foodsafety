@@ -1,10 +1,7 @@
 import { BtbApiError, readBody } from "@/lib/btb-api";
 import { isUuid } from "@/lib/btb-team";
+import { IMPORT_KINDS, type ImportKind } from "@/lib/btb-platform";
 import { platformRoute, platformRpc } from "@/lib/btb-platform-route";
-
-/** Extracted document shapes the import function can accept. */
-export const IMPORT_KINDS = ["gfs", "local", "sales", "master"] as const;
-export type ImportKind = (typeof IMPORT_KINDS)[number];
 
 /**
  * Stage a reviewed extraction. The route never invents line values: the caller

@@ -44,3 +44,8 @@ next-env.d.ts
 
 # compiled test output
 .test-dist
+
+# Internal reference material — business documents, not source
+reference-documents/
+.claude/
+ai-verify-tmp.mjs

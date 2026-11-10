@@ -59,7 +59,7 @@ test("unicode and spaces don't crash the symbol check", () => {
 test("looksLikeEmail accepts normal addresses", () => {
   for (const v of [
     "a@b.co",
-    "owner@foodsafe.demo",
+    "owner@btb.demo",
     "first.last+tag@restaurant-group.co.uk",
     "  padded@example.com  ",
   ]) {

@@ -11,7 +11,6 @@ import {
   Field,
   PasswordField,
 } from "@/components/auth/AuthShell";
-import { DemoPanel } from "@/components/auth/DemoPanel";
 import { safeNextPath } from "@/lib/auth-redirect";
 import "@/app/auth.css";
 
@@ -126,8 +125,6 @@ export default function SignIn() {
           )}
         </button>
       </form>
-
-      <DemoPanel />
 
       <p className="foot">
         New to FoodSafe?{" "}

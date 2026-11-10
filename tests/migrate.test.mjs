@@ -86,7 +86,6 @@ test("manifest steps match the numbers published in supabase/README.md", () => {
 
   const { steps } = validateManifest(MANIFEST, SQL_DIR);
   for (const s of steps) {
-    if (s.file === "seed-demo.sql") continue; // seeded file, not in the README table
     assert.equal(readme.get(s.step), s.file, `step ${s.step} disagrees with README`);
   }
   // Every numbered README row is actually runnable from the manifest.

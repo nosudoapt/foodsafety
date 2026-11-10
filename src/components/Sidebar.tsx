@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import DemoRoleBadge from "@/components/DemoRoleBadge";
 
 const navigation = [
   { name: "Home", href: "/", icon: "🏡" },
@@ -52,9 +51,6 @@ export default function Sidebar() {
             </svg>
           </div>
           <span className="ml-2 font-bold text-gray-900">FoodSafe</span>
-          <div className="ml-auto">
-            <DemoRoleBadge compact />
-          </div>
         </div>
       </div>
 
@@ -79,10 +75,7 @@ export default function Sidebar() {
             <span className="ml-3 font-bold text-gray-900">FoodSafe</span>
           </div>
 
-          {/* Demo perspective switcher (demo sessions only) */}
-          <div className="px-3 py-3 border-b border-gray-100">
-            <DemoRoleBadge />
-          </div>
+          {/* Role-aware workspace header */}
 
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto py-4 px-3">

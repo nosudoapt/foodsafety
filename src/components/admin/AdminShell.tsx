@@ -7,7 +7,6 @@ import { ArrowUpRight, ChevronRight, Command, LogOut, Menu, Search, SearchX, Set
 import "@/app/admin.css";
 import { DayDotDial } from "@/components/marketing/dot-theme";
 import { NavIcon } from "@/components/admin/NavIcon";
-import DemoRoleBadge from "@/components/DemoRoleBadge";
 import { activeWorkspaceItem, searchWorkspace, workspaceNavForRole } from "@/lib/workspace-nav";
 import { roleLabel } from "@/lib/roles";
 import { canAccess } from "@/lib/route-guards";
@@ -152,7 +151,6 @@ export default function AdminShell({ profile, children }: { profile: AdminProfil
             <span className="rail__identity-dot" aria-hidden="true" />
             <span>{profile ? roleLabel(profile.role) : "Your workspace"}<small>{profile?.restaurant_name || "FoodSafe workspace"}</small></span>
           </div>
-          <DemoRoleBadge compact />
         </div>
 
         <div className="rail__search">

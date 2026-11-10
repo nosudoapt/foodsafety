@@ -214,9 +214,12 @@ CREATE TABLE IF NOT EXISTS social_media_calendar (
 );
 ALTER TABLE social_media_calendar ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Managers can manage social_media_calendar" ON social_media_calendar;
+-- Same role set as marketing_promotions: designers manage the calendar too
+-- (matching schema-rbac.sql's marketing_promotions policy) so their board is
+-- not silently filtered to zero rows by RLS.
 CREATE POLICY "Managers can manage social_media_calendar" ON social_media_calendar
-  FOR ALL USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager')))
-  WITH CHECK (user_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager')));
+  FOR ALL USING (user_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager', 'designer')))
+  WITH CHECK (user_id = auth.uid() OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('owner', 'multi_location_owner', 'corporate', 'manager', 'designer')));
 CREATE INDEX IF NOT EXISTS idx_social_media_calendar_user_id ON social_media_calendar(user_id);
 
 -- Indexes

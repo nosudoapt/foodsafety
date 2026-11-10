@@ -6,12 +6,12 @@ import { ShieldCheck, UtensilsCrossed, ArrowRight } from "lucide-react";
 const products = [
   {
     href: "/auth/sign-in",
-    tag: "Demo",
+    tag: "Access",
     title: "FoodSafe Manager",
     desc: "Digital HACCP — temperatures, checks, cleaning, allergens and compliance records.",
     icon: ShieldCheck,
     accent: "green",
-    cta: "Enter demo",
+    cta: "Sign in",
   },
   {
     href: "/between-the-buns/login",

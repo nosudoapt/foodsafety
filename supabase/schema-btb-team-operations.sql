@@ -105,13 +105,13 @@ CREATE TABLE IF NOT EXISTS public.btb_staff_licences (
 CREATE TABLE IF NOT EXISTS public.btb_notification_settings (
   restaurant_name text PRIMARY KEY DEFAULT 'Between the Buns' CHECK (restaurant_name = 'Between the Buns'),
   manager_emails text[] NOT NULL DEFAULT '{}', corporate_emails text[] NOT NULL DEFAULT '{}',
-  enabled boolean NOT NULL DEFAULT false, lead_days integer[] NOT NULL DEFAULT '{30,7,1,0}',
+  enabled boolean NOT NULL DEFAULT false, lead_days integer[] NOT NULL DEFAULT '{60,30,15,7}',
   version integer NOT NULL DEFAULT 1, updated_at timestamptz NOT NULL DEFAULT now(),
   last_run_at timestamptz, last_run_error text
 );
 INSERT INTO public.btb_notification_settings(restaurant_name) VALUES ('Between the Buns') ON CONFLICT DO NOTHING;
 CREATE TABLE IF NOT EXISTS public.btb_licence_email_log (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), source text NOT NULL CHECK (source IN ('business','staff')),
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), source text NOT NULL CHECK (source IN ('business','staff','tax')),
   document_id text NOT NULL, document_name text NOT NULL, expiry_date date NOT NULL, lead_days integer NOT NULL,
   recipient text NOT NULL, status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','sending','sent','failed')),
   attempts integer NOT NULL DEFAULT 0, lease_until timestamptz, lease_token uuid,
@@ -131,6 +131,12 @@ INSERT INTO public.btb_shifts(id,employee_id,shift_date,start_time,end_time,upda
 SELECT s.id,s.staff_member_id,s.shift_date,s.start_time,s.end_time,'Imported roster'
 FROM public.staff_shifts s JOIN public.btb_employees e ON e.id=s.staff_member_id WHERE s.location_id IS NULL
 ON CONFLICT(id) DO NOTHING;
+-- The arbiter for the legacy import is the 3-column unique key. Fresh installs
+-- get it from the table definition. Drifted installs (where a later migration
+-- replaced it with the scoped index) need it recreated so this import has a
+-- conflict target at all.
+CREATE UNIQUE INDEX IF NOT EXISTS btb_shift_checks_legacy_key
+  ON public.btb_shift_checks(restaurant_name,check_date,check_type);
 INSERT INTO public.btb_shift_checks(id,check_date,check_type,items,done_count,total_count,completed,updated_at,saved_by_name)
 SELECT id,check_date,check_type,items,done_count,total_count,completed,coalesce(updated_at,now()),'Legacy record · staff not recorded'
 FROM (SELECT c.*,row_number() OVER(PARTITION BY check_date,check_type ORDER BY updated_at DESC NULLS LAST,id DESC) AS rank
@@ -309,6 +315,7 @@ BEGIN
     AND restaurant_name='Between the Buns' AND location_id IS NULL AND expiry_date=p_expiry) THEN RETURN; END IF;
   IF p_source='staff' AND NOT EXISTS(SELECT 1 FROM btb_staff_licences WHERE id::text=p_document_id
     AND restaurant_name='Between the Buns' AND expiry_date=p_expiry) THEN RETURN; END IF;
+  IF p_source='tax' AND NOT EXISTS(SELECT 1 FROM corporate_dates WHERE id::text=p_document_id AND due_date=p_expiry) THEN RETURN; END IF;
   INSERT INTO btb_licence_email_log(source,document_id,document_name,expiry_date,lead_days,recipient)
   VALUES(p_source,p_document_id,p_name,p_expiry,p_lead,p_recipient) ON CONFLICT(source,document_id,expiry_date,lead_days,recipient) DO NOTHING;
   SELECT * INTO job FROM btb_licence_email_log WHERE source=p_source AND document_id=p_document_id AND expiry_date=p_expiry AND lead_days=p_lead AND recipient=p_recipient FOR UPDATE;

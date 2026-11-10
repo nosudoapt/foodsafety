@@ -55,4 +55,4 @@ selects Node 22 for local development and verification.
 
 - Do not run `npm run db:migrate*` against production.
 - Do not create or populate `_migrations` merely to silence its absence.
-- Do not run `seed-demo.sql`, reset data, or paste secrets into SQL/chat/logs.
+- Do not run live-data resets, or paste secrets into SQL/chat/logs.

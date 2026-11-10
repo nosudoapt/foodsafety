@@ -121,7 +121,7 @@ test("BTB SQL preserves imports, isolates credentials and enforces transactional
 
   await t.test("email claims deduplicate concurrent jobs, reject stale certificates and fence uncertain retries", async () => {
     await db.exec("UPDATE btb_notification_settings SET enabled=true,manager_emails=ARRAY['manager@example.test'],corporate_emails=ARRAY['hq@example.test']");
-    const params = { p_source: "staff", p_document_id: licence, p_name: "Alice certificate", p_expiry: "2026-11-02", p_lead: 0, p_recipient: "manager@example.test" };
+    const params = { p_source: "staff", p_document_id: licence, p_name: "Alice certificate", p_expiry: "2026-11-02", p_lead: 30, p_recipient: "manager@example.test" };
     const claims = await Promise.all([rpc(db, "btb_claim_licence_email", params), rpc(db, "btb_claim_licence_email", params)]);
     assert.equal(claims.flat().length, 1);
     const job = claims.flat()[0];
@@ -139,5 +139,9 @@ test("BTB SQL preserves imports, isolates credentials and enforces transactional
     assert.deepEqual(await rpc(db, "btb_claim_licence_email", { ...params, p_recipient: "hq@example.test" }), []);
     await db.exec("UPDATE btb_notification_settings SET enabled=false");
     assert.deepEqual(await rpc(db, "btb_claim_licence_email", { ...params, p_expiry: "2027-11-02", p_recipient: "hq@example.test" }), []);
+    // Restore state this subtest mutated, so the suite is idempotent over the
+    // live database (the email-claims subtest re-runs against this licence).
+    await db.query("UPDATE btb_staff_licences SET expiry_date='2026-11-02' WHERE id=$1", [licence]);
+    await db.query("DELETE FROM btb_licence_email_log WHERE document_id=$1", [String(licence)]);
   });
 });

@@ -85,7 +85,7 @@ test("manuals endpoints keep FoodSafe and BTB sessions independent, including si
 
 test("manuals enforce BTB role and page access while FoodSafe enforces its own management roles", async ({ page, request, fixture }) => {
   for (const role of ["staff", "supervisor", "manager", "corporate", "admin"] as const) {
-    await apiSignIn(request, `${role}@foodsafe.demo`);
+    await apiSignIn(request, `${role}@btb.demo`);
     expect((await request.get(btbEndpoint)).status(), role).toBe(role === "admin" ? 403 : 200);
   }
   await apiSignIn(request);
