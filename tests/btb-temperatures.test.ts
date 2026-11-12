@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseTemperature, parseTemperatureSheet, temperatureInRange } from "../src/lib/btb-temperatures";
+import { parseTemperature, parseTemperatureSheet, temperatureAlert, temperatureInRange } from "../src/lib/btb-temperatures";
 
 const input = { id: "91000000-0000-4000-8000-000000000001", record_type: "cold_storage", equipment_name: "Walk-in fridge", food_item: "Dairy", temperature: "3.25", min_safe_temp: "0", max_safe_temp: "4", notes: "" };
 
@@ -35,6 +35,24 @@ test("the daily sheet flags against the client's standing standards", () => {
   assert.equal(temperatureInRange(-17.9, -273.15, -18), false, "−17.9 °C freezer is unsafe");
   assert.equal(temperatureInRange(4.4, -273.15, 4.5), true, "4.4 °C cooler is safe");
   assert.equal(temperatureInRange(4.6, -273.15, 4.5), false, "4.6 °C cooler has entered the danger zone");
+});
+
+test("the alert grades the owner's tolerance: ≤4 °C ok, 4–4.5 °C amber, above 4.5 °C red", () => {
+  // Coolers: at or below 4 °C is on target; 4 °C to 4.5 °C is the owner's
+  // tolerance and alerts amber; anything above 4.5 °C is out of range.
+  assert.equal(temperatureAlert(3.9, "cooler"), "ok");
+  assert.equal(temperatureAlert(4, "cooler"), "ok");
+  assert.equal(temperatureAlert(4.2, "cooler"), "warn");
+  assert.equal(temperatureAlert(4.5, "cooler"), "warn");
+  assert.equal(temperatureAlert(4.6, "cooler"), "unsafe");
+  // Freezers: at or below −18 °C (0 °F); anything warmer is unsafe, no tolerance.
+  assert.equal(temperatureAlert(-18, "freezer"), "ok");
+  assert.equal(temperatureAlert(-30, "freezer"), "ok");
+  assert.equal(temperatureAlert(-17.9, "freezer"), "unsafe");
+  // Sanitizer keeps its 200–400 PPM band with no tolerance tier.
+  assert.equal(temperatureAlert(300, "sanitizer"), "ok");
+  assert.equal(temperatureAlert(150, "sanitizer"), "unsafe");
+  assert.equal(temperatureAlert(450, "sanitizer"), "unsafe");
 });
 
 test("reading validation rejects invalid metadata and accepts only caller-editable fields", () => {

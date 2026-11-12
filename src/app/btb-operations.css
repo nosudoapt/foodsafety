@@ -40,6 +40,8 @@
 .temperature-sheet__input::-webkit-outer-spin-button, .temperature-sheet__input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 .temperature-sheet__input[type="number"] { appearance: textfield; appearance: textfield; -moz-appearance: textfield; }
 .temperature-sheet__unsafe { color: var(--danger); font-weight: 600; }
+/* Above target but inside the owner's tolerance (e.g. a cooler at 4.2 °C). */
+.temperature-sheet__warn { color: var(--warning, #b45309); font-weight: 600; }
 @media (max-width: 640px) {
   .temperature-sheet__label { font-size: .6875rem; padding-left: 6px; }
   .temperature-sheet td { min-width: 64px; padding: 2px 3px; }
