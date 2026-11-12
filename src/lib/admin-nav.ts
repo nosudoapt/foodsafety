@@ -155,13 +155,6 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         keywords: "till close reconciliation money",
       },
       {
-        label: "Tax & Renewal Dates",
-        href: "/between-the-buns/tax-dates",
-        icon: "calendar",
-        roles: MGMT,
-        keywords: "deadlines vat filing",
-      },
-      {
         label: "Month-End Inventory",
         href: "/between-the-buns/month-end-inventory",
         icon: "inventory",
