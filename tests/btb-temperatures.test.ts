@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseTemperature, temperatureInRange } from "../src/lib/btb-temperatures";
+import { parseTemperature, parseTemperatureSheet, temperatureInRange } from "../src/lib/btb-temperatures";
 
 const input = { id: "91000000-0000-4000-8000-000000000001", record_type: "cold_storage", equipment_name: "Walk-in fridge", food_item: "Dairy", temperature: "3.25", min_safe_temp: "0", max_safe_temp: "4", notes: "" };
 
@@ -20,6 +20,21 @@ test("negative freezer readings and exact target boundaries are handled correctl
   assert.equal(temperatureInRange(0, 0, 4), true);
   assert.equal(temperatureInRange(4, 0, 4), true);
   assert.equal(temperatureInRange(4.01, 0, 4), false);
+});
+
+test("the daily sheet flags against the client's standing standards", () => {
+  // Coolers hold at or below 4.5 °C (41 °F), freezers at or below −18 °C (0 °F)
+  // — ceilings, not bands: a reading colder than the old floor is still safe.
+  const day = "2026-11-10";
+  const freezer = parseTemperatureSheet({ date: day, cells: [{ label: "FREEZER-1", slot: "11:00", value: "-25" }] }, day);
+  assert.equal(freezer.value?.cells[0].max_safe_temp, -18);
+  assert.equal(freezer.value?.cells[0].min_safe_temp, -273.15, "at or below −18 °C is a ceiling, not a −24 band");
+  const cooler = parseTemperatureSheet({ date: day, cells: [{ label: "COOLER-1", slot: "11:00", value: "4.4" }] }, day);
+  assert.equal(cooler.value?.cells[0].max_safe_temp, 4.5, "the cooler ceiling is 4.5 °C (41 °F)");
+  assert.equal(temperatureInRange(-25, -273.15, -18), true, "−25 °C freezer is safe");
+  assert.equal(temperatureInRange(-17.9, -273.15, -18), false, "−17.9 °C freezer is unsafe");
+  assert.equal(temperatureInRange(4.4, -273.15, 4.5), true, "4.4 °C cooler is safe");
+  assert.equal(temperatureInRange(4.6, -273.15, 4.5), false, "4.6 °C cooler has entered the danger zone");
 });
 
 test("reading validation rejects invalid metadata and accepts only caller-editable fields", () => {

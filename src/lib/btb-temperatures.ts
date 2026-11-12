@@ -93,14 +93,35 @@ export const TEMPERATURE_SHEET_ROWS: readonly { label: string; kind: Temperature
   { label: "", kind: "blank" },
 ];
 
-/** The restaurant's standing standards, pre-printed on the form. Frozen storage
- * holds −24 to −18 °C, refrigeration 0 to 4 °C, and the Quat sanitizer bucket
- * 200 to 400 PPM (matching the seeded Grill House equipment settings). */
-export const TEMPERATURE_SHEET_RANGES: Record<Exclude<TemperatureSheetKind, "blank">, { min: number; max: number; unit: "C" | "PPM"; record_type: TemperatureType | "sanitizer" }> = {
-  freezer: { min: -24, max: -18, unit: "C", record_type: "cold_storage" },
-  cooler: { min: 0, max: 4, unit: "C", record_type: "cold_storage" },
+/** The restaurant's standing standards (client-confirmed 10 Nov 2026),
+ * pre-printed on the form. Coolers hold at or below 4.5 °C (41 °F; target
+ * 4 °C) and freezers at or below −18 °C (0 °F) — both are ceilings, so a
+ * reading colder than the floor of the band is still safe, and the range's
+ * lower bound is simply the coldest value the sheet accepts. The Quat
+ * sanitizer bucket stays 200–400 PPM. The temperature danger zone is 4 °C to
+ * 60 °C (40–140 °F): a cooler above 4.5 °C has left safe holding. */
+export const TEMPERATURE_SHEET_RANGES: Record<Exclude<TemperatureSheetKind, "blank">, { min: number; max: number; warnMax?: number; unit: "C" | "PPM"; record_type: TemperatureType | "sanitizer" }> = {
+  freezer: { min: -273.15, max: -18, unit: "C", record_type: "cold_storage" },
+  cooler: { min: -273.15, max: 4.5, warnMax: 4, unit: "C", record_type: "cold_storage" },
   sanitizer: { min: 200, max: 400, unit: "PPM", record_type: "sanitizer" },
 };
+
+/** The temperature danger zone printed on food-safety standards: 4 °C to
+ * 60 °C (40–140 °F). Cold-held food stays at or below 4 °C, hot-held food at
+ * or above 60 °C — inside this band bacteria multiply fastest. */
+export const TEMPERATURE_DANGER_ZONE = { min: 4, max: 60 } as const;
+
+export type TemperatureAlert = "ok" | "warn" | "unsafe";
+
+/** Grade one saved reading against its row's standing standard: inside the
+ * target (≤4 °C for coolers) is ok; inside the owner's tolerance (4–4.5 °C)
+ * alerts amber; past the ceiling (or a freezer above −18 °C) is unsafe. */
+export function temperatureAlert(value: number, kind: Exclude<TemperatureSheetKind, "blank">): TemperatureAlert {
+  const range = TEMPERATURE_SHEET_RANGES[kind];
+  if (value < range.min || value > range.max) return "unsafe";
+  if (range.warnMax !== undefined && value > range.warnMax) return "warn";
+  return "ok";
+}
 
 /** Every sheet row that accepts an entry, with its standard range. */
 export const TEMPERATURE_SHEET_FILLABLE = TEMPERATURE_SHEET_ROWS

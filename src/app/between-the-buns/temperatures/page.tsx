@@ -15,7 +15,9 @@ import {
   TEMPERATURE_SHEET_ROWS,
   TEMPERATURE_SHEET_SLOTS,
   TEMPERATURE_SHEET_SLOT_LABELS,
+  TEMPERATURE_SHEET_FILLABLE,
   parseTemperature,
+  temperatureAlert,
   temperatureInRange,
   TEMPERATURE_TYPES,
   type BtbTemperatureRecord,
@@ -117,14 +119,21 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
         maxDate={today}
         static={readOnly}
         cells={(label, slot) => {
+          const kind = TEMPERATURE_SHEET_FILLABLE.find((row) => row.label === label)?.kind;
           const saved = savedCells.get(`${label}|${slot}`);
-          if (saved) return { saved: true, text: cellText(saved), unsafe: !saved.is_safe };
+          if (saved) {
+            const alert = kind ? temperatureAlert(saved.temperature, kind) : saved.is_safe ? "ok" : "unsafe";
+            return { saved: true, text: cellText(saved), unsafe: alert === "unsafe", warn: alert === "warn" };
+          }
           if (readOnly) return { saved: false, text: "" };
-          return { saved: false, text: drafts[`${label}|${slot}`] ?? "", draft: true };
+          const text = drafts[`${label}|${slot}`] ?? "";
+          const value = Number(text);
+          const alert = kind && text.trim() !== "" && Number.isFinite(value) ? temperatureAlert(value, kind) : "ok";
+          return { saved: false, text, draft: true, unsafe: alert === "unsafe", warn: alert === "warn" };
         }}
         onDraft={(label, slot, value) => setDraft(`${label}|${slot}`, value)}
       />
-      <p className="ops-meta">Standards printed on the form: freezers −24 to −18 °C · coolers 0 to 4 °C · SANTIZER 200–400 PPM. A box left empty stays empty — it is never recorded as a zero. Saved boxes are locked; correct a wrong reading with an off-form reading note.</p>
+      <p className="ops-meta">Standards printed on the form: coolers at or below 4 °C, up to 4.5 °C (40–41 °F) · freezers at or below −18 °C (0 °F) · sanitizer 200–400 PPM · temperature danger zone 4 °C to 60 °C. A box left empty stays empty — it is never recorded as a zero. Amber = above target but inside tolerance; red = out of range. Saved boxes are locked; correct a wrong reading with an off-form reading note.</p>
     </section>}
     {data && !error && tab === "history" && <section id="temperature-panel-history" role="tabpanel" aria-labelledby="temperature-tab-history" className="temperature-history">
       <div className="ops-toolbar"><p className="ops-meta">The last 90 days of daily sheets, exactly as saved.</p>
@@ -142,7 +151,11 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
             static
             cells={(label, slot) => {
               const saved = (dayRecords.find((record) => record.equipment_name === label && (record.slot ?? "") === slot));
-              if (saved) return { saved: true, text: cellText(saved), unsafe: !saved.is_safe };
+              if (saved) {
+                const kind = TEMPERATURE_SHEET_FILLABLE.find((row) => row.label === label)?.kind;
+                const alert = kind ? temperatureAlert(saved.temperature, kind) : saved.is_safe ? "ok" : "unsafe";
+                return { saved: true, text: cellText(saved), unsafe: alert === "unsafe", warn: alert === "warn" };
+              }
               return { saved: false, text: "" };
             }}
           />
@@ -170,7 +183,7 @@ function SheetTable({ date, onDateChange, maxDate, static: isStatic, cells, onDr
   onDateChange?: (date: string) => void;
   maxDate?: string;
   static?: boolean;
-  cells: (label: string, slot: TemperatureSheetSlot) => { saved: boolean; text: string; unsafe?: boolean; draft?: boolean };
+  cells: (label: string, slot: TemperatureSheetSlot) => { saved: boolean; text: string; unsafe?: boolean; warn?: boolean; draft?: boolean };
   onDraft?: (label: string, slot: TemperatureSheetSlot, value: string) => void;
 }) {
   return <div className="temperature-sheet-scroll">
@@ -190,7 +203,7 @@ function SheetTable({ date, onDateChange, maxDate, static: isStatic, cells, onDr
             : TEMPERATURE_SHEET_SLOTS.map((slot) => {
               const state = cells(row.label, slot);
               const unit = row.kind === "sanitizer" ? "PPM" : "°C";
-              return <td key={slot} className={state.unsafe ? "temperature-sheet__unsafe" : undefined}>
+              return <td key={slot} className={state.unsafe ? "temperature-sheet__unsafe" : state.warn ? "temperature-sheet__warn" : undefined}>
                 {state.saved || isStatic
                   ? <span className="temperature-sheet__value">{state.text}</span>
                   : <span className="temperature-sheet__field">
