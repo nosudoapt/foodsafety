@@ -3,11 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, ArrowUpRight, LogOut } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, LogOut, Search } from "lucide-react";
 import BtbWordmark from "@/components/BtbWordmark";
 import { BtbPageBoundary } from "@/components/BtbFeatureGate";
 import { BtbWorkspaceProvider, useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
-import { accessibleBtbCards, btbCardForPath } from "@/lib/btb-page-access";
+import { searchBtbCards } from "@/lib/btb-dashboard";
+import { btbCardForPath } from "@/lib/btb-page-access";
 import { BTB_ROLE_LABELS } from "@/lib/btb-roles";
 import { fetchJson } from "@/lib/fetch-json";
 import "@/app/btb-operations.css";
@@ -24,8 +25,10 @@ function BtbShell({ children }: { children: React.ReactNode }) {
   const { identity, rows, loading } = useBtbWorkspace();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const current = btbCardForPath(pathname);
-  const cards = identity ? accessibleBtbCards(identity.role, rows) : [];
+  const matches = identity && query.trim() !== "" ? searchBtbCards(identity.role, rows, query).slice(0, 6) : [];
 
   const signOut = async () => {
     if (signingOut) return;
@@ -54,7 +57,37 @@ function BtbShell({ children }: { children: React.ReactNode }) {
         <Link href="/between-the-buns" aria-current={pathname === "/between-the-buns" ? "page" : undefined}>{current || pathname.endsWith("/account") ? <ArrowLeft size={15} aria-hidden="true" /> : <span className="btb-subnav__dot" aria-hidden="true" />}Overview</Link>
         {pathname.endsWith("/account") && <span className="btb-subnav__current">My account</span>}
         {current && <span className="btb-subnav__current">{current.title}</span>}
-        <label className="btb-jump"><span className="sr-only">Jump to a BTB tool</span><select disabled={loading || !cards.length} value={current?.href ?? ""} onChange={(event) => { if (event.target.value) router.push(event.target.value); }}><option value="">Jump to a tool…</option>{cards.map((card) => <option key={card.href} value={card.href}>{card.title}</option>)}</select></label>
+        <div className="btb-search">
+          <label className="btb-search__field">
+            <Search size={15} aria-hidden="true" />
+            <span className="sr-only">Search BTB tools</span>
+            <input
+              type="search"
+              placeholder="Search tools…"
+              autoComplete="off"
+              disabled={loading || !identity}
+              value={query}
+              onChange={(event) => { setQuery(event.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              onBlur={() => { window.setTimeout(() => setSearchOpen(false), 150); }}
+              aria-haspopup="listbox"
+            />
+          </label>
+          {searchOpen && query.trim() !== "" && (
+            matches.length
+              ? <ul className="btb-search__results" role="listbox" aria-label="Search BTB tools">
+                  {matches.map((card) => (
+                    <li key={card.href} role="option" aria-selected={card.href === pathname}>
+                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => { setQuery(""); setSearchOpen(false); router.push(card.href); }}>
+                        <strong>{card.title}</strong>
+                        <span>{card.desc}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              : <p className="btb-search__results btb-search__empty" aria-live="polite">No tools match “{query}”.</p>
+          )}
+        </div>
       </nav>
     </header>
     {error && <div className="ui-notice ui-notice--error" role="alert">{error}</div>}
