@@ -141,6 +141,10 @@ export interface NewItem {
   unit: string;
   unit_cost: number;
   position: number | null;
+  /** Packets per case from the master workbook; blank on manual items. */
+  pack_size: number | null;
+  /** Case cost from the master workbook; blank on manual items. */
+  case_price: number | null;
 }
 
 export const MAX_NAME_LEN = 200;
@@ -166,13 +170,36 @@ export function parseNewItem(body: unknown): Parsed<NewItem> {
     : parseNonNegativeNumber(rawCost, "unit cost", 99_999_999.99);
   if (!parsedCost.ok) return parsedCost;
 
+  // Case/pack are reference data from the master workbook. Blank means "not
+  // recorded" (manual items) — stored as NULL, never as a fabricated 0.
+  const packSize = parseOptionalNumber(b.pack_size, "pack size", 99_999.999, 3);
+  if (!packSize.ok) return packSize;
+  const casePrice = parseOptionalNumber(b.case_price, "case price", 99_999_999.99, 2);
+  if (!casePrice.ok) return casePrice;
+
   const location = rejectLocationScope(b);
   if (!location.ok) return location;
 
   const position =
     typeof b.position === "number" && Number.isInteger(b.position) && b.position >= 0 ? b.position : null;
 
-  return { ok: true, value: { name, unit, unit_cost: parsedCost.value, position } };
+  return { ok: true, value: { name, unit, unit_cost: parsedCost.value, position, pack_size: packSize.value, case_price: casePrice.value } };
+}
+
+/** Optional non-negative number: blank/missing → null, anything else validated. */
+function parseOptionalNumber(value: unknown, label: string, max: number, decimals: number): Parsed<number | null> {
+  if (value === undefined || value === null || value === "") {
+    return { ok: true, value: null };
+  }
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n) || n < 0 || n > max) {
+    return { ok: false, error: `invalid ${label}` };
+  }
+  const factor = 10 ** decimals;
+  const rounded = Math.round(n * factor) / factor;
+  // An explicit 0 pack size or case price is meaningless (a case of nothing?);
+  // it is stored as missing so the workbook's formula never divides by zero.
+  return { ok: true, value: rounded === 0 ? null : rounded };
 }
 
 /**

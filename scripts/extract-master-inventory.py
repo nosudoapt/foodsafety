@@ -51,6 +51,47 @@ CATEGORY_NAMES = {
 }
 
 
+def parse_pack_size(raw):
+    """The workbook's 'Pack size' cell — packets per case. Mostly numbers,
+    sometimes written as strings; blank on rows the sheet leaves unpriced."""
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw) if float(raw) > 0 else None
+    text = str(raw).strip().replace(",", "").replace("$", "")
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    return value if value > 0 else None
+
+
+def parse_price(raw):
+    """A price cell — a plain number, or '$1,234.56' typed by hand."""
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        value = float(raw)
+        return round(value, 2) if value >= 0 else None
+    text = str(raw).strip().replace("$", "").replace(",", "")
+    try:
+        value = float(text)
+    except ValueError:
+        return None
+    return round(value, 2) if value >= 0 else None
+
+
+def parse_item_number(raw):
+    """The workbook's GFS item number — a whole number stored as a float."""
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    return int(value) if value.is_integer() and value > 0 else None
+
+
 def parse_unit(raw):
     """A `Unit size` cell such as '2.27 KG' / '1/9 D' / 'portion' / '710ml'.
 
@@ -130,7 +171,10 @@ def build(table1, table2):
         raw_category = (row[4] or "").strip() if row[4] else ""
         category = CATEGORY_NAMES.get(raw_category.lower(), raw_category) or section
         items.append({"name": name, "unit": unit, "unit_size": unit_size,
-                      "category": category})
+                      "category": category,
+                      "item_number": parse_item_number(row[0]),
+                      "pack_size": parse_pack_size(row[3]),
+                      "case_price": parse_price(row[5])})
 
     for row in table2:
         name = (row[0] or "").strip()
@@ -151,7 +195,10 @@ def build(table1, table2):
                 except ValueError:
                     unit_size = row[4].strip()
         items.append({"name": name, "unit": unit, "unit_size": unit_size,
-                      "category": None})
+                      "category": None,
+                      "item_number": None,
+                      "pack_size": None,
+                      "case_price": None})
 
     # Table 1 wins when a name appears in both sheets.
     seen, unique = set(), []
@@ -189,6 +236,10 @@ def write_ts(items):
         "// names never go away.",
         "//",
         "// Regenerate with: python3 scripts/extract-master-inventory.py",
+        "//",
+        "// Pricing formulas from the workbook, kept per item:",
+        "//   packet (per unit) = case_price ÷ pack_size     — seeded as unit_cost",
+        "//   line value        = count × unit_cost          — or × case_price when counted by case",
         "",
         "/** Quantity basis a count is entered in — the dropdown beside each item. */",
         "export const INVENTORY_UNITS = [",
@@ -231,6 +282,12 @@ def write_ts(items):
         "  category: string | null;",
         "  /** Pack size printed on the sheet (\"10.0 ea\", \"2.27 kg\", \"1/9 D\"). Reference only. */",
         "  unit_size: string | null;",
+        "  /** GFS item number from the workbook. Reference only. */",
+        "  item_number: number | null;",
+        "  /** Packets per case from the workbook's \"Pack size\" column. */",
+        "  pack_size: number | null;",
+        "  /** Case cost from the workbook's \"Case price\" column. Packet = case ÷ pack. */",
+        "  case_price: number | null;",
         "  /** Sheet order — the count sheet keeps it. */",
         "  position: number;",
         "}",
@@ -240,10 +297,12 @@ def write_ts(items):
     ]
     for item in items:
         out.append(
-            "  { name: %s, unit: %s, category: %s, unit_size: %s, position: %d },"
+            "  { name: %s, unit: %s, category: %s, unit_size: %s, item_number: %s, pack_size: %s, case_price: %s, position: %d },"
             % (json.dumps(item["name"], ensure_ascii=False),
                json.dumps(item["unit"]), json.dumps(item["category"]),
-               json.dumps(item["unit_size"]), item["position"])
+               json.dumps(item["unit_size"]),
+               json.dumps(item["item_number"]), json.dumps(item["pack_size"]),
+               json.dumps(item["case_price"]), item["position"])
         )
     out += [
         "];",
@@ -259,11 +318,19 @@ def write_ts(items):
     TS_OUT.write_text("\n".join(out))
 
 
+def num(value):
+    if value is None:
+        return "null"
+    return str(value)
+
+
 def write_sql(items):
+    # Dollar-quoted literals keep source names verbatim; numbers go in bare.
     values = ",\n".join(
-        "  (%s, %s, %s, %s, %d)"
+        "  (%s, %s, %s, %s, %d, %s, %s, %s)"
         % (quote(item["name"]), quote(item["unit"]), quote(item["unit_size"]),
-           quote(item["category"]), item["position"])
+           quote(item["category"]), item["position"],
+           num(item["item_number"]), num(item["pack_size"]), num(item["case_price"]))
         for item in items
     )
     sql = f"""-- Master inventory list — the {len(items)} items from the owner's workbook
@@ -279,6 +346,8 @@ def write_sql(items):
 --     refuses a rename (a rename is a delete wearing a new label).
 --   * Quantity basis (unit), category and unit cost stay editable — those are
 --     corrections, not removals.
+--   * Every seeded row carries the workbook's item number, pack size and case
+--     price; unit cost is seeded as packet = case price ÷ pack size.
 --
 -- Needs inventory_items from schema-month-end-inventory.sql (step 20).
 
@@ -286,11 +355,20 @@ BEGIN;
 
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS unit_size text;
 ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS protected boolean NOT NULL DEFAULT false;
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS item_number bigint;
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS pack_size numeric(10,3);
+ALTER TABLE inventory_items ADD COLUMN IF NOT EXISTS case_price numeric(10,2);
 
 COMMENT ON COLUMN inventory_items.protected IS
   'Seeded from the owner''s master workbook. Cannot be deleted or renamed; unit and cost stay editable.';
 COMMENT ON COLUMN inventory_items.unit_size IS
   'Pack size printed on the master sheet (10.0 ea / 2.27 kg / 1/9 D). Reference text.';
+COMMENT ON COLUMN inventory_items.item_number IS
+  'GFS item number from the master workbook. Reference text.';
+COMMENT ON COLUMN inventory_items.pack_size IS
+  'Packets per case from the master workbook ("Pack size"). Used for the case ↔ packet conversion.';
+COMMENT ON COLUMN inventory_items.case_price IS
+  'Case cost from the master workbook ("Case price"). Packet price = case_price / pack_size.';
 
 -- Append-only guard ---------------------------------------------------------
 CREATE OR REPLACE FUNCTION btb_guard_master_inventory_item()
@@ -330,10 +408,13 @@ CREATE TEMP TABLE master_inventory_seed (
   unit text NOT NULL,
   unit_size text,
   category text,
-  position integer NOT NULL
+  position integer NOT NULL,
+  item_number bigint,
+  pack_size numeric(10,3),
+  case_price numeric(10,2)
 ) ON COMMIT DROP;
 
-INSERT INTO master_inventory_seed (name, unit, unit_size, category, position) VALUES
+INSERT INTO master_inventory_seed (name, unit, unit_size, category, position, item_number, pack_size, case_price) VALUES
 {values};
 
 -- An item the crew already typed by hand becomes protected instead of doubled.
@@ -353,15 +434,20 @@ SELECT coalesce(max(item.position), -1) + 1 AS offset
  WHERE item.location_id IS NULL
    AND NOT item.protected;
 
-INSERT INTO inventory_items (name, unit, unit_size, category, unit_cost, position, location_id, protected)
+INSERT INTO inventory_items (name, unit, unit_size, category, unit_cost, position, location_id, protected, item_number, pack_size, case_price)
 SELECT seed.name,
        seed.unit,
        seed.unit_size,
        seed.category,
-       0,
+       CASE WHEN seed.pack_size > 0 AND seed.case_price IS NOT NULL
+            THEN round((seed.case_price / seed.pack_size)::numeric, 2)
+            ELSE 0 END,
        seed.position + layout.offset,
        NULL,
-       true
+       true,
+       seed.item_number,
+       seed.pack_size,
+       seed.case_price
   FROM master_inventory_seed seed
  CROSS JOIN master_inventory_layout layout
  WHERE NOT EXISTS (
@@ -369,6 +455,27 @@ SELECT seed.name,
     WHERE item.location_id IS NULL
       AND lower(trim(item.name)) = lower(trim(seed.name))
  );
+
+-- Backfill for databases seeded before the case/packet columns existed.
+-- Protected rows gain the workbook's item number, pack size and case price, and
+-- an unpriced ($0) packet cost is re-derived as packet = case ÷ pack. A cost
+-- the manager typed deliberately is never touched.
+UPDATE inventory_items item
+   SET item_number = seed.item_number,
+       pack_size = seed.pack_size,
+       case_price = seed.case_price
+  FROM master_inventory_seed seed
+ WHERE item.location_id IS NULL
+   AND item.protected
+   AND lower(trim(item.name)) = lower(trim(seed.name));
+
+UPDATE inventory_items item
+   SET unit_cost = round((item.case_price / item.pack_size)::numeric, 2)
+ WHERE item.location_id IS NULL
+   AND item.protected
+   AND item.unit_cost = 0
+   AND item.pack_size > 0
+   AND item.case_price IS NOT NULL;
 
 -- Sheet order is authoritative for master rows. A re-run restores it if a later
 -- edit shuffled positions; names, units, categories and costs stay untouched.

@@ -2,13 +2,16 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   INVENTORY_RETENTION_MONTHS,
+  countLineValue,
   countQty,
   countsByItem,
   isMonthKey,
+  itemUnitCost,
   lineValue,
   monthKey,
   monthLabel,
   nextMonth,
+  packetPrice,
   prevMonth,
   recentMonths,
   thisMonth,
@@ -75,6 +78,23 @@ test("valuation multiplies quantity by unit cost, rounded to cents", () => {
   ];
   assert.equal(totalValue(lines), 50);
   assert.equal(totalValue([]), 0);
+});
+
+test("the workbook's case formulas drive the counted value", () => {
+  // packet = case price ÷ pack size, rounded to cents.
+  assert.equal(packetPrice(69.79, 12), 5.82);
+  assert.equal(packetPrice(51.13, 24), 2.13);
+  assert.equal(packetPrice(null, 12), null, "no case price → no packet");
+  assert.equal(packetPrice(50, 0), null, "a zero pack size is not a formula");
+
+  // An item counted in whole cases is worth its case price.
+  const cases = item({ id: "c", name: "Wraps", unit: "case", unit_cost: 5.82, case_price: 69.79, pack_size: 12 });
+  assert.equal(itemUnitCost(cases), 69.79);
+  assert.equal(countLineValue(cases, 2), 139.58);
+  // Everything else uses the stored (packet) cost.
+  const each = item({ id: "e", name: "Buns", unit: "ea", unit_cost: 0.57, case_price: 41.2, pack_size: 72 });
+  assert.equal(itemUnitCost(each), 0.57);
+  assert.equal(countLineValue(each, 100), 57);
 });
 
 test("the closing sheet merges the item list with the month's counts", () => {

@@ -6,12 +6,12 @@ import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader, StatTile } from "@/components/ui";
 import { monthDates, monthlyTotal, dailyTotal, type PurchaseEntry } from "@/lib/inventory-purchases";
 import { computeAccounting, nullableAmount } from "@/lib/inventory-accounting";
-import { countQty, lineValue, monthLabel, prevMonth, recentMonths, thisMonth, toLines, totalValue, type InventoryItem } from "@/lib/month-end-inventory";
+import { countQty, countLineValue, itemUnitCost, packetPrice, monthLabel, prevMonth, recentMonths, thisMonth, toLines, totalValue, type InventoryItem } from "@/lib/month-end-inventory";
 import { INVENTORY_UNITS, MASTER_INVENTORY_ITEMS, inventoryUnitLabel } from "@/lib/inventory-master-list";
 import { changedInventoryCounts, inventoryCountPayload, loadInventoryMonth, type InventoryMonthData, type InventorySnapshot } from "@/lib/inventory-workspace";
 import { fetchJson, RequestError } from "@/lib/fetch-json";
 
-const emptyItem = { name: "", unit: "ea", unit_cost: "" };
+const emptyItem = { name: "", unit: "ea", unit_cost: "", pack_size: "", case_price: "" };
 const emptyPurchase = { type: "gfs", date: "", description: "", amount: "", reference: "", supplier: "GFS" };
 const money = (value: number | null | undefined) => value == null ? "—" : Number(value).toLocaleString("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -41,6 +41,15 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
   const [notice, setNotice] = useState("");
   const [search, setSearch] = useState("");
   const mutation = useRef<AbortController | null>(null);
+  // Editing the case price or pack size re-derives the packet (per unit) price
+  // — the workbook's formula — and pre-fills the unit cost with it. The manager
+  // can still override the unit cost afterwards.
+  const withCaseFormula = (current: typeof emptyItem, patch: Partial<typeof emptyItem>) => {
+    const next = { ...current, ...patch };
+    const pkt = packetPrice(next.case_price === "" ? null : Number(next.case_price), next.pack_size === "" ? null : Number(next.pack_size));
+    return pkt === null ? next : { ...next, unit_cost: String(pkt) };
+  };
+  const packetPreview = packetPrice(itemForm.case_price === "" ? null : Number(itemForm.case_price), itemForm.pack_size === "" ? null : Number(itemForm.pack_size));
   const loaded = resource?.revision === revision;
   const data = loaded ? resource.data : null;
   const loadError = loaded ? resource.error : "";
@@ -50,7 +59,7 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
   const countChanges = changedInventoryCounts(data?.counts ?? [], draft);
   const salesChanged = salesDraft !== null && salesDraft !== data?.sales;
   const purchaseChanged = !!(purchase.date || purchase.description || purchase.amount || purchase.reference);
-  const itemChanged = !!(itemForm.name || itemForm.unit_cost || itemForm.unit !== "ea");
+  const itemChanged = !!(itemForm.name || itemForm.unit_cost || itemForm.unit !== "ea" || itemForm.pack_size || itemForm.case_price);
   const unsaved = countChanges > 0 || salesChanged || purchaseChanged || itemChanged;
 
   useEffect(() => {
@@ -232,7 +241,7 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
       {!finalized && accounting.flags.negativeCogs && <div className="ui-notice ui-notice--warning"><CircleAlert size={18} aria-hidden="true" />Closing value exceeds opening plus purchases. Review the counts and ledger before finalizing.</div>}
 
       <section className="dash-panel" aria-labelledby="count-sheet-title">
-        <div className="dash-panel__header"><div><h2 id="count-sheet-title">1. Count your stock</h2><p>{monthLabel(month)} quantities · values calculated from unit costs</p></div><Badge>{countChanges ? `${countChanges} changed` : "Saved quantities"}</Badge></div>
+        <div className="dash-panel__header"><div><h2 id="count-sheet-title">1. Count your stock</h2><p>{monthLabel(month)} quantities · value = count × packet price, or × case price when counted by case</p></div><Badge>{countChanges ? `${countChanges} changed` : "Saved quantities"}</Badge></div>
         <div className="inventory-sectionbar"><label className="dash-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search inventory items</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Find an item…" /></label>{canEdit && <Button onClick={saveCounts} disabled={!!saving}><Save size={16} aria-hidden="true" />{saving === "counts" ? "Saving counts…" : "Save counts"}</Button>}</div>
         <div className="inventory-table" tabIndex={0} role="region" aria-label="Inventory count sheet">
           <table><caption className="sr-only">Stock quantities and values for {monthLabel(month)}</caption><thead><tr><th scope="col">Item</th><th scope="col">Unit</th><th scope="col">Unit cost $</th><th scope="col">Quantity</th><th scope="col">Value $</th><th scope="col">Quantity change</th>{canEdit && <th scope="col"><span className="sr-only">Item actions</span></th>}</tr></thead>
@@ -240,7 +249,13 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
               const value = draft[item.id] ?? String(stored.get(item.id) ?? 0);
               const invalid = value === "" || !Number.isFinite(Number(value)) || Number(value) < 0;
               const before = previous.get(item.id);
-              return <tr key={item.id}><th scope="row"><strong>{item.name}</strong>{(item.category || item.unit_size) && <small>{[item.category, item.unit_size].filter(Boolean).join(" · ")}</small>}</th><td>{item.unit}</td><td>{money(item.unit_cost)}</td><td><Input type="number" inputMode="decimal" step="0.01" min="0" aria-label={`Quantity for ${item.name} in ${inventoryUnitLabel(item.unit)}`} aria-invalid={invalid} value={value} readOnly={!canEdit} disabled={!!saving} onChange={(event) => { setNotice(""); setDraft((current) => ({ ...current, [item.id]: event.target.value })); }} />{invalid && <small className="inventory-field-error">Enter 0 or more</small>}</td><td>{invalid ? "—" : money(lineValue(live(item.id), item.unit_cost))}</td><td>{before === undefined || invalid ? "—" : `${live(item.id) - before > 0 ? "+" : ""}${countQty(value) - before}`}</td>{canEdit && <td><div className="inventory-row-actions"><button disabled={!!saving} aria-label={`Edit ${item.name}`} onClick={() => { setEditingItem(item.id); setItemForm({ name: item.name, unit: item.unit, unit_cost: String(item.unit_cost) }); document.getElementById("inventory-item-form")?.scrollIntoView({ block: "center" }); document.getElementById("inventory-item-name")?.focus(); }}><Pencil size={16} aria-hidden="true" /></button>{item.protected ? <span className="inventory-locked" title="On the master list — count 0 instead of removing"><LockKeyhole size={15} aria-hidden="true" /><span className="sr-only">{item.name} is on the master inventory list and cannot be removed</span></span> : <button disabled={!!saving} aria-label={`Remove ${item.name}`} onClick={() => removeItem(item)}><Trash2 size={16} aria-hidden="true" /></button>}</div></td>}</tr>;
+              // The workbook's formulas, kept per row: case price ÷ pack size = packet.
+              const packet = packetPrice(item.case_price, item.pack_size);
+              const caseNote = packet !== null && item.case_price != null && item.pack_size != null
+                ? `Case of ${item.pack_size} @ ${money(item.case_price)} → packet ${money(packet)}`
+                : null;
+              const rowMeta = [item.category, item.unit_size, item.item_number ? `#${item.item_number}` : null].filter(Boolean).join(" · ");
+              return <tr key={item.id}><th scope="row"><strong>{item.name}</strong>{rowMeta && <small>{rowMeta}</small>}</th><td>{item.unit}</td><td>{money(itemUnitCost(item))}{caseNote && <small className="inventory-formula-note">{caseNote}</small>}</td><td><Input type="number" inputMode="decimal" step="0.01" min="0" aria-label={`Quantity for ${item.name} in ${inventoryUnitLabel(item.unit)}`} aria-invalid={invalid} value={value} readOnly={!canEdit} disabled={!!saving} onChange={(event) => { setNotice(""); setDraft((current) => ({ ...current, [item.id]: event.target.value })); }} />{invalid && <small className="inventory-field-error">Enter 0 or more</small>}</td><td>{invalid ? "—" : money(countLineValue(item, live(item.id)))}</td><td>{before === undefined || invalid ? "—" : `${live(item.id) - before > 0 ? "+" : ""}${countQty(value) - before}`}</td>{canEdit && <td><div className="inventory-row-actions"><button disabled={!!saving} aria-label={`Edit ${item.name}`} onClick={() => { setEditingItem(item.id); setItemForm({ name: item.name, unit: item.unit, unit_cost: String(item.unit_cost), pack_size: item.pack_size == null ? "" : String(item.pack_size), case_price: item.case_price == null ? "" : String(item.case_price) }); document.getElementById("inventory-item-form")?.scrollIntoView({ block: "center" }); document.getElementById("inventory-item-name")?.focus(); }}><Pencil size={16} aria-hidden="true" /></button>{item.protected ? <span className="inventory-locked" title="On the master list — count 0 instead of removing"><LockKeyhole size={15} aria-hidden="true" /><span className="sr-only">{item.name} is on the master inventory list and cannot be removed</span></span> : <button disabled={!!saving} aria-label={`Remove ${item.name}`} onClick={() => removeItem(item)}><Trash2 size={16} aria-hidden="true" /></button>}</div></td>}</tr>;
             })}</tbody></table>
         </div>
         {!matchingLines.length && <div className="ui-empty"><Layers size={26} aria-hidden="true" /><h3>{search ? "No matching items" : "No inventory items yet"}</h3><p>{search ? "Try another item name." : readOnly ? "Items added by your manager will appear here." : "Add an item below to start the count sheet."}</p></div>}
@@ -252,11 +267,13 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
         <form id="inventory-item-form" onSubmit={saveItem}><fieldset disabled={!!saving} className="inventory-form-grid">
           <label className="inventory-field inventory-field--wide">Item name<Input id="inventory-item-name" required maxLength={200} value={itemForm.name} readOnly={!!editingItem && !!editing?.protected} onChange={(event) => setItemForm((current) => ({ ...current, name: event.target.value }))} placeholder="Sesame buns" />{editingItem && editing?.protected && <small>Master list name — cannot be changed.</small>}</label>
           <label className="inventory-field">Unit<select value={itemForm.unit} onChange={(event) => setItemForm((current) => ({ ...current, unit: event.target.value }))}>{INVENTORY_UNITS.map((unit) => <option key={unit.value} value={unit.value}>{unit.label}</option>)}</select><small>{INVENTORY_UNITS.find((unit) => unit.value === itemForm.unit)?.note}</small></label>
-          <label className="inventory-field">Unit cost $<Input type="number" min="0" step="0.01" inputMode="decimal" value={itemForm.unit_cost} onChange={(event) => setItemForm((current) => ({ ...current, unit_cost: event.target.value }))} placeholder="0.00" /></label>
+          <label className="inventory-field">Unit cost $<Input type="number" min="0" step="0.01" inputMode="decimal" value={itemForm.unit_cost} onChange={(event) => setItemForm((current) => ({ ...current, unit_cost: event.target.value }))} placeholder="0.00" /><small>{itemForm.unit === "case" && itemForm.case_price ? "Per case (counted unit)" : "Per counted unit — packet price"}</small></label>
+          <label className="inventory-field">Pack size<Input type="number" min="0" step="0.001" inputMode="decimal" value={itemForm.pack_size} placeholder="e.g. 12" onChange={(event) => setItemForm((current) => withCaseFormula(current, { pack_size: event.target.value }))} /><small>Packets per case</small></label>
+          <label className="inventory-field">Case price $<Input type="number" min="0" step="0.01" inputMode="decimal" value={itemForm.case_price} placeholder="e.g. 69.79" onChange={(event) => setItemForm((current) => withCaseFormula(current, { case_price: event.target.value }))} /><small>{packetPreview !== null ? `Case ÷ pack = packet ${money(packetPreview)}` : "Packet = case ÷ pack"}</small></label>
           <Button type="submit" disabled={!!saving}>{saving === "item" ? "Saving item…" : editingItem ? "Save item" : "Add item"}</Button>
           {itemChanged && <Button variant="ghost" disabled={!!saving} onClick={() => { setItemForm(emptyItem); setEditingItem(null); }}>Clear item form</Button>}
         </fieldset></form>
-        {!editingItem && <MasterListPicker taken={masterTaken} onPick={(item) => setItemForm({ name: item.name, unit: item.unit, unit_cost: "" })} />}
+        {!editingItem && <MasterListPicker taken={masterTaken} onPick={(item) => setItemForm({ ...emptyItem, name: item.name, unit: item.unit, unit_cost: String(packetPrice(item.case_price, item.pack_size) ?? ""), pack_size: item.pack_size == null ? "" : String(item.pack_size), case_price: item.case_price == null ? "" : String(item.case_price) })} />}
       </details>}
 
       <section className="dash-panel" aria-labelledby="purchases-title"><div className="dash-panel__header"><div><h2 id="purchases-title">2. Reconcile purchases</h2><p>Daily invoices and local purchases for {monthLabel(month)}</p></div><Badge>{data.purchases.length} {data.purchases.length === 1 ? "entry" : "entries"}</Badge></div>

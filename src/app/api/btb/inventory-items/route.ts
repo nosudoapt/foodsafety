@@ -17,8 +17,9 @@ import { requireItemWithoutFinalizedHistory } from "@/lib/inventory-server-guard
 // The database trigger (supabase/schema-inventory-master-list.sql) is the real
 // guarantee; this route just answers politely instead of letting Postgres
 // raise. See DELETE at the bottom.
-
-const ITEM_COLS = "id, name, unit, unit_size, category, unit_cost, position, location_id, protected";
+// Requires the item_number/pack_size/case_price columns added by the same
+// migration (schema-inventory-master-list.sql).
+const ITEM_COLS = "id, name, unit, unit_size, category, unit_cost, position, location_id, protected, item_number, pack_size, case_price";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -79,6 +80,9 @@ export async function POST(req: Request) {
       position,
       location_id: null,
       protected: false,
+      item_number: null,
+      pack_size: item.pack_size,
+      case_price: item.case_price,
     })
     .select(ITEM_COLS)
     .single();
@@ -119,7 +123,7 @@ export async function PATCH(req: Request) {
 
   const { data, error } = await db
     .from("inventory_items")
-    .update({ name: parsed.value.name, unit: parsed.value.unit, unit_cost: parsed.value.unit_cost })
+    .update({ name: parsed.value.name, unit: parsed.value.unit, unit_cost: parsed.value.unit_cost, pack_size: parsed.value.pack_size, case_price: parsed.value.case_price })
     .is("location_id", null)
     .eq("id", id)
     .select(ITEM_COLS)

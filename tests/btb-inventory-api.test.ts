@@ -157,6 +157,30 @@ test("parseNewItem: trims name, accepts a dropdown unit, and takes blank cost as
   }
 });
 
+test("parseNewItem: case price and pack size are optional, validated, and blank means missing", () => {
+  const blank = parseNewItem({ name: "buns", unit: "ea" });
+  assert.ok(blank.ok);
+  if (blank.ok) {
+    assert.equal(blank.value.pack_size, null);
+    assert.equal(blank.value.case_price, null);
+  }
+  const priced = parseNewItem({ name: "buns", unit: "ea", pack_size: "12", case_price: 69.79 });
+  assert.ok(priced.ok);
+  if (priced.ok) {
+    assert.equal(priced.value.pack_size, 12);
+    assert.equal(priced.value.case_price, 69.79);
+  }
+  // A 0 pack size or case price is meaningless — stored as missing, never zero.
+  const zero = parseNewItem({ name: "buns", unit: "ea", pack_size: 0, case_price: 0 });
+  assert.ok(zero.ok);
+  if (zero.ok) {
+    assert.equal(zero.value.pack_size, null);
+    assert.equal(zero.value.case_price, null);
+  }
+  assert.equal(parseNewItem({ name: "buns", unit: "ea", pack_size: -1 }).ok, false);
+  assert.equal(parseNewItem({ name: "buns", unit: "ea", case_price: "junk" }).ok, false);
+});
+
 test("parseNewItem: a unit outside the dropdown is rejected, never coerced to ea", () => {
   for (const unit of ["", "   ", "furlongs", "KG", "kilograms"]) {
     assert.equal(parseNewItem({ name: "buns", unit }).ok, false, `unit ${JSON.stringify(unit)}`);

@@ -54,7 +54,7 @@ export const BTB_CARDS: readonly BtbCard[] = [
   { href: "/between-the-buns/month-end-inventory", title: "Month-End Inventory", desc: "Closing count sheet — value, variance vs last month.", iconKey: "listChecks", accent: "green", feature: "month_end_inventory" },
   { href: "/between-the-buns/training-guide", title: "Training & Progress", desc: "Learn the routines, submit your training and track manager approvals.", iconKey: "bookCheck", accent: "purple", feature: "training_guide" },
   { href: "/between-the-buns/loyalty-rewards", title: "Loyalty Rewards", desc: "Employee and customer guides, rewards, eligibility and MYR redemption.", iconKey: "sparkles", accent: "purple", feature: "loyalty_rewards" },
-  { href: "/between-the-buns/tax-dates", title: "Tax & Renewal Dates", desc: "GST/PST returns, registry renewals, year-end filings — one list.", iconKey: "clipboard", accent: "amber", feature: "tax_dates" },
+  { href: "/between-the-buns/tax-dates", title: "Tax & Renewal Dates", desc: "GST/PST returns, registry renewals, year-end filings — one list.", iconKey: "clipboard", accent: "amber", feature: "tax_dates", hub: false },
   { href: "/between-the-buns/staff-schedule", title: "Staff Schedule", desc: "Weekly shifts with named opening and closing staff.", iconKey: "idCard", accent: "purple", feature: "staff_schedule" },
   { href: "/between-the-buns/employees", title: "Employees", desc: "Individual logins, phone numbers, emails and team records.", iconKey: "idCard", accent: "purple", feature: "employees" },
   { href: "/between-the-buns/cash-out", title: "Cash Out", desc: "End-of-day till count, safe drop & 30-day history.", iconKey: "calculator", accent: "green", feature: "cash_out" },
@@ -74,7 +74,7 @@ export const BTB_CARDS: readonly BtbCard[] = [
   // Compliance & administration (management) — ONE card for the whole
   // compliance family. The sibling routes still exist (and keep their page
   // access rules), they are sections inside /compliance, not hub cards.
-  { href: "/between-the-buns/compliance", title: "Compliance, docs & reminders", desc: "Licences & permits, tax & filing dates, staff certificates, business documents and expiry reminder emails — in one place.", iconKey: "shield", accent: "red", feature: "compliance" },
+  { href: "/between-the-buns/compliance", title: "Compliance", desc: "Licences & renewals, staff certificates, tax deadlines, business documents and reminder emails — one place.", iconKey: "shield", accent: "red", feature: "compliance" },
   { href: "/between-the-buns/documents", title: "Business Documents", desc: "Forms, SOPs, brand assets & menus — plain files, no expiry.", iconKey: "file", accent: "amber", feature: "documents", hub: false },
   { href: "/between-the-buns/staff-licenses", title: "Staff Licenses & Certs", desc: "Food-handler cards & certifications with expiry.", iconKey: "idCard", accent: "purple", feature: "staff_licenses", hub: false },
   { href: "/between-the-buns/licence-reminders", title: "Licence Email Reminders", desc: "Expiry emails to managers and corporate, with delivery history.", iconKey: "shield", accent: "amber", feature: "licence_reminders", hub: false },

@@ -28,8 +28,9 @@ export default function TemperaturesPage() {
 
 interface SheetCellState { [key: string]: string }
 
-/** The last N calendar dates, newest first — the 1-month history window. */
-function lastDays(today: string, count = 31): string[] {
+/** The last N calendar dates, newest first — the 90-day rolling record window
+ *  kept in view at all times per the client requirement. */
+function lastDays(today: string, count = 90): string[] {
   const end = new Date(`${today}T12:00:00Z`).getTime();
   return Array.from({ length: count }, (_, index) => new Date(end - index * 86_400_000).toISOString().slice(0, 10));
 }
@@ -93,18 +94,18 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
   };
 
   return <div className="ops-workspace">
-    <PageHeader title="Temperature Log" subtitle="The daily temp-check sheet, exactly as printed — freezers, coolers, line and sanitizer at 11:00 AM, 4:00 PM and 8:00 PM, with a saved one-month history." action={<span className="ops-toolbar-actions">
+    <PageHeader title="Temperature Log" subtitle="The daily temp-check sheet, exactly as printed — freezers, coolers, line and sanitizer at 11:00 AM, 4:00 PM and 8:00 PM, with a saved 90-day rolling record." action={<span className="ops-toolbar-actions">
       <Button variant="ghost" onClick={() => window.print()}><Printer size={16} aria-hidden="true" />Print sheet</Button>
       {!readOnly && <Button disabled={!data || !!error} onClick={() => setEditing(true)}><Plus size={18} aria-hidden="true" />Add off-form reading</Button>}
     </span>} />
     {notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
     {readOnly && <p className="ops-meta">Read-only overview. Your restaurant team fills the sheet from their workspace.</p>}
-    <div className="ops-tabs-row"><TabList id="temperature" label="Temperature records" value={tab} onChange={setTab} tabs={[{ id: "sheet", label: "Daily sheet" }, { id: "history", label: "History (1 month)" }]} /><Button variant="ghost" disabled={loading} onClick={reload}><RefreshCw size={16} aria-hidden="true" />Refresh</Button></div>
+    <div className="ops-tabs-row"><TabList id="temperature" label="Temperature records" value={tab} onChange={setTab} tabs={[{ id: "sheet", label: "Daily sheet" }, { id: "history", label: "History (90 days)" }]} /><Button variant="ghost" disabled={loading} onClick={reload}><RefreshCw size={16} aria-hidden="true" />Refresh</Button></div>
     <LoadState loading={loading} error={error} onRetry={reload} />
     {data && !error && tab === "sheet" && <section id="temperature-panel-sheet" role="tabpanel" aria-labelledby="temperature-tab-sheet" className="temperature-sheet-wrap">
       <div className="ops-toolbar">
         <label className="ops-inline-field">Sheet date
-          <Input type="date" value={sheetDate} max={today} min={lastDays(today)[30]} onChange={(event) => changeSheetDate(event.target.value)} />
+          <Input type="date" value={sheetDate} max={today} min={lastDays(today)[89]} onChange={(event) => changeSheetDate(event.target.value)} />
         </label>
         <p className="ops-meta">{savedCount} saved · {draftCount} ready to save{readOnly ? " · read-only" : ""}</p>
         {!readOnly && <Button disabled={saving || !!error} onClick={() => void saveSheet()}>{saving ? "Saving…" : "Save sheet"}</Button>}
@@ -126,7 +127,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
       <p className="ops-meta">Standards printed on the form: freezers −24 to −18 °C · coolers 0 to 4 °C · SANTIZER 200–400 PPM. A box left empty stays empty — it is never recorded as a zero. Saved boxes are locked; correct a wrong reading with an off-form reading note.</p>
     </section>}
     {data && !error && tab === "history" && <section id="temperature-panel-history" role="tabpanel" aria-labelledby="temperature-tab-history" className="temperature-history">
-      <div className="ops-toolbar"><p className="ops-meta">The last month of daily sheets, exactly as saved.</p>
+      <div className="ops-toolbar"><p className="ops-meta">The last 90 days of daily sheets, exactly as saved.</p>
         <label className="ops-inline-field">Jump to date
           <Input type="date" value={historyDay} onChange={(event) => setHistoryDay(event.target.value)} />
           {historyDay && <Button variant="ghost" onClick={() => setHistoryDay("")}>Whole month</Button>}
@@ -148,7 +149,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
         </Card>;
       })}
     </section>}
-    <details className="temperature-legacy"><summary>Looking for earlier FoodSafe records?</summary><p>Readings created under a FoodSafe account are available in that account’s Temperature Monitoring page.</p><Link href="/temperatures" className="ops-text-link">Open FoodSafe temperature records</Link><p className="ops-meta">Use the FoodSafe login that originally recorded them.</p></details>
+    <details className="temperature-legacy"><summary>Looking for earlier Pholo records?</summary><p>Readings created under a Pholo account are available in that account’s Temperature Monitoring page.</p><Link href="/temperatures" className="ops-text-link">Open Pholo temperature records</Link><p className="ops-meta">Use the Pholo login that originally recorded them.</p></details>
     {editing && <ReadingForm onClose={() => setEditing(false)} onSaved={(record) => {
       update((current) => ({ ...current, records: [record, ...current.records.filter((item) => item.id !== record.id)] }));
       setEditing(false); setNotice("Temperature reading saved.");
@@ -188,20 +189,24 @@ function SheetTable({ date, onDateChange, maxDate, static: isStatic, cells, onDr
             ? TEMPERATURE_SHEET_SLOTS.map((slot) => <td key={slot} />)
             : TEMPERATURE_SHEET_SLOTS.map((slot) => {
               const state = cells(row.label, slot);
+              const unit = row.kind === "sanitizer" ? "PPM" : "°C";
               return <td key={slot} className={state.unsafe ? "temperature-sheet__unsafe" : undefined}>
                 {state.saved || isStatic
                   ? <span className="temperature-sheet__value">{state.text}</span>
-                  : <input
-                      className="temperature-sheet__input"
-                      type="number"
-                      inputMode="decimal"
-                      step="0.01"
-                      min={row.kind === "sanitizer" ? 0 : -273.15}
-                      max={999.99}
-                      aria-label={`${row.label} ${TEMPERATURE_SHEET_SLOT_LABELS[slot]}`}
-                      value={state.text}
-                      onChange={(event) => onDraft?.(row.label, slot, event.target.value)}
-                    />}
+                  : <span className="temperature-sheet__field">
+                      <input
+                        className="temperature-sheet__input"
+                        type="number"
+                        inputMode="decimal"
+                        step="0.01"
+                        min={row.kind === "sanitizer" ? 0 : -273.15}
+                        max={999.99}
+                        aria-label={`${row.label} ${TEMPERATURE_SHEET_SLOT_LABELS[slot]} ${unit}`}
+                        value={state.text}
+                        onChange={(event) => onDraft?.(row.label, slot, event.target.value)}
+                      />
+                      <span className="temperature-sheet__unit" aria-hidden="true">{unit}</span>
+                    </span>}
               </td>;
             })}
         </tr>)}

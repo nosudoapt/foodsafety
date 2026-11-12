@@ -18,6 +18,12 @@ export interface InventoryItem {
    * can be counted, re-priced or re-categorised, never renamed or removed.
    */
   protected?: boolean;
+  /** GFS item number from the workbook. Reference only. */
+  item_number?: number | null;
+  /** Packets per case from the workbook ("Pack size"). */
+  pack_size?: number | null;
+  /** Case cost from the workbook ("Case price"). Packet = case ÷ pack. */
+  case_price?: number | null;
 }
 
 export interface InventoryCount {
@@ -95,9 +101,35 @@ export function countQty(value: unknown): number {
 export const lineValue = (qty: number, unitCost: number): number =>
   Math.round(countQty(qty) * Math.max(0, Number(unitCost) || 0) * 100) / 100;
 
+/**
+ * The cost that applies to what the crew actually counts. An item counted in
+ * whole cases is worth its case price; everything else uses its stored unit
+ * cost (for master items that is packet = case ÷ pack).
+ */
+export function itemUnitCost(item: Pick<InventoryItem, "unit" | "unit_cost" | "case_price">): number {
+  const casePrice = Number(item.case_price);
+  if (item.unit === "case" && Number.isFinite(casePrice) && casePrice > 0) {
+    return Math.round(casePrice * 100) / 100;
+  }
+  const cost = Number(item.unit_cost);
+  return Number.isFinite(cost) && cost > 0 ? Math.round(cost * 100) / 100 : 0;
+}
+
+/** Packet (per counted unit) from the case price and pack size — the workbook's formula. */
+export function packetPrice(casePrice: number | null | undefined, packSize: number | null | undefined): number | null {
+  const price = Number(casePrice);
+  const pack = Number(packSize);
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(pack) || pack <= 0) return null;
+  return Math.round((price / pack) * 100) / 100;
+}
+
+/** Line value for one counted item, honouring its count basis. */
+export const countLineValue = (item: InventoryItem, qty: number): number =>
+  lineValue(qty, itemUnitCost(item));
+
 /** Every line's value added up — the closing inventory value. */
 export const totalValue = (lines: readonly InventoryLine[]): number =>
-  Math.round(lines.reduce((sum, l) => sum + lineValue(l.qty, l.item.unit_cost), 0) * 100) / 100;
+  Math.round(lines.reduce((sum, l) => sum + countLineValue(l.item, l.qty), 0) * 100) / 100;
 
 /** Item list + stored counts → ordered lines with quantities (0 when uncounted). */
 export function toLines(items: readonly InventoryItem[], counts: readonly InventoryCount[]): InventoryLine[] {

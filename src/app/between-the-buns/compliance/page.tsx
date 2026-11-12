@@ -13,9 +13,11 @@ import { btbCanEdit } from "@/lib/btb-access";
 import { accessibleBtbCards } from "@/lib/btb-page-access";
 import { BTB_RESTAURANT } from "@/lib/btb-roles";
 
-// Combined compliance hub — renewals (expiring docs), tax & renewal dates
-// (deadlines) and business documents (plain files) in one place. The three
-// standalone routes and tabs share the same saved page restrictions.
+// Combined compliance hub — renewals (expiring docs), staff certificates, tax
+// & renewal dates (deadlines), business documents (plain files) and expiry
+// reminder emails, each saved once and shown once. The standalone routes still
+// exist (and keep their page access rules) but are sections here, not separate
+// hub tiles — the client asked for one simple place, not the same list twice.
 export default function Page() {
   return (
     <BtbFeatureGate feature="compliance">
@@ -44,8 +46,8 @@ function ComplianceHub({ readOnly }: { readOnly: boolean }) {
   return (
     <div className="compliance-hub">
       <PageHeader
-        title="Compliance, docs & reminders"
-        subtitle="Licences, deadlines, staff certificates, documents and reminder emails — together, ready for the next review."
+        title="Compliance"
+        subtitle="Everything that expires or needs a reminder — licences, staff certificates, tax deadlines, documents and emails — in one place. Each item is saved here once."
       />
 
       <TabList id="btb-compliance" label="Compliance sections" tabs={tabs} value={active} onChange={setTab} />

@@ -32,8 +32,10 @@
 .temperature-sheet__date-field { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .06em; }
 .temperature-sheet__date-field input { border: 0; border-bottom: 1px solid var(--ink); background: transparent; font-family: inherit; font-size: .875rem; color: var(--ink); padding: 0 4px; text-align: center; }
 .temperature-sheet td { min-width: 88px; height: 34px; font-variant-numeric: tabular-nums; }
+.temperature-sheet__field { position: relative; display: flex; align-items: center; width: 100%; }
+.temperature-sheet__unit { position: absolute; right: 6px; font-size: .6875rem; font-weight: 600; color: var(--muted-2); pointer-events: none; letter-spacing: .02em; }
 .temperature-sheet__value { display: inline-block; min-height: 20px; font-size: .875rem; }
-.temperature-sheet__input { width: 100%; min-height: 28px; border: 0; background: transparent; font-family: inherit; font-size: .875rem; color: var(--ink); text-align: center; font-variant-numeric: tabular-nums; }
+.temperature-sheet__input { width: 100%; min-height: 28px; border: 0; background: transparent; font-family: inherit; font-size: .875rem; color: var(--ink); text-align: center; padding-right: 26px; font-variant-numeric: tabular-nums; }
 .temperature-sheet__input:focus { outline: 2px solid var(--brand); outline-offset: -2px; }
 .temperature-sheet__input::-webkit-outer-spin-button, .temperature-sheet__input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 .temperature-sheet__input[type="number"] { appearance: textfield; appearance: textfield; -moz-appearance: textfield; }

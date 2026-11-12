@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Check, CircleAlert, Info, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, CircleAlert, Download, FileText, Info, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
 import Modal from "@/components/Modal";
+import { downloadDataUrl, fileToDataUrl, formatFileSize } from "@/lib/files";
 import {
   DOC_ROUTING_HINT, COMPLIANCE_PRESETS, complianceType, expiryLevel, expiryLabel,
   LEVEL_ACCENT, sortByUrgency, alertsFrom,
@@ -16,11 +17,16 @@ interface Doc {
   doc_type: string;
   name: string;
   file_name: string | null;
+  file_url: string | null;
   expiry_date: string;
   notes: string;
 }
 
-const COLUMNS = "id, doc_type, name, file_name, expiry_date, notes";
+const COLUMNS = "id, doc_type, name, file_name, file_url, expiry_date, notes";
+
+/** Insurance certificates, licences and PDFs — the same ceiling staff
+ * certificates use (src/app/between-the-buns/staff-licenses). */
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 export default function ComplianceRegister({ readOnly = false, restaurant: fixedRestaurant, showHeader = true }: {
   readOnly?: boolean; restaurant?: string; showHeader?: boolean;
@@ -49,6 +55,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
   const [expiry, setExpiry] = useState("");
   const [notes, setNotes] = useState("");
   const [preset, setPreset] = useState("other");
+  const [file, setFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const formId = useId();
@@ -81,14 +88,19 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
     if (readOnly || saving || !name.trim() || !expiry || !restaurant || (!companyWide && !locationId)) return;
     setSaving(true); setFormError(""); setNotice("");
     try {
+      // An attached certificate (insurance, business licence, lease…) is stored
+      // beside the expiry date as a data URL, the same pattern the staff
+      // licence register and Document Vault use.
+      const attachment = file ? await fileToDataUrl(file) : null;
       const { data, error } = await supabase.from("compliance_documents").insert({
         restaurant_name: restaurant, doc_type: preset, name: name.trim(), expiry_date: expiry,
         notes: notes.trim(), location_id: locationId,
+        ...(file ? { file_name: file.name, file_url: attachment } : {}),
       }).select(COLUMNS).abortSignal(AbortSignal.timeout(15_000)).single();
       if (error || !data) throw new Error("The renewal wasn’t saved. Your details are still here; please try again.");
       setRows((current) => [...current, data as Doc]);
       setNotice(`${name.trim()} added to the renewal register.`);
-      setName(""); setExpiry(""); setNotes(""); setOpen(false); setAttentionOnly(false);
+      setName(""); setExpiry(""); setNotes(""); setFile(null); setOpen(false); setAttentionOnly(false);
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : "The renewal couldn’t be saved.");
     } finally { setSaving(false); }
@@ -114,7 +126,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
   const visible = attentionOnly ? alerts : sorted;
   const actions = <div className="ui-actions">
     <Badge accent={loading || loadError || !rows.length ? "slate" : alerts.length ? "amber" : "green"}>{loading ? "Loading renewals…" : loadError ? "Status unavailable" : !rows.length ? "No renewals yet" : alerts.length ? `${alerts.length} need attention` : "All current"}</Badge>
-    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
+    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
   </div>;
 
   return <div className="compliance-workspace">
@@ -137,6 +149,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
             <span className={`ui-icon ui-tone--${LEVEL_ACCENT[level]}`}><ShieldCheck size={21} aria-hidden="true" /></span>
             <div className="compliance-row__body"><h3>{row.name}</h3><p>{type.label} · {new Date(`${row.expiry_date}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>{row.notes && <p>{row.notes}</p>}</div>
             <Badge accent={LEVEL_ACCENT[level]}>{expiryLabel(row.expiry_date)}</Badge>
+            {row.file_url && <button className="ui-iconbutton" aria-label={`Download ${row.file_name ?? row.name}`} title={row.file_name ?? "Download"} onClick={() => downloadDataUrl(row.file_url!, row.file_name ?? `${row.name}.pdf`)}><Download size={17} aria-hidden="true" /></button>}
             {!readOnly && <button disabled={!!deletingId} onClick={() => remove(row)} className="ui-iconbutton ui-iconbutton--danger" aria-label={`Delete ${row.name}`}><Trash2 size={17} aria-hidden="true" /></button>}
           </article>;
         })}</div>
@@ -150,8 +163,14 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
           <label htmlFor={`${formId}-name`}>Name<Input id={`${formId}-name`} data-modal-autofocus required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Food premises licence" /></label>
           <label htmlFor={`${formId}-expiry`}>Expiry date<Input id={`${formId}-expiry`} type="date" required value={expiry} onChange={(event) => setExpiry(event.target.value)} /><small>Reminder window: {complianceType(preset).notifyDays} days before expiry.</small></label>
           <label htmlFor={`${formId}-notes`}>Notes <span>(optional)</span><Input id={`${formId}-notes`} maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Renewal contact or reference" /></label>
+          <div><label htmlFor={`${formId}-file`}>Certificate or document <span>(optional)</span></label><input id={`${formId}-file`} className="mt-2" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(event) => {
+            const picked = event.target.files?.[0] || null;
+            if (picked && picked.size > MAX_FILE_BYTES) { setFormError("Choose a file no larger than 5 MB."); event.target.value = ""; return; }
+            setFormError(""); setFile(picked);
+          }} /><small>PDF, image or Word document — e.g. the signed insurance certificate, business licence or lease. Maximum 5 MB.</small></div>
+          {file && <p className="text-sm text-gray-600"><FileText size={14} className="inline-block align-[-2px]" aria-hidden="true" /> Attached: {file.name} ({formatFileSize(file.size)})</p>}
         </fieldset>
-        <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={saving || !name.trim() || !expiry}>{saving ? "Saving renewal…" : "Save renewal"}</Button></div>
+        <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={() => { setFile(null); setOpen(false); }}>Cancel</Button><Button type="submit" disabled={saving || !name.trim() || !expiry}>{saving ? "Saving renewal…" : "Save renewal"}</Button></div>
       </form>
     </Modal>}
   </div>;

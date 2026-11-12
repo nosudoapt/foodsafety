@@ -73,9 +73,10 @@ export function expiryLabel(date: string | null | undefined): string {
 // --- shared list helpers (used by the compliance page and DocumentVault) ---
 
 // Shown on both modules so the split is self-explanatory: Compliance holds
-// anything with an expiry_date; Business Documents holds plain files (null).
+// anything with an expiry_date (and now accepts the certificate file with it);
+// Business Documents holds plain files (null).
 export const DOC_ROUTING_HINT =
-  "Does it expire and need a reminder? → Compliance. Is it just a file? → Business Docs.";
+  "Does it expire and need a reminder? → Compliance (you can attach the certificate there). Is it just a file with no expiry? → Business Docs.";
 
 // Lower rank = more urgent, so an ascending sort surfaces expired items first.
 export const URGENCY_RANK: Record<ExpiryLevel, number> = {

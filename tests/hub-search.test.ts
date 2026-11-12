@@ -17,5 +17,9 @@ test("search never reveals pages excluded by a role or saved restrictions", () =
 
 test("clearing a no-match query restores the full permitted directory", () => {
   assert.deepEqual(searchBtbCards("staff", [], "nonexistent page 928"), []);
-  assert.deepEqual(searchBtbCards("staff", [], " "), accessibleBtbCards("staff", []));
+  // Search covers hub tiles only: sections of a combined card (Business
+  // Documents, staff certificates, tax dates, reminders) are reachable but are
+  // not separate tiles, so they never surface as search results either.
+  assert.deepEqual(searchBtbCards("staff", [], " "), accessibleBtbCards("staff", []).filter((card) => card.hub !== false));
+  assert.ok(!searchBtbCards("manager", [], "tax").some((card) => card.feature === "tax_dates"), "tax dates live inside the Compliance card, not as their own tile");
 });
