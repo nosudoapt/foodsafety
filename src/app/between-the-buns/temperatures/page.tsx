@@ -136,7 +136,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
       <p className="ops-meta">Standards printed on the form: coolers at or below 4 °C, up to 4.5 °C (40–41 °F) · freezers at or below −18 °C (0 °F) · sanitizer 200–400 PPM · temperature danger zone 4 °C to 60 °C. A box left empty stays empty — it is never recorded as a zero. Amber = above target but inside tolerance; red = out of range. Saved boxes are locked; correct a wrong reading with an off-form reading note.</p>
     </section>}
     {data && !error && tab === "history" && <section id="temperature-panel-history" role="tabpanel" aria-labelledby="temperature-tab-history" className="temperature-history">
-      <div className="ops-toolbar"><p className="ops-meta">The last 90 days of daily sheets, exactly as saved.</p>
+      <div className="ops-toolbar"><p className="ops-meta">The last 90 days of daily sheets — tap a day to open its sheet.</p>
         <label className="ops-inline-field">Jump to date
           <Input type="date" value={historyDay} onChange={(event) => setHistoryDay(event.target.value)} />
           {historyDay && <Button variant="ghost" onClick={() => setHistoryDay("")}>Whole month</Button>}
@@ -144,21 +144,35 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
       </div>
       {lastDays(today).filter((date) => !historyDay || date === historyDay).map((date) => {
         const dayRecords = byDay.get(date) ?? [];
+        const dayAlerts = dayRecords.map((record) => {
+          const kind = TEMPERATURE_SHEET_FILLABLE.find((row) => row.label === record.equipment_name)?.kind;
+          return kind ? temperatureAlert(record.temperature, kind) : record.is_safe ? "ok" : "unsafe";
+        });
+        const worst = dayAlerts.includes("unsafe") ? "unsafe" : dayAlerts.includes("warn") ? "warn" : dayRecords.length ? "ok" : "";
         return <Card key={date} className="temperature-history__day">
-          <div className="temperature-reading__head"><div><Badge accent={dayRecords.length ? "purple" : "amber"}>{date}</Badge><h2>{date === today ? "Today" : new Date(`${date}T12:00:00Z`).toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" })}</h2><p>{dayRecords.length ? `${dayRecords.length} reading${dayRecords.length === 1 ? "" : "s"} saved` : "No readings recorded"}</p></div></div>
-          <SheetTable
-            date={date}
-            static
-            cells={(label, slot) => {
-              const saved = (dayRecords.find((record) => record.equipment_name === label && (record.slot ?? "") === slot));
-              if (saved) {
-                const kind = TEMPERATURE_SHEET_FILLABLE.find((row) => row.label === label)?.kind;
-                const alert = kind ? temperatureAlert(saved.temperature, kind) : saved.is_safe ? "ok" : "unsafe";
-                return { saved: true, text: cellText(saved), unsafe: alert === "unsafe", warn: alert === "warn" };
-              }
-              return { saved: false, text: "" };
-            }}
-          />
+          <details open={date === historyDay}>
+            <summary className="temperature-history__summary">
+              <div>
+                <Badge accent={worst === "unsafe" ? "red" : worst === "warn" ? "amber" : worst === "ok" ? "purple" : "amber"}>{worst === "unsafe" ? "Out of range" : worst === "warn" ? "Watch" : worst === "ok" ? "All in range" : "No readings"}</Badge>
+                <strong>{date === today ? "Today" : new Date(`${date}T12:00:00Z`).toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" })}</strong>
+                <span className="temperature-history__meta">{date} · {dayRecords.length ? `${dayRecords.length} reading${dayRecords.length === 1 ? "" : "s"} saved` : "nothing recorded"}</span>
+              </div>
+              <span className="temperature-history__toggle" aria-hidden="true">Sheet ▾</span>
+            </summary>
+            <SheetTable
+              date={date}
+              static
+              cells={(label, slot) => {
+                const saved = (dayRecords.find((record) => record.equipment_name === label && (record.slot ?? "") === slot));
+                if (saved) {
+                  const kind = TEMPERATURE_SHEET_FILLABLE.find((row) => row.label === label)?.kind;
+                  const alert = kind ? temperatureAlert(saved.temperature, kind) : saved.is_safe ? "ok" : "unsafe";
+                  return { saved: true, text: cellText(saved), unsafe: alert === "unsafe", warn: alert === "warn" };
+                }
+                return { saved: false, text: "" };
+              }}
+            />
+          </details>
         </Card>;
       })}
     </section>}

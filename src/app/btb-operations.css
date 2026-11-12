@@ -42,6 +42,14 @@
 .temperature-sheet__unsafe { color: var(--danger); font-weight: 600; }
 /* Above target but inside the owner's tolerance (e.g. a cooler at 4.2 °C). */
 .temperature-sheet__warn { color: var(--warning, #b45309); font-weight: 600; }
+/* Compact history: one collapsed row per day, opening the full sheet on tap. */
+.temperature-history__day details > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; padding: 4px 0; min-height: 44px; }
+.temperature-history__day details > summary::-webkit-details-marker { display: none; }
+.temperature-history__day details > summary > div { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.temperature-history__meta { color: var(--muted); font-size: 0.8125rem; }
+.temperature-history__toggle { font-size: 0.75rem; color: var(--brand); flex-shrink: 0; }
+.temperature-history__day details[open] .temperature-history__toggle::before { content: "Close "; }
+.temperature-history__day details[open] .temperature-history__toggle::after { content: " ▴"; }
 @media (max-width: 640px) {
   .temperature-sheet__label { font-size: .6875rem; padding-left: 6px; }
   .temperature-sheet td { min-width: 64px; padding: 2px 3px; }
