@@ -44,7 +44,7 @@ function BtbShell({ children }: { children: React.ReactNode }) {
     <a href="#btb-main" className="workspace-skip">Skip to content</a>
     <header className="btb-header">
       <div className="btb-header__inner">
-        <Link href="/between-the-buns" className="btb-header__brand" aria-label="Between the Buns overview"><BtbWordmark className="text-lg sm:text-xl" /><span>Team workspace · powered by FoodSafe</span></Link>
+        <Link href="/between-the-buns" className="btb-header__brand" aria-label="Between the Buns overview"><BtbWordmark className="text-lg sm:text-xl" /><span>Team workspace · powered by Pholo</span></Link>
         <div className="btb-header__actions">
           {identity && <Link href="/between-the-buns/account" className="btb-identity" aria-label={`My account: ${identity.name}`}><span>{identity.name}</span><span className="ui-badge ui-tone--purple">{BTB_ROLE_LABELS[identity.role]}</span></Link>}
           <button className="btb-header__signout" onClick={signOut} disabled={signingOut} aria-label={signingOut ? "Signing out" : "Sign out"}><LogOut size={17} aria-hidden="true" /><span>{signingOut ? "Signing out…" : "Sign out"}</span></button>

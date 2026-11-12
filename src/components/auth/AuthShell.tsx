@@ -17,9 +17,9 @@ export { strengthOf };
 
 export function AuthBrand({ wordmark = true }: { wordmark?: boolean }) {
   return (
-    <Link href="/" className="ax__brand" aria-label="FoodSafe home">
+    <Link href="/" className="ax__brand" aria-label="Pholo home">
       <DayDotDial size={34} interactive={false} />
-      {wordmark && <span className="ax__brand-word">FoodSafe</span>}
+      {wordmark && <span className="ax__brand-word">Pholo</span>}
     </Link>
   );
 }
@@ -55,7 +55,7 @@ export function AuthShell({
 
       <aside className="ax__aside">
         <div className="ax__aside-inner auth-story">
-          <p className="dash-focus__label">FoodSafe · The restaurant workspace</p>
+          <p className="dash-focus__label">Pholo · The operations workspace</p>
           <h2>{title}</h2>
           <p>{description}</p>
           <ul className="ax__proofs">

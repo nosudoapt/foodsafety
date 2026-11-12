@@ -50,7 +50,7 @@ export default function BtbLogin() {
   };
 
   return <div className="ax btb-auth">
-    <main className="ax__main"><div className="ax__top"><div className="btb-auth__brand"><BtbWordmark className="text-xl" /><span>Team workspace · powered by FoodSafe</span></div></div><div className="ax__body"><div className="ax__card">
+    <main className="ax__main"><div className="ax__top"><div className="btb-auth__brand"><BtbWordmark className="text-xl" /><span>Team workspace · powered by Pholo</span></div></div><div className="ax__body"><div className="ax__card">
       <p className="ax__eyebrow">Between the Buns</p><h1 className="ax__title">A good day starts here.</h1><p className="ax__sub">Use your individual employee email and password. Your shift checks and training are saved under your name.</p>
       <form className="ax__form" onSubmit={handleSubmit} noValidate>
         {error && <Alert kind="error">{error}</Alert>}

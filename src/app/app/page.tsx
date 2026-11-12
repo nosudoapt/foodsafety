@@ -7,7 +7,7 @@ const products = [
   {
     href: "/auth/sign-in",
     tag: "Access",
-    title: "FoodSafe Manager",
+    title: "Pholo Manager",
     desc: "Digital HACCP — temperatures, checks, cleaning, allergens and compliance records.",
     icon: ShieldCheck,
     accent: "green",

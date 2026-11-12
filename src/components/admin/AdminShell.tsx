@@ -89,7 +89,7 @@ export default function AdminShell({ profile, children }: { profile: AdminProfil
   }, [cursor, paletteOpen]);
 
   useEffect(() => {
-    document.title = `${current?.label ?? "Workspace"} · FoodSafe`;
+    document.title = `${current?.label ?? "Workspace"} · Pholo`;
   }, [current?.label]);
 
   const go = (href: string) => {
@@ -143,13 +143,13 @@ export default function AdminShell({ profile, children }: { profile: AdminProfil
           <div className="rail__brandrow">
             <Link href="/dashboard" className="railbrand">
               <DayDotDial size={34} interactive={false} />
-              <span><span className="railbrand__word">FoodSafe</span><span className="railbrand__site">The everyday, under control.</span></span>
+              <span><span className="railbrand__word">Pholo</span><span className="railbrand__site">The everyday, under control.</span></span>
             </Link>
             {mobile && <button className="rail__close" onClick={() => setRailOpen(false)} aria-label="Close navigation"><X size={18} /></button>}
           </div>
           <div className="rail__identity">
             <span className="rail__identity-dot" aria-hidden="true" />
-            <span>{profile ? roleLabel(profile.role) : "Your workspace"}<small>{profile?.restaurant_name || "FoodSafe workspace"}</small></span>
+            <span>{profile ? roleLabel(profile.role) : "Your workspace"}<small>{profile?.restaurant_name || "Pholo workspace"}</small></span>
           </div>
         </div>
 
@@ -194,7 +194,7 @@ export default function AdminShell({ profile, children }: { profile: AdminProfil
           </div>
         </header>
         <main id="workspace-main" className="canvas" tabIndex={-1}>{children}</main>
-        <footer className="workspace-footer"><span>FoodSafe · A little clarity, every day.</span><Link href="/">About FoodSafe <ArrowUpRight size={12} aria-hidden="true" /></Link></footer>
+        <footer className="workspace-footer"><span>Pholo · A little clarity, every day.</span><Link href="/">About Pholo <ArrowUpRight size={12} aria-hidden="true" /></Link></footer>
       </div>
 
       <dialog ref={dialogRef} className="palette" aria-label="Search pages" onCancel={() => setPaletteOpen(false)} onClose={() => setPaletteOpen(false)} onClick={(event) => { if (event.target === event.currentTarget) setPaletteOpen(false); }}>

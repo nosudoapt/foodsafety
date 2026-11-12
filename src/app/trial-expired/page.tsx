@@ -12,7 +12,7 @@ export default function TrialExpired() {
         </div>
         <h1 className="text-3xl font-extrabold tracking-tight">Your 30-day trial has ended</h1>
         <p className="mt-4 text-slate-300 leading-relaxed">
-          Thanks for trying FoodSafe. Upgrade to keep your compliance alerts, logs and vault
+          Thanks for trying Pholo. Upgrade to keep your compliance alerts, logs and vault
           — or explore the demo anytime.
         </p>
         <div className="mt-8 flex flex-wrap gap-3 justify-center">

@@ -1,6 +1,6 @@
 import { FeedbackScreen } from "@/components/FeedbackScreen";
 
-export const metadata = { title: "Page not found · FoodSafe" };
+export const metadata = { title: "Page not found · Pholo" };
 
 export default function NotFound() {
   return (

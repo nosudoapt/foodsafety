@@ -1,11 +1,11 @@
 {
-  "name": "FoodSafe - Restaurant Operations Platform",
-  "short_name": "FoodSafe",
-  "description": "The operations platform for cafés, restaurants, takeaways, pubs and catering businesses.",
+  "name": "Pholo - Operations Platform",
+  "short_name": "Pholo",
+  "description": "One live operations platform for every industry: checks, counts, scheduling, documents, inspections and compliance.",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#f0fdf4",
-  "theme_color": "#16a34a",
+  "background_color": "#f3f0e9",
+  "theme_color": "#1b36e0",
   "orientation": "any",
   "icons": [
     {
@@ -23,8 +23,8 @@
   ],
   "categories": [
     "business",
-    "food",
-    "health"
+    "productivity",
+    "utilities"
   ],
   "scope": "/",
   "lang": "en",

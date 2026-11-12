@@ -495,6 +495,8 @@ a.dash-metric:hover { border-color: var(--brand); background: white; }
 .inventory-table .ui-input { width: 104px; text-align: right; font-variant-numeric: tabular-nums; }
 .inventory-table .ui-input[aria-invalid="true"] { border-color: var(--danger); }
 .inventory-field-error { display: block; color: var(--danger); font-size: 0.75rem; padding-top: 5px; }
+/* The workbook's case formula under the unit cost: Case of 12 @ $69.79 → packet $5.82. */
+.inventory-formula-note { display: block; color: var(--muted); font-size: 0.75rem; padding-top: 5px; white-space: nowrap; }
 .inventory-row-actions { display: flex; gap: 4px; justify-content: flex-end; align-items: center; }
 .inventory-row-actions button { display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--r-sm); color: var(--muted); }
 .inventory-row-actions button:hover:not(:disabled) { background: var(--paper-2); color: var(--brand); }

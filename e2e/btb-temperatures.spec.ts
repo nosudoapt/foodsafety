@@ -8,22 +8,25 @@ const input = { id, record_type: "cold_storage", equipment_name: "Walk-in fridge
 const row = { ...input, user_id: owner, restaurant_name: "Between the Buns", location_id: null, unit: "C", is_safe: false, recorded_at: new Date().toISOString() };
 
 test("BTB temperature saves retain failures, survive reload and keep independent FoodSafe sessions", async ({ page, fixture }, info) => {
+  // Long end-to-end journey: two independent sign-ins, a failing then
+  // succeeding save, reload, history and the legacy-records navigation.
+  test.slow();
   await signInFoodSafe(page, "manager");
   await signInBtb(page, "manager");
   await page.getByRole("searchbox", { name: "Search BTB tools" }).fill("temperature sheet");
   await page.locator('#btb-tools a[href="/between-the-buns/temperatures"]').click();
-  const cell = page.getByLabel("COOLER-1 11:00 AM", { exact: true });
+  const cell = page.getByLabel(/^COOLER-1 11:00 AM (°C|PPM)$/);
   await expect(cell).toBeVisible();
   await fixture.configure({ failures: [{ table: "temperature_records", method: "POST", times: 1 }] });
   await cell.fill("8");
   await page.getByRole("button", { name: "Save sheet" }).click();
   await expect(page.locator(".ui-notice--error")).toContainText("COOLER-1 (11:00) wasn’t saved");
-  await expect(page.getByLabel("COOLER-1 11:00 AM", { exact: true })).toHaveValue("8");
+  await expect(page.getByLabel(/^COOLER-1 11:00 AM (°C|PPM)$/)).toHaveValue("8");
   await page.setViewportSize({ width: 375, height: 812 });
   await capture(page, info, "temperature-mobile-retained-draft");
   await page.getByRole("button", { name: "Save sheet" }).click();
   await expect(page.getByRole("status")).toContainText("Sheet saved — 1 reading");
-  await expect(page.getByLabel("COOLER-1 11:00 AM", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel(/^COOLER-1 11:00 AM (°C|PPM)$/)).toHaveCount(0);
   const saved = (await fixture.state()).tables.temperature_records.find((record) => record.user_id === owner)!;
   expect(saved).toMatchObject({ restaurant_name: "Between the Buns", location_id: null, equipment_name: "COOLER-1", temperature: 8, is_safe: false });
   await expect(page.getByText("8 °C").first()).toBeVisible();
@@ -31,11 +34,11 @@ test("BTB temperature saves retain failures, survive reload and keep independent
   await expect(page.getByText("8 °C").first()).toBeVisible();
   await capture(page, info, "temperature-mobile-history");
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole("tab", { name: "History (1 month)" }).click();
+  await page.getByRole("tab", { name: "History (90 days)" }).click();
   await expect(page.getByText("8 °C").first()).toBeVisible();
   await capture(page, info, "temperature-desktop-history");
-  await page.getByText("Looking for earlier FoodSafe records?", { exact: true }).click();
-  await page.getByRole("link", { name: "Open FoodSafe temperature records" }).click();
+  await page.getByText("Looking for earlier Pholo records?", { exact: true }).click();
+  await page.getByRole("link", { name: "Open Pholo temperature records" }).click();
   await expect(page.getByText("Cheese", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Temperature Monitoring" })).toBeVisible();
 });
@@ -76,7 +79,7 @@ test("temperature endpoints enforce login, operational permissions and saved pag
   expect((await request.get("/api/btb/temperatures")).status()).toBe(401);
   await signInBtb(page, "corporate", "/between-the-buns/temperatures");
   await expect(page.getByText("Read-only overview.")).toBeVisible();
-  await expect(page.getByLabel("COOLER-1 11:00 AM", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel(/^COOLER-1 11:00 AM (°C|PPM)$/)).toHaveCount(0);
   expect((await page.request.post("/api/btb/temperatures", { data: input })).status()).toBe(403);
   for (const role of ["staff", "supervisor"] as const) {
     await apiSignIn(request, `${role}@btb.demo`);

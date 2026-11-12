@@ -1,70 +1,74 @@
 /* ============================================================
-   FoodSafe — canonical design tokens  ("The Pass")
+   Pholo — canonical design tokens  ("Bone & Signal")
    One palette, consumed by every surface: the marketing page
-   (.fs), authentication, the workspace and the BTB tools.
+   (.fs), authentication, the workspace and the in-app tools.
    Only tokens live here — no component styles.
+
+   The identity is two materials in tension:
+     bone paper  — craft, records, the thing being replaced
+     signal blue — the live system, the thing doing the replacing
    ============================================================ */
 
 :root {
   /* ---- neutrals ---------------------------------------------------- */
-  --paper: #f7f3ec;
-  --paper-2: #f1ebe0;
-  --paper-3: #e9e1d3;
-  --surface: #fffdfa;
-  --ink: #14100f;
-  --ink-2: #1d1816;
-  --ink-3: #2e2725;
-  --line: #dbd2c3;
-  --line-soft: #e8e1d5;
-  --muted: #6d6459;
-  --muted-2: #5a524a;
+  --paper: #f3f0e9;
+  --paper-2: #eae6dc;
+  --paper-3: #ddd7c9;
+  --surface: #fcfaf6;
+  --ink: #100e0c;
+  --ink-2: #171512;
+  --ink-3: #262320;
+  --line: #d6d0c2;
+  --line-soft: #e4dfd3;
+  --muted: #6b645a;
+  --muted-2: #565047;
 
   /* ---- brand ------------------------------------------------------- */
-  --brand: #4a1b3d;
-  --brand-2: #2f1027;
-  --brand-soft: #f0e2e9;
+  --brand: #1b36e0;
+  --brand-2: #1429b5;
+  --brand-soft: #e4e8fd;
 
   /* ---- semantic status (independent of the switchable accent) ------ */
-  --ok: #286840;
-  --ok-soft: #e2efdf;
-  --ok-line: #c3dcc4;
-  --warn: #8c4518;
-  --warn-soft: #fbeedd;
-  --warn-line: #eed3b4;
-  --danger: #a3352c;
-  --danger-soft: #fae5e2;
-  --danger-line: #eec7c1;
+  --ok: #22603c;
+  --ok-soft: #e0efdf;
+  --ok-line: #bfd9c1;
+  --warn: #8a4715;
+  --warn-soft: #fbebd9;
+  --warn-line: #efd0ae;
+  --danger: #a33228;
+  --danger-soft: #fae3df;
+  --danger-line: #eec3bc;
 
-  /* ---- switchable accent: the kitchen day-dot ---------------------- */
-  --dot: #5b1e3b;
-  --dot-soft: #f0e2e9;
-  --dot-line: #d8becc;
+  /* ---- switchable accent: the signal ------------------------------- */
+  --dot: #1b36e0;
+  --dot-soft: #e4e8fd;
+  --dot-line: #c3cbf8;
   /* three tones because one accent cannot be legible in every position:
      --dot-text  accent marks on the ink band
      --dot-fg    marks on the soft tint
      --dot-on    text drawn on the solid fill */
-  --dot-text: #f0a8c6;
-  --dot-fg: #4a1b3d;
+  --dot-text: #9fb0ff;
+  --dot-fg: #16299e;
   --dot-on: #ffffff;
 
   /* ---- type -------------------------------------------------------- */
-  --font-display: var(--font-foodsafe-display), "Didot", "Bodoni 72", "Playfair Display",
+  --font-display: var(--font-pholo-display), "Didot", "Bodoni 72", "Playfair Display",
     "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
     "Times New Roman", serif;
-  --font-sans: var(--font-foodsafe-sans), "Avenir Next", "Inter", "Segoe UI", "Helvetica Neue",
+  --font-sans: var(--font-pholo-sans), "Avenir Next", "Inter", "Segoe UI", "Helvetica Neue",
     Helvetica, ui-sans-serif, system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
   /* ---- shape ------------------------------------------------------- */
-  --r-xs: 6px;
+  --r-xs: 5px;
   --r-sm: 8px;
-  --r-md: 14px;
-  --r-lg: 22px;
-  --r-xl: 28px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-xl: 26px;
   --r-pill: 999px;
 
   /* ---- layout ------------------------------------------------------ */
-  --wrap: 1240px;
+  --wrap: 1280px;
   --shell-w: 268px;
   --topbar-h: 68px;
   --space-1: 4px;
@@ -79,6 +83,7 @@
   /* ---- motion ------------------------------------------------------ */
   --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --ease-expo: cubic-bezier(0.16, 1, 0.3, 1);
   --t-fast: 0.16s;
   --t-base: 0.28s;
   --t-slow: 0.55s;
@@ -86,35 +91,43 @@
 
 /* Accent themes. Kept as attribute selectors (not class-scoped) so any
    surface — marketing, auth, admin — can opt in with data-dot. */
-[data-dot="pistachio"] {
-  --dot: #cde27a;
-  --dot-soft: #eff6d6;
-  --dot-line: #c6d69b;
-  --dot-on: #241a10;
-  --dot-fg: #3c4a17;
-  --dot-text: #dff2a4;
+[data-dot="signal"] {
+  --dot: #1b36e0;
+  --dot-soft: #e4e8fd;
+  --dot-line: #c3cbf8;
+  --dot-on: #ffffff;
+  --dot-fg: #16299e;
+  --dot-text: #9fb0ff;
 }
-[data-dot="butter"] {
-  --dot: #f7cb5b;
-  --dot-soft: #fbf0d3;
-  --dot-line: #e2c489;
-  --dot-on: #241a10;
-  --dot-fg: #4a3a10;
-  --dot-text: #ffdd8f;
+[data-dot="volt"] {
+  --dot: #c9f24c;
+  --dot-soft: #eff8d4;
+  --dot-line: #d3e6a0;
+  --dot-on: #17160f;
+  --dot-fg: #3c4a12;
+  --dot-text: #ddf89a;
 }
-[data-dot="coral"] {
-  --dot: #f47b5c;
-  --dot-soft: #fbe4dc;
-  --dot-line: #e9b7a7;
-  --dot-on: #2a1208;
-  --dot-fg: #5a2416;
-  --dot-text: #ffa98f;
+[data-dot="ember"] {
+  --dot: #f0623a;
+  --dot-soft: #fbe6dd;
+  --dot-line: #f0c0ac;
+  --dot-on: #200f07;
+  --dot-fg: #5e2412;
+  --dot-text: #ffac8e;
 }
-[data-dot="sky"] {
-  --dot: #a9c7e8;
-  --dot-soft: #e6eff9;
-  --dot-line: #b7cce2;
-  --dot-on: #14100f;
-  --dot-fg: #1d3550;
-  --dot-text: #c3dcf5;
+[data-dot="mint"] {
+  --dot: #4ecfa6;
+  --dot-soft: #ddf5ec;
+  --dot-line: #b2e3d3;
+  --dot-on: #08201a;
+  --dot-fg: #125343;
+  --dot-text: #9bebd2;
+}
+[data-dot="iris"] {
+  --dot: #6b45f2;
+  --dot-soft: #eae4fe;
+  --dot-line: #cfc4f7;
+  --dot-on: #ffffff;
+  --dot-fg: #4a2fb8;
+  --dot-text: #c1b2ff;
 }

@@ -127,7 +127,7 @@ export default function SignIn() {
       </form>
 
       <p className="foot">
-        New to FoodSafe?{" "}
+        New to Pholo?{" "}
         <Link href="/auth/sign-up?trial=1">Start a 30-day trial</Link>
       </p>
 

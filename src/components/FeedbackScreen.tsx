@@ -29,9 +29,9 @@ export function FeedbackScreen({
   return (
     <div className="fbs">
       <div className="fbs__card">
-        <Link href="/" className="fbs__brand" aria-label="FoodSafe home">
+        <Link href="/" className="fbs__brand" aria-label="Pholo home">
           <DayDotDial size={34} interactive={false} />
-          <span className="fbs__brand-word">FoodSafe</span>
+          <span className="fbs__brand-word">Pholo</span>
         </Link>
 
         <span className="fbs__icon" aria-hidden>

@@ -24,7 +24,7 @@ export default function GlobalError({
               </svg>
             </span>
             <p className="fbs__code">{error.digest ? `Error ${error.digest}` : "Startup error"}</p>
-            <h1 className="fbs__title">FoodSafe couldn&apos;t load</h1>
+            <h1 className="fbs__title">Pholo couldn&apos;t load</h1>
             <p className="fbs__body">
               Something failed before the page could start. Reloading usually
               fixes it; if it doesn&apos;t, the reference above is what support

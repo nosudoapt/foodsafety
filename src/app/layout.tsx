@@ -6,35 +6,50 @@ import ServiceWorkerRegistrar from "@/components/ServiceWorkerRegistrar";
 
 const uiFont = localFont({
   src: "./fonts/dm-sans-latin.woff2",
-  variable: "--font-foodsafe-sans",
+  variable: "--font-pholo-sans",
   weight: "400 700",
   display: "swap",
 });
 
 const displayFont = localFont({
   src: [
-    { path: "./fonts/dm-serif-display-latin.woff2", weight: "400", style: "normal" },
-    { path: "./fonts/dm-serif-display-italic-latin.woff2", weight: "400", style: "italic" },
+    { path: "./fonts/instrument-serif-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/instrument-serif-italic-latin.woff2", weight: "400", style: "italic" },
   ],
-  variable: "--font-foodsafe-display",
+  variable: "--font-pholo-display",
   display: "swap",
 });
 
 export const metadata: Metadata = {
-  title: "FoodSafe - Restaurant Operations Platform",
-  description: "The operations platform for cafés, restaurants, takeaways, pubs and catering businesses.",
+  metadataBase: new URL("https://pholo.ca"),
+  title: {
+    default: "Pholo — Every business runs on paper. We make it run itself.",
+    template: "%s · Pholo",
+  },
+  description:
+    "Pholo turns the printouts, spreadsheets and clipboards a business already runs on into one live operations platform — checks, counts, scheduling, documents, inspections and compliance across every location.",
+  applicationName: "Pholo",
   manifest: "/manifest.json",
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    url: "https://pholo.ca",
+    siteName: "Pholo",
+    title: "Pholo — Every business runs on paper. We make it run itself.",
+    description:
+      "One live operations platform for every industry: checks, counts, scheduling, documents, inspections and compliance across every location.",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "FoodSafe",
+    title: "Pholo",
   },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#4a1b3d",
+  themeColor: "#f3f0e9",
 };
 
 export default function RootLayout({

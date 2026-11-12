@@ -1,8 +1,7 @@
 "use client";
 
-// The day-dot palette. Five dots in a dial, exactly like the date labels a
-// kitchen puts on prep — and the same five dots that recolour the page.
-// Cassis is the brand default; the rest are the switchable accents.
+// The Pholo signal system. A five-dot dial, the same five dots that recolour
+// the entire surface. Signal blue is the default; the rest are alternates.
 import {
   createContext,
   useCallback,
@@ -12,17 +11,17 @@ import {
   useState,
 } from "react";
 
-export type DotId = "cassis" | "pistachio" | "butter" | "coral" | "sky";
+export type DotId = "signal" | "volt" | "ember" | "mint" | "iris";
 
 export const DOTS: { id: DotId; hex: string; name: string }[] = [
-  { id: "cassis", hex: "#5b1e3b", name: "Cassis" },
-  { id: "pistachio", hex: "#cde27a", name: "Pistachio" },
-  { id: "butter", hex: "#f7cb5b", name: "Butter" },
-  { id: "coral", hex: "#f47b5c", name: "Coral" },
-  { id: "sky", hex: "#a9c7e8", name: "Sky" },
+  { id: "signal", hex: "#1b36e0", name: "Signal" },
+  { id: "volt", hex: "#c9f24c", name: "Volt" },
+  { id: "ember", hex: "#f0623a", name: "Ember" },
+  { id: "mint", hex: "#4ecfa6", name: "Mint" },
+  { id: "iris", hex: "#6b45f2", name: "Iris" },
 ];
 
-const STORAGE_KEY = "foodsafe.dot";
+const STORAGE_KEY = "pholo.signal";
 
 type Ctx = {
   dot: DotId;
@@ -34,7 +33,7 @@ type Ctx = {
 const DotCtx = createContext<Ctx | null>(null);
 
 const FALLBACK: Ctx = {
-  dot: "cassis",
+  dot: "signal",
   index: 0,
   setDot: () => {},
   next: () => {},
@@ -51,7 +50,7 @@ export function DotProvider({ children }: { children: React.ReactNode }) {
   // agree or React discards the hydrated tree. The saved hue is applied on the
   // next frame instead, so a returning visitor sees their colour land instantly
   // without a hydration mismatch.
-  const [dot, setDotState] = useState<DotId>("cassis");
+  const [dot, setDotState] = useState<DotId>("signal");
 
   useEffect(() => {
     let saved: string | null = null;
@@ -106,9 +105,9 @@ export function DotProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// The logo. A dial of five date dots; the active colour sits at twelve
-// o'clock. Hover nudges the dial, click indexes the next colour — which
-// re-skins the entire page.
+// The logo dial. Five dots around a ring; the active colour sits at twelve
+// o'clock. Hover nudges it, click indexes the next colour — which re-skins
+// every accent on the page.
 export function DayDotDial({
   size = 40,
   interactive = true,
@@ -117,7 +116,7 @@ export function DayDotDial({
   interactive?: boolean;
 }) {
   const { dot, index, next } = useDot();
-  const name = DOTS[index]?.name ?? "Cassis";
+  const name = DOTS[index]?.name ?? "Signal";
   const R = size / 2;
 
   const Tag = interactive ? "button" : "span";
@@ -131,11 +130,7 @@ export function DayDotDial({
     : { "aria-hidden": true as const };
 
   return (
-    <Tag
-      {...props}
-      className="dial"
-      style={{ width: size, height: size }}
-    >
+    <Tag {...props} className="dial" style={{ width: size, height: size }}>
       <span
         className="dial__ring"
         style={
