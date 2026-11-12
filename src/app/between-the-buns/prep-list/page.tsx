@@ -541,50 +541,56 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         )}
       </div>
 
-      {/* Print sheet — the full prep list unfiltered, values as text. */}
-      <div id="print-section" className="hidden print:block max-w-4xl mx-auto px-4 py-6 text-gray-900">
-        <h1 className="text-xl font-bold">Daily Prep Sheet — {day}, {date}</h1>
-        <p className="text-xs text-gray-500 mb-4">Between the Buns · MAKE = PAR − On Hand · 🔥 = urgent</p>
-        {prepColumns.map((column) => (
-          <div key={column.label} className="mb-5 break-inside-avoid">
-            <h2 className="font-bold text-sm mb-1">{column.label}</h2>
-            {column.sections.map((section) => (
-              <div key={section.title} className="mb-2">
-                <h3 className="text-xs font-bold uppercase tracking-wide text-gray-600">{section.title}</h3>
-                <table className="w-full text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-gray-300 text-gray-500">
-                      <th className="text-left py-1">Item</th>
-                      <th className="text-right">Par</th>
-                      <th className="text-right">OH</th>
-                      <th className="text-right">Make</th>
-                      <th className="text-right">Init</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {section.items.map((item) => {
-                      const e = prepData[itemKey(item)];
-                      return (
-                        <tr key={itemKey(item)} className="border-b border-gray-100">
-                          <td className="py-1">
-                            {item.name}
-                            {item.unit ? <span className="text-gray-400"> ({item.unit})</span> : null}
-                            {e?.urgent ? " 🔥" : ""}
-                            {e?.pull ? <span className="text-gray-500"> · pull {e.pull}</span> : null}
-                          </td>
-                          <td className="text-right">{e?.par ?? ""}</td>
-                          <td className="text-right">{e?.oh ?? ""}</td>
-                          <td className="text-right font-bold">{e?.make ?? ""}</td>
-                          <td className="text-right">{e?.initial ?? ""}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ))}
-          </div>
-        ))}
+      {/* Print sheet — the full prep list unfiltered, values as text, laid out
+          like the paper form: the three columns side-by-side with tight rows so
+          everything lands on a single printed page. */}
+      <div id="print-section" className="hidden print:block max-w-[46rem] mx-auto px-2 py-1 text-gray-900">
+        <div className="flex items-baseline justify-between gap-2 border-b border-gray-400 pb-1 mb-1.5">
+          <h1 className="text-sm font-bold">Daily Prep Sheet — {day}, {date}</h1>
+          <p className="text-[8px] text-gray-500 whitespace-nowrap">Between the Buns · MAKE = PAR − On Hand · 🔥 = urgent</p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 items-start">
+          {prepColumns.map((column) => (
+            <div key={column.label} className="break-inside-avoid">
+              <h2 className="font-bold text-[9px] uppercase tracking-wide border-b border-gray-400 pb-0.5 mb-0.5">{column.label}</h2>
+              {column.sections.map((section) => (
+                <div key={section.title} className="mb-1 break-inside-avoid">
+                  <h3 className="text-[8px] font-bold uppercase tracking-wide text-gray-600">{section.title}</h3>
+                  <table className="w-full text-[9px] leading-tight border-collapse">
+                    <thead>
+                      <tr className="border-b border-gray-300 text-gray-500">
+                        <th className="text-left py-0.5">Item</th>
+                        <th className="text-right">Par</th>
+                        <th className="text-right">OH</th>
+                        <th className="text-right">Make</th>
+                        <th className="text-right">Init</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {section.items.map((item) => {
+                        const e = prepData[itemKey(item)];
+                        return (
+                          <tr key={itemKey(item)} className="border-b border-gray-100">
+                            <td className="py-0.5 whitespace-nowrap max-w-[8rem] overflow-hidden text-ellipsis">
+                              {item.name}
+                              {item.unit ? <span className="text-gray-400"> {item.unit}</span> : null}
+                              {e?.urgent ? " 🔥" : ""}
+                              {e?.pull ? <span className="text-gray-500"> ·pull {e.pull}</span> : null}
+                            </td>
+                            <td className="text-right">{e?.par ?? ""}</td>
+                            <td className="text-right">{e?.oh ?? ""}</td>
+                            <td className="text-right font-bold">{e?.make ?? ""}</td>
+                            <td className="text-right">{e?.initial ?? ""}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
