@@ -32,21 +32,23 @@ export async function GET() {
   const db = inventoryDb();
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
-  const [activity, plans, locations, storageDocs, storageLicenses, storagePromos, storageManuals, fileObjects, aiUsage, employees] = await Promise.all([
+  const [activity, plans, locations, storageDocs, storageLicenses, storagePromos, storageManuals, storageCompliance, storageBranding, fileObjects, aiUsage, employees] = await Promise.all([
     db.from("app_activity").select("restaurant_name, location_id, path, title, role, actor_id, actor_name, created_at")
       .gte("created_at", since).order("created_at", { ascending: false }).limit(20_000),
     db.from("platform_plans").select("*"),
     db.from("locations").select("id, name, address, created_at"),
-    db.from("business_documents").select("restaurant_name, file_size"),
-    db.from("staff_licenses").select("restaurant_name, file_size"),
-    db.from("marketing_promotions").select("restaurant_name, file_size"),
-    db.from("print_manuals").select("restaurant_name, file_size"),
+    db.from("business_documents").select("restaurant_name, file_size, file_url"),
+    db.from("staff_licenses").select("restaurant_name, file_size, file_url"),
+    db.from("marketing_promotions").select("restaurant_name, file_size, file_url"),
+    db.from("print_manuals").select("restaurant_name, file_size, file_url"),
+    db.from("compliance_documents").select("restaurant_name, file_url"),
+    db.from("branding_requests").select("restaurant_name, file_url"),
     db.from("btb_file_objects").select("location_id, byte_size"),
     db.from("btb_ai_usage").select("location_id, used, day").gte("day", since.slice(0, 10)),
     db.from("btb_employees").select("restaurant_name, active"),
   ]);
 
-  const errs = [activity, plans, locations, storageDocs, storageLicenses, storagePromos, storageManuals, fileObjects, aiUsage, employees]
+  const errs = [activity, plans, locations, storageDocs, storageLicenses, storagePromos, storageManuals, storageCompliance, storageBranding, fileObjects, aiUsage, employees]
     .map((r) => r.error).filter(Boolean);
   if (errs.length) {
     return NextResponse.json({ ok: false, error: errs[0]!.message }, { status: 503, headers: PRIVATE_HEADERS });
@@ -72,16 +74,20 @@ export async function GET() {
   // Storage per client — the file-bearing tables' sizes plus BTB's inline
   // file objects.
   const storageByRestaurant = new Map<string, number>();
-  const addBytes = (list: { restaurant_name?: string; file_size?: number | null }[] | null) => {
+  const urlBytes = (url: unknown) =>
+    typeof url === "string" && url.startsWith("data:") ? Math.round((url.length * 3) / 4) : 0;
+  const addBytes = (list: { restaurant_name?: string; file_size?: number | null; file_url?: unknown }[] | null) => {
     for (const row of list ?? []) {
       const key = row.restaurant_name || "unknown";
-      storageByRestaurant.set(key, (storageByRestaurant.get(key) ?? 0) + bytes(row.file_size));
+      storageByRestaurant.set(key, (storageByRestaurant.get(key) ?? 0) + bytes(row.file_size) + urlBytes(row.file_url));
     }
   };
   addBytes(storageDocs.data ?? []);
   addBytes(storageLicenses.data ?? []);
   addBytes(storagePromos.data ?? []);
   addBytes(storageManuals.data ?? []);
+  addBytes(storageCompliance.data ?? []);
+  addBytes(storageBranding.data ?? []);
 
   const clients = new Map<string, {
     restaurant_name: string; views30d: number; activeUsers: number; users: string[];
