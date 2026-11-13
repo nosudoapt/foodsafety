@@ -1,36 +1,21 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
 import { inventoryDb } from "@/lib/supabase-server";
-import { OWNER_TIER_ROLES } from "@/lib/roles";
+import { hasPlatformSession, PLATFORM_COOKIE } from "@/lib/platform-admin";
 import { PRIVATE_HEADERS } from "@/lib/btb-api";
 
-// The platform-owner dashboard (/admin/platform): every client (restaurant),
-// usage heatmap, storage, seats and pricing. Owner tier only.
+// The platform pane's data: every client (restaurant) — BTB and FoodSafe alike
+// — with usage, storage, heatmap and the pricing game. Platform cookie only.
 
-const OWNER = OWNER_TIER_ROLES as string[];
-
-async function requireOwner() {
-  const cookieStore = await cookies();
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll: () => cookieStore.getAll(), setAll: () => undefined } },
-  );
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-  const { data: profile } = await supabase.from("profiles").select("role, restaurant_name").eq("id", user.id).maybeSingle();
-  if (!profile || !OWNER.includes(profile.role as string)) return null;
-  return { userId: user.id, role: profile.role as string, restaurant: profile.restaurant_name as string };
-}
-
-const bytes = (n: number | null | undefined) => n ?? 0;
 const gb = (n: number) => Math.round((n / 1_073_741_824) * 100) / 100;
+const bytes = (n: number | null | undefined) => n ?? 0;
 
 export async function GET() {
-  const owner = await requireOwner();
-  if (!owner) return NextResponse.json({ ok: false }, { status: 403, headers: PRIVATE_HEADERS });
+  const cookieStore = await cookies();
+  if (!hasPlatformSession(cookieStore.get(PLATFORM_COOKIE)?.value)) {
+    return NextResponse.json({ ok: false }, { status: 401, headers: PRIVATE_HEADERS });
+  }
   const db = inventoryDb();
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
 
@@ -71,19 +56,19 @@ export async function GET() {
     if (di !== undefined) heatmap[di][new Date(row.created_at).getHours()] += 1;
   }
 
-  // Storage per client — the base64 data-URL column sizes on file-bearing
-  // tables plus the BTB inline file objects.
+  // Storage per client — the file-bearing tables' sizes plus BTB's inline
+  // file objects.
   const storageByRestaurant = new Map<string, number>();
-  const addBytes = (list: { restaurant_name?: string; file_size?: number | null }[] | null, fallback: string) => {
+  const addBytes = (list: { restaurant_name?: string; file_size?: number | null }[] | null) => {
     for (const row of list ?? []) {
-      const key = row.restaurant_name || fallback;
+      const key = row.restaurant_name || "unknown";
       storageByRestaurant.set(key, (storageByRestaurant.get(key) ?? 0) + bytes(row.file_size));
     }
   };
-  addBytes(storageDocs.data ?? [], "");
-  addBytes(storageLicenses.data ?? [], "");
-  addBytes(storagePromos.data ?? [], "");
-  addBytes(storageManuals.data ?? [], "");
+  addBytes(storageDocs.data ?? []);
+  addBytes(storageLicenses.data ?? []);
+  addBytes(storagePromos.data ?? []);
+  addBytes(storageManuals.data ?? []);
 
   const clients = new Map<string, {
     restaurant_name: string; views30d: number; activeUsers: number; users: string[];
@@ -103,12 +88,13 @@ export async function GET() {
     if (page) page.visits += 1;
     else client.topPages.push({ path: row.path, visits: 1 });
   }
+
+  const btbFileBytes = (fileObjects.data ?? []).reduce((sum: number, f: Record<string, unknown>) => sum + bytes(f.byte_size as number), 0);
+  const aiTotal = (aiUsage.data ?? []).reduce((sum: number, u: Record<string, unknown>) => sum + Number(u.used_count ?? 0), 0);
   const clientList = [...clients.values()].map((client) => {
     const plan = plansById.get(client.restaurant_name);
     const clientBytes = (storageByRestaurant.get(client.restaurant_name) ?? 0)
-      + (client.restaurant_name === "Between the Buns"
-        ? (fileObjects.data ?? []).reduce((sum: number, f: Record<string, unknown>) => sum + bytes(f.byte_size as number), 0)
-        : 0);
+      + (client.restaurant_name === "Between the Buns" ? btbFileBytes : 0);
     return {
       restaurant_name: client.restaurant_name,
       views30d: client.views30d,
@@ -116,9 +102,7 @@ export async function GET() {
       topPages: client.topPages.sort((a, b) => b.visits - a.visits).slice(0, 5),
       lastSeen: client.lastSeen,
       storageBytes: gb(clientBytes),
-      aiCalls30d: client.restaurant_name === "Between the Buns"
-        ? (aiUsage.data ?? []).reduce((sum: number, u: Record<string, unknown>) => sum + Number(u.used_count ?? 0), 0)
-        : undefined,
+      aiCalls30d: client.restaurant_name === "Between the Buns" ? aiTotal : undefined,
       plan: (plan?.plan as string) ?? "standard",
       seats: Number(plan?.seats ?? 0),
       monthlyPrice: Number(plan?.monthly_price ?? 0),
@@ -132,7 +116,7 @@ export async function GET() {
       clients: clientList.length,
       views30d: rows.length,
       activeUsers: new Set(rows.map((r) => r.actor_id)).size,
-      storageBytes: gb([...storageByRestaurant.values()].reduce((a, b) => a + b, 0) + (fileObjects.data ?? []).reduce((s: number, f: Record<string, unknown>) => s + bytes(f.byte_size as number), 0)),
+      storageBytes: gb([...storageByRestaurant.values()].reduce((a, b) => a + b, 0) + btbFileBytes),
       mrr: clientList.reduce((sum, c) => sum + c.monthlyPrice, 0),
       seats: clientList.reduce((sum, c) => sum + c.seats, 0),
     },
@@ -144,8 +128,10 @@ export async function GET() {
 
 /** Owner edits a client's plan/seats/price — the "pricing game". */
 export async function PUT(request: Request) {
-  const owner = await requireOwner();
-  if (!owner) return NextResponse.json({ ok: false }, { status: 403, headers: PRIVATE_HEADERS });
+  const cookieStore = await cookies();
+  if (!hasPlatformSession(cookieStore.get(PLATFORM_COOKIE)?.value)) {
+    return NextResponse.json({ ok: false }, { status: 401, headers: PRIVATE_HEADERS });
+  }
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
