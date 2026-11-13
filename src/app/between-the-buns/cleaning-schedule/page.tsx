@@ -12,8 +12,9 @@ import {
   uploadToSupabase,
 } from "@/lib/photos";
 import { locationScope, activeLocationId } from "@/lib/locations";
-import { btbToday } from "@/lib/btb-team";
+import { attributionName, btbToday } from "@/lib/btb-team";
 import { isoDay as toISODate } from "@/lib/staff-schedule";
+import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
 
 // One cleaning_logs row per task per week: who did it, when, and JSON arrays of
 // object paths for each photo side (multiple angles). Photos are compressed
@@ -89,6 +90,10 @@ export default function CleaningSchedulePage() {
 }
 
 function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
+  const { identity } = useBtbWorkspace();
+  // Who did it is recorded automatically from the signed-in account — the same
+  // attribution the opening/closing checklists use. It is never typed or chosen.
+  const actorName = identity ? attributionName(identity) : "";
   const [store, setStore] = useState<Store>({});
   const storeRef = useRef<Store>({});
   const [ready, setReady] = useState(false);
@@ -159,7 +164,9 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
           task_name: taskName,
           week_start: key,
           done_date: doneDate,
-          done_by: log.name || null,
+          // Attribution is automatic from the signed-in identity; any previously
+          // typed name is overwritten on the next save.
+          done_by: actorName || null,
           done_time: log.time || null,
           before_photo: JSON.stringify(log.before),
           after_photo: JSON.stringify(log.after),
@@ -191,7 +198,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
         setError(e instanceof Error ? e.message : "Could not save this entry.");
       }
     },
-    [setLog],
+    [setLog, actorName],
   );
 
   const schedulePersist = useCallback(
@@ -505,14 +512,15 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
                         />
                       </label>
                       <label className="block">
-                        <span className="text-[10px] font-bold text-gray-500 uppercase">Name</span>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase">Cleaned by</span>
                         <input
                           type="text"
-                          value={log.name}
-                          disabled={readOnly}
-                          onChange={(e) => updateLog(weekKey, idx, { name: e.target.value })}
-                          placeholder="Who cleaned it"
-                          className="w-full mt-0.5 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 disabled:bg-gray-50"
+                          value={log.name || actorName}
+                          disabled
+                          readOnly
+                          placeholder="Sign in to record your name"
+                          title="Recorded automatically from your signed-in account"
+                          className="w-full mt-0.5 px-2 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-900 bg-gray-50"
                         />
                       </label>
                     </div>
@@ -614,6 +622,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
                   (n, l) => n + l.before.length + l.after.length,
                   0,
                 );
+                const names = [...new Set(Object.values(week).filter(hasContent).map((l) => l.name || "Staff not recorded"))];
                 return (
                   <div key={key} className="bg-white rounded-xl border border-gray-200 p-4">
                     <div className="flex items-center justify-between">
@@ -622,6 +631,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
                         <p className="text-xs text-gray-500">
                           {logged}/{cleaningTasks.length} tasks · {photos} photos
                         </p>
+                        <p className="text-xs text-gray-400">Cleaned by {names.join(", ")}</p>
                       </div>
                       <div className="flex gap-3">
                         <button
