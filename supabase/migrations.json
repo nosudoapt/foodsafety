@@ -144,6 +144,11 @@
       "step": 30,
       "file": "schema-platform-admin.sql",
       "description": "Platform admin — app_activity page-visit tracking (powers recently/most used links and the owner heatmap) and platform_plans client billing rows."
+    },
+    {
+      "step": 31,
+      "file": "schema-compliance-second-attachment.sql",
+      "description": "Compliance renewals — second attachment slot (other_file_name / other_file_url) beside the renewal certificate."
     }
   ]
 }

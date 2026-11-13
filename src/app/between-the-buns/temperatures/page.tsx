@@ -217,7 +217,7 @@ function SheetTable({ date, onDateChange, maxDate, static: isStatic, cells, onDr
             : TEMPERATURE_SHEET_SLOTS.map((slot) => {
               const state = cells(row.label, slot);
               const unit = row.kind === "sanitizer" ? "PPM" : "°C";
-              return <td key={slot} className={state.unsafe ? "temperature-sheet__unsafe" : state.warn ? "temperature-sheet__warn" : undefined}>
+              return <td key={slot} className={state.unsafe ? "temperature-sheet__unsafe" : state.warn ? "temperature-sheet__warn" : state.saved ? "temperature-sheet__ok" : undefined}>
                 {state.saved || isStatic
                   ? <span className="temperature-sheet__value">{state.text}</span>
                   : <span className="temperature-sheet__field">

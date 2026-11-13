@@ -18,13 +18,15 @@ interface Doc {
   name: string;
   file_name: string | null;
   file_url: string | null;
+  other_file_name?: string | null;
+  other_file_url?: string | null;
   expiry_date: string;
   notes: string;
   notify?: boolean | null;
   notify_days?: number | null;
 }
 
-const COLUMNS = "id, doc_type, name, file_name, file_url, expiry_date, notes, notify, notify_days";
+const COLUMNS = "id, doc_type, name, file_name, file_url, other_file_name, other_file_url, expiry_date, notes, notify, notify_days";
 
 /** Insurance certificates, licences and PDFs — the same ceiling staff
  * certificates use (src/app/between-the-buns/staff-licenses). */
@@ -58,6 +60,9 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
   const [notes, setNotes] = useState("");
   const [preset, setPreset] = useState("other");
   const [file, setFile] = useState<File | null>(null);
+  // Second slot: a supporting document that isn't the renewal certificate
+  // itself — receipt, inspection report, photo. Stored in other_file_url.
+  const [otherFile, setOtherFile] = useState<File | null>(null);
   // Reminder timing — chosen inside the upload flow itself: keep the type's
   // smart default, pick a fixed window, or turn reminders off. No separate toggle.
   const [notifyChoice, setNotifyChoice] = useState("default");
@@ -97,17 +102,19 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
       // beside the expiry date as a data URL, the same pattern the staff
       // licence register and Document Vault use.
       const attachment = file ? await fileToDataUrl(file) : null;
+      const otherAttachment = otherFile ? await fileToDataUrl(otherFile) : null;
       const notify = notifyChoice !== "none";
       const notifyDays = notify && notifyChoice !== "default" ? Number(notifyChoice) : null;
       const { data, error } = await supabase.from("compliance_documents").insert({
         restaurant_name: restaurant, doc_type: preset, name: name.trim(), expiry_date: expiry,
         notes: notes.trim(), location_id: locationId, notify, notify_days: notifyDays,
         ...(file ? { file_name: file.name, file_url: attachment } : {}),
+        ...(otherFile ? { other_file_name: otherFile.name, other_file_url: otherAttachment } : {}),
       }).select(COLUMNS).abortSignal(AbortSignal.timeout(15_000)).single();
       if (error || !data) throw new Error("The renewal wasn’t saved. Your details are still here; please try again.");
       setRows((current) => [...current, data as Doc]);
       setNotice(`${name.trim()} added to the renewal register.`);
-      setName(""); setExpiry(""); setNotes(""); setFile(null); setOpen(false); setAttentionOnly(false);
+      setName(""); setExpiry(""); setNotes(""); setFile(null); setOtherFile(null); setOpen(false); setAttentionOnly(false);
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : "The renewal couldn’t be saved.");
     } finally { setSaving(false); }
@@ -133,7 +140,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
   const visible = attentionOnly ? alerts : sorted;
   const actions = <div className="ui-actions">
     <Badge accent={loading || loadError || !rows.length ? "slate" : alerts.length ? "amber" : "green"}>{loading ? "Loading renewals…" : loadError ? "Status unavailable" : !rows.length ? "No renewals yet" : alerts.length ? `${alerts.length} need attention` : "All current"}</Badge>
-    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setNotifyChoice("default"); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
+    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setOtherFile(null); setNotifyChoice("default"); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
   </div>;
 
   return <div className="compliance-workspace">
@@ -157,7 +164,8 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
             <div className="compliance-row__body"><h3>{row.name}</h3><p>{type.label} · {new Date(`${row.expiry_date}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>{row.notes && <p>{row.notes}</p>}</div>
             <Badge accent={LEVEL_ACCENT[level]}>{expiryLabel(row.expiry_date)}</Badge>
             {row.notify === false && <span className="ui-icon ui-tone--slate" title="Reminders are off for this document"><BellOff size={17} aria-hidden="true" /></span>}
-            {row.file_url && <button className="ui-iconbutton" aria-label={`Download ${row.file_name ?? row.name}`} title={row.file_name ?? "Download"} onClick={() => downloadDataUrl(row.file_url!, row.file_name ?? `${row.name}.pdf`)}><Download size={17} aria-hidden="true" /></button>}
+            {row.file_url && <button className="ui-iconbutton" aria-label={`Download renewal certificate for ${row.name}`} title={`Certificate: ${row.file_name ?? "download"}`} onClick={() => downloadDataUrl(row.file_url!, row.file_name ?? `${row.name}.pdf`)}><Download size={17} aria-hidden="true" /></button>}
+            {row.other_file_url && <button className="ui-iconbutton" aria-label={`Download other attachment for ${row.name}`} title={`Other attachment: ${row.other_file_name ?? "download"}`} onClick={() => downloadDataUrl(row.other_file_url!, row.other_file_name ?? `${row.name}-attachment.pdf`)}><FileText size={17} aria-hidden="true" /></button>}
             {!readOnly && <button disabled={!!deletingId} onClick={() => remove(row)} className="ui-iconbutton ui-iconbutton--danger" aria-label={`Delete ${row.name}`}><Trash2 size={17} aria-hidden="true" /></button>}
           </article>;
         })}</div>
@@ -182,14 +190,20 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
             </label>
           </div>
           <label htmlFor={`${formId}-notes`}>Notes <span>(optional)</span><Input id={`${formId}-notes`} maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Renewal contact or reference" /></label>
-          <div><label htmlFor={`${formId}-file`}>Certificate or document <span>(optional)</span></label><input id={`${formId}-file`} className="mt-2" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(event) => {
+          <div><label htmlFor={`${formId}-file`}>Renewal certificate or document <span>(optional)</span></label><input id={`${formId}-file`} className="mt-2" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(event) => {
             const picked = event.target.files?.[0] || null;
             if (picked && picked.size > MAX_FILE_BYTES) { setFormError("Choose a file no larger than 5 MB."); event.target.value = ""; return; }
             setFormError(""); setFile(picked);
           }} /><small>PDF, image or Word document — e.g. the signed insurance certificate, business licence or lease. Maximum 5 MB.</small></div>
+          <div><label htmlFor={`${formId}-other-file`}>Other attachment <span>(optional)</span></label><input id={`${formId}-other-file`} className="mt-2" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(event) => {
+            const picked = event.target.files?.[0] || null;
+            if (picked && picked.size > MAX_FILE_BYTES) { setFormError("Choose a file no larger than 5 MB."); event.target.value = ""; return; }
+            setFormError(""); setOtherFile(picked);
+          }} /><small>A supporting file that isn’t the certificate itself — receipt, inspection report, photo of the document. Maximum 5 MB.</small></div>
           {file && <p className="text-sm text-gray-600"><FileText size={14} className="inline-block align-[-2px]" aria-hidden="true" /> Attached: {file.name} ({formatFileSize(file.size)})</p>}
+          {otherFile && <p className="text-sm text-gray-600"><FileText size={14} className="inline-block align-[-2px]" aria-hidden="true" /> Other attachment: {otherFile.name} ({formatFileSize(otherFile.size)})</p>}
         </fieldset>
-        <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={() => { setFile(null); setOpen(false); }}>Cancel</Button><Button type="submit" disabled={saving || !name.trim() || !expiry}>{saving ? "Saving renewal…" : "Save renewal"}</Button></div>
+        <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={() => { setFile(null); setOtherFile(null); setOpen(false); }}>Cancel</Button><Button type="submit" disabled={saving || !name.trim() || !expiry}>{saving ? "Saving renewal…" : "Save renewal"}</Button></div>
       </form>
     </Modal>}
   </div>;

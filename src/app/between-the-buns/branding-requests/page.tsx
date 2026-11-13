@@ -416,7 +416,7 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
         </label>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="text-sm grow min-w-[12rem]">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Your email (designer replies here)</span>
+            <span className="block text-xs font-medium text-slate-500 mb-1">Your email (vendor replies here)</span>
             <Input
               accent="amber"
               type="email"

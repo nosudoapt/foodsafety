@@ -40,10 +40,18 @@
 .temperature-sheet__input::-webkit-outer-spin-button, .temperature-sheet__input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 .temperature-sheet__input[type="number"] { appearance: textfield; appearance: textfield; -moz-appearance: textfield; }
 /* Out of range: a red box around the reading — on the input while typing and
-   on the saved value afterwards, since the class lives on the shared cell. */
-.temperature-sheet__unsafe { color: var(--danger); font-weight: 600; background: var(--danger-soft); box-shadow: inset 0 0 0 1.5px var(--danger); border-radius: 8px; }
+   on the saved value afterwards, since the class lives on the shared cell.
+   Bright, high-contrast fills so the state reads at a glance on screen. */
+.temperature-sheet__unsafe { color: #7f1d1d; font-weight: 700; background: #f87171; box-shadow: inset 0 0 0 2px #b91c1c; border-radius: 8px; }
 /* Above target but inside the owner's tolerance (e.g. a cooler at 4.2 °C). */
-.temperature-sheet__warn { color: var(--warning, #b45309); font-weight: 600; }
+.temperature-sheet__warn { color: #713f12; font-weight: 700; background: #fbbf24; box-shadow: inset 0 0 0 2px #d97706; border-radius: 8px; }
+/* In range: bright green fill so a completed, safe sheet is obvious. */
+.temperature-sheet__ok { color: #14532d; font-weight: 700; background: #86efac; box-shadow: inset 0 0 0 2px #22c55e; border-radius: 8px; }
+@media print {
+  .temperature-sheet__ok { background: #eafff0; box-shadow: inset 0 0 0 1.5px #22c55e; }
+  .temperature-sheet__warn { background: #fff7e0; box-shadow: inset 0 0 0 1.5px #d97706; }
+  .temperature-sheet__unsafe { background: #ffecec; box-shadow: inset 0 0 0 1.5px #b91c1c; }
+}
 /* Compact history: one collapsed row per day, opening the full sheet on tap. */
 .temperature-history__day details > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; padding: 4px 0; min-height: 44px; }
 .temperature-history__day details > summary::-webkit-details-marker { display: none; }
