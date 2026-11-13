@@ -42,6 +42,16 @@ export function complianceType(value: string): ComplianceType {
   return COMPLIANCE_TYPES.find((t) => t.value === value) ?? COMPLIANCE_TYPES[COMPLIANCE_TYPES.length - 1];
 }
 
+// Per-document "when to notify" choices offered in the upload forms. A row
+// carries notify_days = null to keep the type's smart default.
+export const REMINDER_LEAD_OPTIONS: readonly number[] = [90, 60, 30, 14, 7, 0];
+
+/** Effective in-app/email lead for a row: the document's own window or the type default. */
+export function effectiveNotifyDays(rowNotifyDays: number | null | undefined, docType: string): number {
+  if (typeof rowNotifyDays === "number" && Number.isFinite(rowNotifyDays)) return Math.max(0, Math.min(365, rowNotifyDays));
+  return complianceType(docType).notifyDays;
+}
+
 export function daysUntil(date: string | null | undefined): number | null {
   if (!date) return null;
   const ms = new Date(date + "T00:00:00").getTime() - new Date().setHours(0, 0, 0, 0);
@@ -95,11 +105,13 @@ export function isAlertLevel(level: ExpiryLevel): boolean {
 export function sortByUrgency<T>(
   rows: readonly T[],
   docType: (row: T) => string,
-  expiry: (row: T) => string | null | undefined
+  expiry: (row: T) => string | null | undefined,
+  notifyDays?: (row: T) => number | null | undefined
 ): T[] {
+  const lead = (row: T): number => effectiveNotifyDays(notifyDays?.(row), docType(row));
   return [...rows].sort((a, b) => {
-    const la = expiryLevel(expiry(a), complianceType(docType(a)).notifyDays);
-    const lb = expiryLevel(expiry(b), complianceType(docType(b)).notifyDays);
+    const la = expiryLevel(expiry(a), lead(a));
+    const lb = expiryLevel(expiry(b), lead(b));
     if (URGENCY_RANK[la] !== URGENCY_RANK[lb]) return URGENCY_RANK[la] - URGENCY_RANK[lb];
     return (daysUntil(expiry(a)) ?? 1e9) - (daysUntil(expiry(b)) ?? 1e9);
   });
@@ -109,9 +121,11 @@ export function sortByUrgency<T>(
 export function alertsFrom<T>(
   rows: readonly T[],
   docType: (row: T) => string,
-  expiry: (row: T) => string | null | undefined
+  expiry: (row: T) => string | null | undefined,
+  notifyDays?: (row: T) => number | null | undefined
 ): T[] {
-  return sortByUrgency(rows, docType, expiry).filter((r) =>
-    isAlertLevel(expiryLevel(expiry(r), complianceType(docType(r)).notifyDays))
+  const lead = (row: T): number => effectiveNotifyDays(notifyDays?.(row), docType(row));
+  return sortByUrgency(rows, docType, expiry, notifyDays).filter((r) =>
+    isAlertLevel(expiryLevel(expiry(r), lead(r)))
   );
 }

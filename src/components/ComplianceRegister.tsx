@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Check, CircleAlert, Bell, BellOff, Download, FileText, Info, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, CircleAlert, BellOff, Download, FileText, Info, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
@@ -9,7 +9,7 @@ import Modal from "@/components/Modal";
 import { downloadDataUrl, fileToDataUrl, formatFileSize } from "@/lib/files";
 import {
   DOC_ROUTING_HINT, COMPLIANCE_PRESETS, complianceType, expiryLevel, expiryLabel,
-  LEVEL_ACCENT, sortByUrgency, alertsFrom,
+  LEVEL_ACCENT, sortByUrgency, alertsFrom, effectiveNotifyDays, REMINDER_LEAD_OPTIONS,
 } from "@/lib/expiry";
 
 interface Doc {
@@ -21,9 +21,10 @@ interface Doc {
   expiry_date: string;
   notes: string;
   notify?: boolean | null;
+  notify_days?: number | null;
 }
 
-const COLUMNS = "id, doc_type, name, file_name, file_url, expiry_date, notes, notify";
+const COLUMNS = "id, doc_type, name, file_name, file_url, expiry_date, notes, notify, notify_days";
 
 /** Insurance certificates, licences and PDFs — the same ceiling staff
  * certificates use (src/app/between-the-buns/staff-licenses). */
@@ -57,9 +58,9 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
   const [notes, setNotes] = useState("");
   const [preset, setPreset] = useState("other");
   const [file, setFile] = useState<File | null>(null);
-  // Reminder toggle — the bell button beside the expiry date entry. On by
-  // default; switching off keeps the document registered without reminders.
-  const [notifyOn, setNotifyOn] = useState(true);
+  // Reminder timing — chosen inside the upload flow itself: keep the type's
+  // smart default, pick a fixed window, or turn reminders off. No separate toggle.
+  const [notifyChoice, setNotifyChoice] = useState("default");
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const formId = useId();
@@ -96,9 +97,11 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
       // beside the expiry date as a data URL, the same pattern the staff
       // licence register and Document Vault use.
       const attachment = file ? await fileToDataUrl(file) : null;
+      const notify = notifyChoice !== "none";
+      const notifyDays = notify && notifyChoice !== "default" ? Number(notifyChoice) : null;
       const { data, error } = await supabase.from("compliance_documents").insert({
         restaurant_name: restaurant, doc_type: preset, name: name.trim(), expiry_date: expiry,
-        notes: notes.trim(), location_id: locationId, notify: notifyOn,
+        notes: notes.trim(), location_id: locationId, notify, notify_days: notifyDays,
         ...(file ? { file_name: file.name, file_url: attachment } : {}),
       }).select(COLUMNS).abortSignal(AbortSignal.timeout(15_000)).single();
       if (error || !data) throw new Error("The renewal wasn’t saved. Your details are still here; please try again.");
@@ -125,12 +128,12 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
     } finally { setDeletingId(null); }
   }
 
-  const sorted = sortByUrgency(rows, (row) => row.doc_type, (row) => row.expiry_date);
-  const alerts = alertsFrom(rows, (row) => row.doc_type, (row) => row.expiry_date);
+  const sorted = sortByUrgency(rows, (row) => row.doc_type, (row) => row.expiry_date, (row) => row.notify_days);
+  const alerts = alertsFrom(rows, (row) => row.doc_type, (row) => row.expiry_date, (row) => row.notify_days);
   const visible = attentionOnly ? alerts : sorted;
   const actions = <div className="ui-actions">
     <Badge accent={loading || loadError || !rows.length ? "slate" : alerts.length ? "amber" : "green"}>{loading ? "Loading renewals…" : loadError ? "Status unavailable" : !rows.length ? "No renewals yet" : alerts.length ? `${alerts.length} need attention` : "All current"}</Badge>
-    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setNotifyOn(true); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
+    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setNotifyChoice("default"); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
   </div>;
 
   return <div className="compliance-workspace">
@@ -148,7 +151,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
       {visible.length === 0 ? <Card className="ui-empty"><ShieldCheck size={32} aria-hidden="true" /><h2>{attentionOnly ? "No renewals need attention" : "Keep your next renewal in sight"}</h2><p>{attentionOnly ? "Your saved renewals are outside their reminder windows." : "Add an expiry date to start tracking a licence, permit or agreement."}</p></Card> : (
         <div className="space-y-3">{visible.map((row) => {
           const type = complianceType(row.doc_type);
-          const level = expiryLevel(row.expiry_date, type.notifyDays);
+          const level = expiryLevel(row.expiry_date, effectiveNotifyDays(row.notify_days, row.doc_type));
           return <article key={row.id} className="ui-card compliance-row" aria-label={row.name}>
             <span className={`ui-icon ui-tone--${LEVEL_ACCENT[level]}`}><ShieldCheck size={21} aria-hidden="true" /></span>
             <div className="compliance-row__body"><h3>{row.name}</h3><p>{type.label} · {new Date(`${row.expiry_date}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>{row.notes && <p>{row.notes}</p>}</div>
@@ -167,10 +170,16 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
           <div><span className="block text-sm font-medium text-gray-600 mb-2" id={`${formId}-type`}>Renewal type</span><div className="ui-actions" role="group" aria-labelledby={`${formId}-type`}>{COMPLIANCE_PRESETS.map((value) => <Button key={value} variant={preset === value ? "soft" : "ghost"} aria-pressed={preset === value} onClick={() => setPreset(value)}>{complianceType(value).label}</Button>)}</div></div>
           <label htmlFor={`${formId}-name`}>Name<Input id={`${formId}-name`} data-modal-autofocus required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Food premises licence" /></label>
           <div className="ui-actions">
-            <label htmlFor={`${formId}-expiry`} className="grow">Expiry date<Input id={`${formId}-expiry`} type="date" required value={expiry} onChange={(event) => setExpiry(event.target.value)} /><small>Reminder window: {complianceType(preset).notifyDays} days before expiry.</small></label>
-            <Button type="button" variant={notifyOn ? "soft" : "ghost"} aria-pressed={notifyOn} title={notifyOn ? "Reminders are on" : "Reminders are off"} onClick={() => setNotifyOn((on) => !on)}>
-              {notifyOn ? <Bell size={17} aria-hidden="true" /> : <BellOff size={17} aria-hidden="true" />}{notifyOn ? "Remind me" : "No reminder"}
-            </Button>
+            <label htmlFor={`${formId}-expiry`} className="grow">Expiry date<Input id={`${formId}-expiry`} type="date" required value={expiry} onChange={(event) => setExpiry(event.target.value)} /><small>{notifyChoice === "none" ? "No reminder — the register still shows the expiry." : `Reminder window: ${notifyChoice === "default" ? complianceType(preset).notifyDays : notifyChoice} days before expiry.`}</small></label>
+            <label htmlFor={`${formId}-notify`} className="grow-0" style={{ minWidth: "13rem" }}>When to notify
+              <select id={`${formId}-notify`} value={notifyChoice} onChange={(event) => setNotifyChoice(event.target.value)}>
+                <option value="default">Type default ({complianceType(preset).notifyDays} days before)</option>
+                {REMINDER_LEAD_OPTIONS.map((days) => (
+                  <option key={days} value={days}>{days === 0 ? "On the due date" : `${days} days before expiry`}</option>
+                ))}
+                <option value="none">No reminder</option>
+              </select>
+            </label>
           </div>
           <label htmlFor={`${formId}-notes`}>Notes <span>(optional)</span><Input id={`${formId}-notes`} maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Renewal contact or reference" /></label>
           <div><label htmlFor={`${formId}-file`}>Certificate or document <span>(optional)</span></label><input id={`${formId}-file`} className="mt-2" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(event) => {

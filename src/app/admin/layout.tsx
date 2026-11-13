@@ -1,5 +1,11 @@
 import AppShell from "@/components/AppShell";
+import ActivityTracker from "@/components/ActivityTracker";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+  return (
+    <AppShell>
+      <ActivityTracker />
+      {children}
+    </AppShell>
+  );
 }

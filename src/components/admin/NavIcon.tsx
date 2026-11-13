@@ -33,6 +33,7 @@ import {
   Bug,
   ChartNoAxesCombined,
   Settings,
+  Globe,
 } from "lucide-react";
 import type { NavIcon as NavIconName } from "@/lib/admin-nav";
 
@@ -65,6 +66,7 @@ const MAP: Record<NavIconName, typeof Circle> = {
   pest: Bug,
   reports: ChartNoAxesCombined,
   settings: Settings,
+  platform: Globe,
 };
 
 export function NavIcon({ name, size = 16 }: { name: NavIconName; size?: number }) {

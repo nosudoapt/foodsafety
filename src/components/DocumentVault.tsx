@@ -16,7 +16,7 @@ import { getProfileContext } from "@/lib/profile";
 import { fetchJson } from "@/lib/fetch-json";
 import { BTB_UPLOAD_MAX_BYTES, type BtbUploaderConnection } from "@/lib/btb-uploads";
 import { downloadDataUrl, fileToDataUrl, formatFileSize } from "@/lib/files";
-import { DOC_ROUTING_HINT } from "@/lib/expiry";
+import { DOC_ROUTING_HINT, REMINDER_LEAD_OPTIONS, COMPLIANCE_PRESETS, complianceType } from "@/lib/expiry";
 import { Card, PageHeader, Button, Input, Badge } from "@/components/ui";
 import Modal from "@/components/Modal";
 import { jsonRequest } from "@/components/btb/Feedback";
@@ -71,6 +71,11 @@ function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = tru
   const [name, setName] = useState("");
   const [notes, setNotes] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  // Optional expiry — attach it here and the upload lands in the Renewals
+  // register with its reminder timing, instead of the plain-file vault.
+  const [expiry, setExpiry] = useState("");
+  const [docType, setDocType] = useState("other");
+  const [notifyChoice, setNotifyChoice] = useState("default");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formId = useId();
   const independentWorkspace = !!uploader;
@@ -109,31 +114,60 @@ function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = tru
     if (readOnly || !uploadConnected || !file || !name.trim() || saving || !restaurant) return;
     setSaving(true);
     setUploadError(""); setNotice("");
+    let document: VaultRow | null = null;
     try {
-      let document: VaultRow;
+      // An expiry date routes the upload to the Renewals register (with the
+      // chosen reminder timing); without one it stays a plain file here.
+      const expiring = !!expiry;
       if (independentWorkspace) {
         if (file.size > BTB_UPLOAD_MAX_BYTES) throw new Error("Choose a file no larger than 3 MB.");
-        const result = await fetchJson<{ document: VaultRow }>("/api/btb/documents", jsonRequest({ name: name.trim(), notes: notes.trim(), file: { name: file.name, url: await fileToDataUrl(file) } }));
-        document = result.document;
+        const result = await fetchJson<{ document: VaultRow | null; routedToRenewals?: boolean }>(
+          "/api/btb/documents",
+          jsonRequest({
+            name: name.trim(), notes: notes.trim(),
+            ...(expiring ? { expiry_date: expiry, doc_type: docType, notify: notifyChoice !== "none", notify_days: notifyChoice !== "none" && notifyChoice !== "default" ? Number(notifyChoice) : null } : {}),
+            file: { name: file.name, url: await fileToDataUrl(file) },
+          }));
+        if (result.routedToRenewals) {
+          setNotice(`${name.trim()} saved to the Renewals register with its reminder.`);
+          setShowUpload(false); setName(""); setNotes(""); setFile(null); setExpiry(""); setNotifyChoice("default"); setDocType("other");
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          return;
+        }
+        document = result.document as VaultRow;
       } else {
         const ctx = await getProfileContext();
         if (!ctx || ctx.restaurantName !== restaurant) throw new Error("Your profile is unavailable. Sign in again, then retry this upload.");
         const userId = ctx.userId;
+        if (expiring) {
+          const notify = notifyChoice !== "none";
+          const { data, error } = await supabase.from("compliance_documents").insert({
+            restaurant_name: restaurant, doc_type: docType, name: name.trim(), expiry_date: expiry,
+            notes: notes.trim(), notify, notify_days: notify && notifyChoice !== "default" ? Number(notifyChoice) : null,
+            user_id: userId, uploaded_by: userId,
+            ...(file ? { file_name: file.name, file_url: await fileToDataUrl(file) } : {}),
+          }).select("id").abortSignal(AbortSignal.timeout(15_000)).single();
+          if (error || !data) throw new Error("The upload wasn't saved to Renewals. Your file and details are still here; please try again.");
+          setNotice(`${name.trim()} saved to the Renewals register with its reminder.`);
+          setShowUpload(false); setName(""); setNotes(""); setFile(null); setExpiry(""); setNotifyChoice("default"); setDocType("other");
+          if (fileInputRef.current) fileInputRef.current.value = "";
+          return;
+        }
         const { data, error } = await supabase.from("business_documents").insert({
           user_id: userId, uploaded_by: userId, restaurant_name: restaurant,
           doc_type: "other", name: name.trim(), file_name: file.name,
           file_url: await fileToDataUrl(file), file_size: file.size, expiry_date: null, notes: notes.trim(),
         }).select(SELECT).abortSignal(AbortSignal.timeout(15_000)).single();
-        if (error || !data) throw new Error("The document wasn’t uploaded. Your file and details are still here; please try again.");
+        if (error || !data) throw new Error("The document wasn't uploaded. Your file and details are still here; please try again.");
         document = data as VaultRow;
       }
-      setRows((prev) => [document, ...prev]);
+      setRows((prev) => [document as VaultRow, ...prev]);
       setNotice(`${name.trim()} uploaded.`);
       setShowUpload(false);
-      setName(""); setNotes(""); setFile(null);
+      setName(""); setNotes(""); setFile(null); setExpiry(""); setNotifyChoice("default"); setDocType("other");
       if (fileInputRef.current) fileInputRef.current.value = "";
     } catch (cause) {
-      setUploadError(cause instanceof Error ? cause.message : "The upload couldn’t be completed. Please try again.");
+      setUploadError(cause instanceof Error ? cause.message : "The upload couldn't be completed. Please try again.");
     } finally { setSaving(false); }
   }
 
@@ -239,15 +273,29 @@ function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = tru
         </div>
       )}
 
-      {!readOnly && <Modal open={showUpload} title="Upload document" description="Give the file a clear name so your team can find it." busy={saving} onClose={() => setShowUpload(false)}>
+      {!readOnly && <Modal open={showUpload} title="Upload document" description="Give the file a clear name so your team can find it. Add an expiry date to also get renewal reminders." busy={saving} onClose={() => setShowUpload(false)}>
         <form onSubmit={(event) => { event.preventDefault(); void upload(); }}>
           {uploadError && <div className="ui-notice ui-notice--error" role="alert">{uploadError}</div>}
           <fieldset disabled={saving} className="ui-form-stack">
             <label htmlFor={`${formId}-name`}>Document name<Input id={`${formId}-name`} data-modal-autofocus required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Kitchen opening procedure" /></label>
             <label htmlFor={`${formId}-notes`}>Notes <span>(optional)</span><Input id={`${formId}-notes`} maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="When or how to use this file" /></label>
             <div><label htmlFor={`${formId}-file`}>File</label><input id={`${formId}-file`} className="mt-2" ref={fileInputRef} required type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(event) => setFile(event.target.files?.[0] || null)} aria-describedby={`${formId}-formats`} /><small id={`${formId}-formats`}>PDF, image or Word document.{independentWorkspace && " Maximum 3 MB."}</small></div>
+            <label htmlFor={`${formId}-expiry`}>Expiry date <span>(optional — leaves the file here with no reminder)</span>
+              <Input id={`${formId}-expiry`} type="date" value={expiry} onChange={(event) => { setExpiry(event.target.value); if (!event.target.value) setNotifyChoice("default"); }} />
+            </label>
+            {expiry && <>
+              <div><span className="block text-sm font-medium text-gray-600 mb-2" id={`${formId}-type`}>Document type</span><div className="ui-actions" role="group" aria-labelledby={`${formId}-type`}>{COMPLIANCE_PRESETS.map((value) => <Button key={value} type="button" variant={docType === value ? "soft" : "ghost"} aria-pressed={docType === value} onClick={() => setDocType(value)}>{complianceType(value).label}</Button>)}</div></div>
+              <label htmlFor={`${formId}-notify`}>When to notify
+                <select id={`${formId}-notify`} value={notifyChoice} onChange={(event) => setNotifyChoice(event.target.value)}>
+                  <option value="default">Type default ({complianceType(docType).notifyDays} days before)</option>
+                  {REMINDER_LEAD_OPTIONS.map((days) => <option key={days} value={days}>{days === 0 ? "On the due date" : `${days} days before expiry`}</option>)}
+                  <option value="none">No reminder</option>
+                </select>
+                <small>With an expiry set, this file lives in the Renewals register and emails go out at the chosen window.</small>
+              </label>
+            </>}
           </fieldset>
-          <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={() => setShowUpload(false)}>Cancel</Button><Button type="submit" disabled={!file || !name.trim() || saving}>{saving ? "Uploading…" : "Upload document"}</Button></div>
+          <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={() => setShowUpload(false)}>Cancel</Button><Button type="submit" disabled={!file || !name.trim() || saving}>{saving ? "Uploading…" : expiry ? "Save to Renewals" : "Upload document"}</Button></div>
         </form>
       </Modal>}
     </div>

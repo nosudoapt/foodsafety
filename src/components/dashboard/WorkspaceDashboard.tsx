@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ArrowRight, CheckCheck, ChevronRight, CircleAlert, Clock3, MapPin, RefreshCw, Search, SearchX, ShieldCheck, Sparkles, WifiOff, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
+import RecentlyUsed from "@/components/RecentlyUsed";
 import { ROLES, isRole, roleLabel, type Role } from "@/lib/roles";
 import { DASHBOARD_VIEWS, METRICS, attentionFor, dayKey, isGroupRole, metricScope, metricsForRole, type DashboardContext, type DashboardScope, type MetricId } from "@/lib/dashboard";
 import { loadDashboard, loadLocationPulse, type DashboardResult, type LocationPulse } from "@/lib/dashboard-data";
@@ -83,6 +84,7 @@ function DashboardBody({ role, userId }: { role: Role; userId: string }) {
 
   return (
     <div className="dash" data-role={role}>
+      <RecentlyUsed />
       <header className="dash__heading">
         <div>
           <p className="dash__eyebrow">{roleLabel(role)} overview <span aria-hidden="true" /> {new Date().toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</p>

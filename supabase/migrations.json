@@ -139,6 +139,11 @@
       "step": 29,
       "file": "schema-november-13-updates.sql",
       "description": "13 Nov 2026 updates — branding: qty + combo request items columns; shifts: duty CHECK accepts prep and none (duties optional); compliance: notify reminder toggle column."
+    },
+    {
+      "step": 30,
+      "file": "schema-platform-admin.sql",
+      "description": "Platform admin — app_activity page-visit tracking (powers recently/most used links and the owner heatmap) and platform_plans client billing rows."
     }
   ]
 }

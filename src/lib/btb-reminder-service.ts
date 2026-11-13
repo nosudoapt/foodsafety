@@ -18,14 +18,17 @@ export async function loadReminderSettings(db: SupabaseClient): Promise<Reminder
 
 export async function loadReminderDocuments(db: SupabaseClient): Promise<ReminderDocument[]> {
   const [business, staff, corporate] = await Promise.all([
-    readAll<{ id: string; name: string; expiry_date: string }>((from, to) => db.from("compliance_documents").select("id,name,expiry_date").eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).not("expiry_date", "is", null).order("id").range(from, to), "Business licence dates could not be loaded."),
+    readAll<{ id: string; name: string; expiry_date: string; notify?: boolean | null; notify_days?: number | null }>((from, to) => db.from("compliance_documents").select("id,name,expiry_date,notify,notify_days").eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).not("expiry_date", "is", null).order("id").range(from, to), "Business licence dates could not be loaded."),
     readAll<{ id: string; staff_name: string; license_type: string; expiry_date: string }>((from, to) => db.from("btb_staff_licences").select("id,staff_name,license_type,expiry_date").eq("restaurant_name", BTB_RESTAURANT).not("expiry_date", "is", null).order("id").range(from, to), "Staff certificate dates could not be loaded."),
     // Tax / renewal deadlines (corporate_dates): company-wide rows, like the
     // business licences; site-scoped rows show in the location record instead.
     readAll<{ id: string; title: string; category: string; due_date: string; recurrence: string }>((from, to) => db.from("corporate_dates").select("id,title,category,due_date,recurrence").is("location_id", null).order("id").range(from, to), "Tax and renewal deadlines could not be loaded."),
   ]);
   return [
-    ...business.map((row): ReminderDocument => ({ ...row, source: "business" })),
+    // A document can opt out of emails (notify = false) or carry its own lead
+    // time (notify_days), which overrides the global reminder windows for it.
+    ...business.filter((row) => row.notify !== false)
+      .map((row): ReminderDocument => ({ ...row, source: "business", notify_days: row.notify_days ?? null })),
     ...staff.map((row): ReminderDocument => ({ id: row.id, name: `${row.staff_name} · ${licenceTypeLabel(row.license_type)}`, expiry_date: row.expiry_date, source: "staff" })),
     ...corporate.map((row): ReminderDocument => ({ id: row.id, name: `${row.title} (${row.category})`, expiry_date: nextDueDate(row.due_date, row.recurrence), source: "tax" })),
   ].sort((a, b) => a.expiry_date.localeCompare(b.expiry_date) || a.name.localeCompare(b.name));
@@ -66,7 +69,11 @@ export async function dispatchLicenceReminders(db: SupabaseClient, { limit = 30,
       const recipients = [...new Set([...settings.manager_emails, ...settings.corporate_emails].map((email) => email.toLowerCase()))];
       const today = btbToday();
       const candidates = documents.flatMap((document) => {
-        const lead = reminderLead(document.expiry_date, today, settings.lead_days);
+        // A per-document window (chosen when the document was uploaded) overrides
+        // the global reminder windows; the reminder lands at the nearest reached
+        // lead among the days still ahead, including the due-date reminder (0).
+        const windows = typeof document.notify_days === "number" ? [document.notify_days] : settings.lead_days;
+        const lead = reminderLead(document.expiry_date, today, windows);
         return lead === null ? [] : recipients.map((recipient) => ({ document, lead, recipient }));
       });
       let attempted = 0;

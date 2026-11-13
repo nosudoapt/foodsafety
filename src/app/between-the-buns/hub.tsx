@@ -12,6 +12,7 @@ import { BTB_ROLE_LABELS, BTB_ROLES, type BtbRole } from "@/lib/btb-roles";
 import { btbCanEdit } from "@/lib/btb-access";
 import { btbToday } from "@/lib/btb-team";
 import { fetchJson } from "@/lib/fetch-json";
+import RecentlyUsed from "@/components/RecentlyUsed";
 import TrainingDashboardPanel from "@/components/btb/TrainingProgress";
 
 export default function BtbHub({ role: initialRole }: { role: BtbRole }) {
@@ -26,6 +27,7 @@ function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtb
   const [query, setQuery] = useState("");
   const [revision, setRevision] = useState(0);
   const [snapshot, setSnapshot] = useState<{ revision: number; data: BtbOverview | null; error: string } | null>(null);
+  const recently = <RecentlyUsed />;
   const loaded = snapshot?.revision === revision;
   const result = loaded ? snapshot.data : null;
   const overviewDay = result?.day ?? btbToday();
@@ -53,6 +55,7 @@ function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtb
   }, [revision]);
 
   return <div className="dash btb-overview" data-role={role}>
+    {recently}
     <header className="dash__heading"><div><p className="dash__eyebrow">{BTB_ROLE_LABELS[role]} overview<span aria-hidden="true" /><time dateTime={overviewDay}>{new Date(`${overviewDay}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</time></p><h1>{view.title}</h1><p className="dash__intro">{view.subtitle}</p></div><div className="dash__heading-actions"><a className="ui-button ui-button--ghost" href="#btb-tools">Explore your tools</a>{primary && <Link className="ui-button" href={primary.href}>{primary.title}<ArrowRight size={16} aria-hidden="true" /></Link>}</div></header>
     <div className="dash__toolbar"><span className="dash__scope"><span className="btb-subnav__dot" aria-hidden="true" />Between the Buns · saved workspace records</span><div className="dash__toolbar-right"><span className="dash__updated" role="status">{!loaded ? "Updating your overview…" : error || missing.length ? "Some records are unavailable" : `Updated ${new Date(result!.updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`}</span><button className="dash__refresh" aria-label="Refresh overview" aria-busy={!loaded} disabled={!loaded} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={17} aria-hidden="true" /></button></div></div>
     {(error || missing.length > 0) && <div className="ui-notice ui-notice--warning" role="status"><CircleAlert size={18} aria-hidden="true" /><div>{error || "Some counts are unavailable. Refresh to complete your overview."} <button onClick={() => setRevision((value) => value + 1)}>Try again</button></div></div>}

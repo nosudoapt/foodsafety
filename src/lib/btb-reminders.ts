@@ -5,7 +5,7 @@ export interface ReminderSettings {
   manager_emails: string[]; corporate_emails: string[]; enabled: boolean; lead_days: number[];
   version: number; updated_at: string; last_run_at: string | null; last_run_error: string | null;
 }
-export interface ReminderDocument { source: "business" | "staff" | "tax"; id: string; name: string; expiry_date: string }
+export interface ReminderDocument { source: "business" | "staff" | "tax"; id: string; name: string; expiry_date: string; notify_days?: number | null }
 export interface ReminderJob {
   id: string; source: ReminderDocument["source"]; document_id: string; document_name: string; expiry_date: string;
   lead_days: number; recipient: string; status: "pending" | "sending" | "sent" | "failed"; attempts: number;

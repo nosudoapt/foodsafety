@@ -36,7 +36,8 @@ export type NavIcon =
   | "delivery"
   | "pest"
   | "reports"
-  | "settings";
+  | "settings"
+  | "platform";
 
 export interface AdminNavItem {
   label: string;
@@ -220,6 +221,13 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         icon: "newrestaurant",
         roles: OWNER,
         keywords: "open site launch onboard",
+      },
+      {
+        label: "Platform · all clients",
+        href: "/admin/platform",
+        icon: "platform",
+        roles: OWNER,
+        keywords: "usage heatmap clients storage gb compute pricing plans billing super admin",
       },
     ],
   },

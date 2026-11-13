@@ -9,6 +9,7 @@ const OPS = OPERATIONAL_ROLES as string[];
 // anyone else to /admin.
 export const ADMIN_ROUTE_ROLES: { prefix: string; roles: string[] }[] = [
   { prefix: "/admin/vault", roles: OWNER },
+  { prefix: "/admin/platform", roles: OWNER },
   { prefix: "/admin/new-restaurant", roles: OWNER },
   { prefix: "/admin/compliance", roles: MGMT },
   { prefix: "/admin/documents", roles: MGMT },

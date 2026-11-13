@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ArrowLeft, ArrowUpRight, LogOut, Search } from "lucide-react";
 import BtbWordmark from "@/components/BtbWordmark";
 import { BtbPageBoundary } from "@/components/BtbFeatureGate";
+import ActivityTracker from "@/components/ActivityTracker";
 import { BtbWorkspaceProvider, useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
 import { searchBtbCards } from "@/lib/btb-dashboard";
 import { btbCardForPath } from "@/lib/btb-page-access";
@@ -16,7 +17,7 @@ import "@/app/btb-operations.css";
 export default function BetweenTheBunsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   if (pathname === "/between-the-buns/login") return <>{children}</>;
-  return <BtbWorkspaceProvider><BtbShell>{children}</BtbShell></BtbWorkspaceProvider>;
+  return <BtbWorkspaceProvider><ActivityTracker /><BtbShell>{children}</BtbShell></BtbWorkspaceProvider>;
 }
 
 function BtbShell({ children }: { children: React.ReactNode }) {
