@@ -23,32 +23,38 @@ test("negative freezer readings and exact target boundaries are handled correctl
 });
 
 test("the daily sheet flags against the client's standing standards", () => {
-  // Coolers hold at or below 4.5 °C (41 °F), freezers at or below −18 °C (0 °F)
-  // — ceilings, not bands: a reading colder than the old floor is still safe.
-  const day = "2026-11-10";
+  // Coolers: green at 1–3 °C (anything colder still fine — a ceiling), amber at
+  // 4 °C, red above 4 °C. Freezers: green at −18 °C or colder, amber −17 to
+  // −12 °C, red warmer than −12 °C.
+  const day = "2026-11-13";
   const freezer = parseTemperatureSheet({ date: day, cells: [{ label: "FREEZER-1", slot: "11:00", value: "-25" }] }, day);
-  assert.equal(freezer.value?.cells[0].max_safe_temp, -18);
-  assert.equal(freezer.value?.cells[0].min_safe_temp, -273.15, "at or below −18 °C is a ceiling, not a −24 band");
-  const cooler = parseTemperatureSheet({ date: day, cells: [{ label: "COOLER-1", slot: "11:00", value: "4.4" }] }, day);
-  assert.equal(cooler.value?.cells[0].max_safe_temp, 4.5, "the cooler ceiling is 4.5 °C (41 °F)");
+  assert.equal(freezer.value?.cells[0].max_safe_temp, -12, "the freezer red ceiling is −12 °C");
+  assert.equal(freezer.value?.cells[0].min_safe_temp, -273.15, "colder than −18 °C is still green, not a −24 band");
+  const cooler = parseTemperatureSheet({ date: day, cells: [{ label: "COOLER-1", slot: "11:00", value: "2.5" }] }, day);
+  assert.equal(cooler.value?.cells[0].max_safe_temp, 4, "the cooler red ceiling is 4 °C");
   assert.equal(temperatureInRange(-25, -273.15, -18), true, "−25 °C freezer is safe");
-  assert.equal(temperatureInRange(-17.9, -273.15, -18), false, "−17.9 °C freezer is unsafe");
-  assert.equal(temperatureInRange(4.4, -273.15, 4.5), true, "4.4 °C cooler is safe");
-  assert.equal(temperatureInRange(4.6, -273.15, 4.5), false, "4.6 °C cooler has entered the danger zone");
+  assert.equal(temperatureInRange(-15, -273.15, -12), true, "−15 °C freezer is inside the amber band");
+  assert.equal(temperatureInRange(2, -273.15, 4), true, "2 °C cooler is in the green band");
+  assert.equal(temperatureInRange(4.4, -273.15, 4), false, "4.4 °C cooler has left the range");
 });
 
-test("the alert grades the owner's tolerance: ≤4 °C ok, 4–4.5 °C amber, above 4.5 °C red", () => {
-  // Coolers: at or below 4 °C is on target; 4 °C to 4.5 °C is the owner's
-  // tolerance and alerts amber; anything above 4.5 °C is out of range.
-  assert.equal(temperatureAlert(3.9, "cooler"), "ok");
-  assert.equal(temperatureAlert(4, "cooler"), "ok");
-  assert.equal(temperatureAlert(4.2, "cooler"), "warn");
-  assert.equal(temperatureAlert(4.5, "cooler"), "warn");
-  assert.equal(temperatureAlert(4.6, "cooler"), "unsafe");
-  // Freezers: at or below −18 °C (0 °F); anything warmer is unsafe, no tolerance.
+test("the alert grades the owner's tolerance: ≤3 °C ok, 4 °C amber, above 4 °C red; freezers ≤−18 ok, −17 to −12 amber, warmer red", () => {
+  // Coolers: 1–3 °C green, 4 °C amber, above 4 °C red.
+  assert.equal(temperatureAlert(1, "cooler"), "ok");
+  assert.equal(temperatureAlert(2.5, "cooler"), "ok");
+  assert.equal(temperatureAlert(3, "cooler"), "ok");
+  assert.equal(temperatureAlert(3.5, "cooler"), "warn");
+  assert.equal(temperatureAlert(4, "cooler"), "warn");
+  assert.equal(temperatureAlert(4.1, "cooler"), "unsafe");
+  assert.equal(temperatureAlert(4.5, "cooler"), "unsafe");
+  // Freezers: −18 °C or colder green; −17 °C to −12 °C amber; above −12 °C red.
   assert.equal(temperatureAlert(-18, "freezer"), "ok");
   assert.equal(temperatureAlert(-30, "freezer"), "ok");
-  assert.equal(temperatureAlert(-17.9, "freezer"), "unsafe");
+  assert.equal(temperatureAlert(-17.9, "freezer"), "warn");
+  assert.equal(temperatureAlert(-15, "freezer"), "warn");
+  assert.equal(temperatureAlert(-12, "freezer"), "warn");
+  assert.equal(temperatureAlert(-11.9, "freezer"), "unsafe");
+  assert.equal(temperatureAlert(-10, "freezer"), "unsafe");
   // Sanitizer keeps its 200–400 PPM band with no tolerance tier.
   assert.equal(temperatureAlert(300, "sanitizer"), "ok");
   assert.equal(temperatureAlert(150, "sanitizer"), "unsafe");

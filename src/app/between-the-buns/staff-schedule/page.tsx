@@ -70,7 +70,8 @@ function ScheduleWeek({ start, readOnly }: { start: string; readOnly: boolean })
 }
 
 function ShiftForm({ shift, start, employees, onClose, onSaved, onDeleted }: { shift: BtbShift | null; start: string; employees: TeamMember[]; onClose: () => void; onSaved: (shift: BtbShift) => void; onDeleted: (id: string) => void }) {
-  const [form, setForm] = useState({ employee_id: shift?.employee_id ?? employees.find((employee) => employee.active)?.id ?? "", shift_date: shift?.shift_date ?? start, start_time: shift?.start_time ?? "09:00", end_time: shift?.end_time ?? "17:00", ends_next_day: shift?.ends_next_day ?? false, duty: shift?.duty ?? "opening" as ShiftDuty });
+  const { identity } = useBtbWorkspace();
+  const [form, setForm] = useState({ employee_id: shift?.employee_id ?? (identity?.employeeId && employees.some((employee) => employee.id === identity.employeeId && employee.active) ? identity.employeeId : employees.find((employee) => employee.active)?.id) ?? "", shift_date: shift?.shift_date ?? start, start_time: shift?.start_time ?? "09:00", end_time: shift?.end_time ?? "17:00", ends_next_day: shift?.ends_next_day ?? false, duty: shift?.duty ?? "none" as ShiftDuty });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const save = async (event: React.FormEvent) => {
@@ -87,7 +88,7 @@ function ShiftForm({ shift, start, employees, onClose, onSaved, onDeleted }: { s
     catch (cause) { setError(messageOf(cause)); }
     finally { setSaving(false); }
   };
-  return <Modal open title={shift ? "Edit shift" : "Add shift"} description="Assign the employee, time and opening or closing responsibility." busy={saving} onClose={onClose}><form onSubmit={save}>{error && <p className="ui-notice ui-notice--error" role="alert">{error}</p>}<fieldset className="ui-form-stack" disabled={saving}>
+  return <Modal open title={shift ? "Edit shift" : "Add shift"} description="Assign the employee and time. Duty is optional — leave it on “No duty” if this shift has no opening, closing or prep responsibility." busy={saving} onClose={onClose}><form onSubmit={save}>{error && <p className="ui-notice ui-notice--error" role="alert">{error}</p>}<fieldset className="ui-form-stack" disabled={saving}>
     <label>Employee<select className="ui-input" data-modal-autofocus required value={form.employee_id} onChange={(event) => setForm({ ...form, employee_id: event.target.value })}>{employees.filter((employee) => employee.active || employee.id === form.employee_id).map((employee) => <option key={employee.id} value={employee.id} disabled={!employee.active}>{employee.name}{employee.active ? "" : " (inactive)"}</option>)}</select></label>
     <label>Date<Input type="date" required min={start} max={addDays(start, 6)} value={form.shift_date} onChange={(event) => setForm({ ...form, shift_date: event.target.value })} /></label>
     <div className="ops-form-grid"><label>Start time<Input type="time" required value={form.start_time} onChange={(event) => setForm({ ...form, start_time: event.target.value })} /></label><label>End time<Input type="time" required value={form.end_time} onChange={(event) => setForm({ ...form, end_time: event.target.value })} /></label></div>

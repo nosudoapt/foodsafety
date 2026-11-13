@@ -7,7 +7,7 @@ export type BrandingStatus = (typeof BRANDING_STATUSES)[number];
 export const BRANDING_PRIORITIES = ["low", "normal", "high", "urgent"] as const;
 export type BrandingPriority = (typeof BRANDING_PRIORITIES)[number];
 
-export const BRANDING_CATEGORIES = ["uniform", "serving_trays", "hats", "gift_cards", "flyers", "display_board", "caddies"] as const;
+export const BRANDING_CATEGORIES = ["uniform", "serving_trays", "hats", "gift_cards", "flyers", "display_board", "caddies", "table_numbers"] as const;
 export type BrandingCategory = (typeof BRANDING_CATEGORIES)[number];
 
 // Values saved before the category revamp — still accepted so old cards keep
@@ -38,6 +38,10 @@ export interface BrandingRequest {
   requested_by?: string | null;
   /** Size detail — T-shirt S–XXXL or tray Small/Large, otherwise null. */
   size?: string | null;
+  /** Quantity for single-item requests (legacy cards); capped per item. */
+  qty?: number | null;
+  /** Combo request lines — several items filed by one location together. */
+  items?: BrandingLine[] | null;
   /** Reply-to email for the requester — used by the Email designer button. */
   contact_email?: string | null;
   /** Optional pinned file (base64 data URL) + original name. */
@@ -75,16 +79,81 @@ export const statusLabel = (v: string): string => {
 
 export const priorityLabel = label;
 
-/** Card badge for a category: T-shirt, Serving trays, Display board … */
+/** Card badge for a category: T-shirt, Serving trays, Bun display board … */
 export const categoryLabel = (v: string): string => {
   if (v === "uniform") return "T-shirt";
   if (v === "serving_trays") return "Serving trays";
   if (v === "gift_cards") return "Gift cards";
-  if (v === "display_board") return "Display board";
+  if (v === "display_board") return "Bun display board";
   if (v === "caddies") return "Caddies";
   if (v === "hats") return "Hats";
+  if (v === "table_numbers") return "Table numbers";
+  if (v === "flyers") return "Flyers";
   return label(v);
 };
+
+/** Maximum quantity per item (per size where sizes apply). Flyers are ordered
+ * in print runs — see FLYER_RUNS — so they have no single numeric cap. */
+export const BRANDING_QTY_LIMITS: Record<string, number> = {
+  uniform: 10,
+  serving_trays: 30,
+  hats: 10,
+  gift_cards: 100,
+  display_board: 1,
+  caddies: 20,
+  table_numbers: 12,
+};
+
+/** Flyers are printed in runs of 5k / 10k, up to 25k. */
+export const FLYER_RUNS = [5_000, 10_000, 15_000, 20_000, 25_000] as const;
+
+/** The largest quantity a category accepts (undefined = flyers, run-based). */
+export function qtyLimitFor(category: string): number | undefined {
+  return BRANDING_QTY_LIMITS[category];
+}
+
+/** Clamp a quantity to the item's cap; flyers snap to a print run. */
+export function capQty(category: string, qty: number): number | null {
+  if (!Number.isFinite(qty) || qty <= 0) return null;
+  if (category === "flyers") {
+    const run = FLYER_RUNS.find((option) => option >= qty);
+    return run ?? FLYER_RUNS[FLYER_RUNS.length - 1];
+  }
+  const limit = qtyLimitFor(category);
+  return limit ? Math.min(Math.floor(qty), limit) : Math.floor(qty);
+}
+
+/** One line of a combo request — several items filed by a location together. */
+export interface BrandingLine {
+  category: string;
+  /** Size detail where it applies (T-shirt size, tray size), else null. */
+  size: string | null;
+  /** Quantity capped by BRANDING_QTY_LIMITS; flyers use print runs (5k–25k). */
+  qty: number | null;
+}
+
+/** Parse the `items` JSONB of a combo request: one or more valid lines. */
+export function parseBrandingLines(input: unknown): { value: BrandingLine[]; error?: never } | { error: string; value?: never } {
+  if (!Array.isArray(input) || input.length === 0 || input.length > 25) return { error: "Add at least one item line (up to 25 per combo request)." };
+  const lines: BrandingLine[] = [];
+  for (const raw of input) {
+    if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { error: "One of the item lines could not be read. Try again." };
+    const line = raw as Record<string, unknown>;
+    if (typeof line.category !== "string" || !isCategory(line.category)) return { error: "Choose a valid item type for every line." };
+    const sizes = sizesFor(line.category);
+    if (line.size != null && (typeof line.size !== "string" || !sizes.includes(line.size))) return { error: `Choose a valid size for ${categoryLabel(line.category)}.` };
+    const qty = capQty(line.category, typeof line.qty === "number" ? line.qty : NaN);
+    if (qty === null) return { error: `Enter a quantity for ${categoryLabel(line.category)}${line.size ? ` (${line.size})` : ""}.` };
+    lines.push({ category: line.category, size: line.size ?? null, qty });
+  }
+  return { value: lines };
+}
+
+/** Short human summary of one line, e.g. "T-shirt (L) × 10". */
+export function brandingLineLabel(line: BrandingLine): string {
+  const qty = line.category === "flyers" && line.qty ? line.qty.toLocaleString("en-CA") : line.qty;
+  return `${categoryLabel(line.category)}${line.size ? ` (${line.size})` : ""} × ${qty}`;
+}
 
 /** Board column / badge colour. */
 export function statusAccent(v: string): "red" | "amber" | "purple" | "green" | "slate" {

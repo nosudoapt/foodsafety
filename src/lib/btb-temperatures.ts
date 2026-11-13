@@ -93,16 +93,16 @@ export const TEMPERATURE_SHEET_ROWS: readonly { label: string; kind: Temperature
   { label: "", kind: "blank" },
 ];
 
-/** The restaurant's standing standards (client-confirmed 10 Nov 2026),
- * pre-printed on the form. Coolers hold at or below 4.5 °C (41 °F; target
- * 4 °C) and freezers at or below −18 °C (0 °F) — both are ceilings, so a
- * reading colder than the floor of the band is still safe, and the range's
- * lower bound is simply the coldest value the sheet accepts. The Quat
+/** The restaurant's standing standards (client-confirmed 13 Nov 2026),
+ * pre-printed on the form and graded green/amber/red. Coolers: 1–3 °C is
+ * green (anything colder is still fine — it is a ceiling), 4 °C is amber and
+ * anything above 4 °C is red. Freezers: −18 °C or colder is green, −17 °C to
+ * −12 °C is amber, and anything warmer than −12 °C is red. The Quat
  * sanitizer bucket stays 200–400 PPM. The temperature danger zone is 4 °C to
- * 60 °C (40–140 °F): a cooler above 4.5 °C has left safe holding. */
+ * 60 °C (40–140 °F). */
 export const TEMPERATURE_SHEET_RANGES: Record<Exclude<TemperatureSheetKind, "blank">, { min: number; max: number; warnMax?: number; unit: "C" | "PPM"; record_type: TemperatureType | "sanitizer" }> = {
-  freezer: { min: -273.15, max: -18, unit: "C", record_type: "cold_storage" },
-  cooler: { min: -273.15, max: 4.5, warnMax: 4, unit: "C", record_type: "cold_storage" },
+  freezer: { min: -273.15, max: -12, warnMax: -18, unit: "C", record_type: "cold_storage" },
+  cooler: { min: -273.15, max: 4, warnMax: 3, unit: "C", record_type: "cold_storage" },
   sanitizer: { min: 200, max: 400, unit: "PPM", record_type: "sanitizer" },
 };
 
@@ -113,9 +113,10 @@ export const TEMPERATURE_DANGER_ZONE = { min: 4, max: 60 } as const;
 
 export type TemperatureAlert = "ok" | "warn" | "unsafe";
 
-/** Grade one saved reading against its row's standing standard: inside the
- * target (≤4 °C for coolers) is ok; inside the owner's tolerance (4–4.5 °C)
- * alerts amber; past the ceiling (or a freezer above −18 °C) is unsafe. */
+/** Grade one saved reading against its row's standing standard: coolers at or
+ * below 3 °C (and freezers at or below −18 °C) are ok; inside the owner's
+ * tolerance band (4 °C coolers, −17 to −12 °C freezers) alerts amber; past the
+ * red ceiling (above 4 °C / warmer than −12 °C) is unsafe. */
 export function temperatureAlert(value: number, kind: Exclude<TemperatureSheetKind, "blank">): TemperatureAlert {
   const range = TEMPERATURE_SHEET_RANGES[kind];
   if (value < range.min || value > range.max) return "unsafe";

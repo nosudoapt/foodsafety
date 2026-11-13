@@ -134,6 +134,11 @@
       "step": 28,
       "file": "schema-inventory-master-list.sql",
       "description": "Master inventory list — the 278 items from the owner's workbook seeded once, marked protected, and guarded append-only by a trigger: names may be added, never deleted or renamed. Unit/category/cost stay editable."
+    },
+    {
+      "step": 29,
+      "file": "schema-november-13-updates.sql",
+      "description": "13 Nov 2026 updates — branding: qty + combo request items columns; shifts: duty CHECK accepts prep and none (duties optional); compliance: notify reminder toggle column."
     }
   ]
 }

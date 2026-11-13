@@ -5,12 +5,15 @@ import {
   BRANDING_PRIORITIES,
   BRANDING_STATUSES,
   boardColumns,
+  brandingLineLabel,
+  capQty,
   categoryLabel,
   dueTone,
   isOpen,
   isCategory,
   isPriority,
   isStatus,
+  parseBrandingLines,
   priorityAccent,
   priorityLabel,
   priorityRank,
@@ -33,13 +36,14 @@ const req = (over: Partial<BrandingRequest> & { id: string }): BrandingRequest =
 test("statuses, priorities and categories are a closed set", () => {
   assert.deepEqual([...BRANDING_STATUSES], ["open", "in_review", "in_progress", "done", "declined"]);
   assert.equal(BRANDING_PRIORITIES.length, 4);
-  assert.equal(BRANDING_CATEGORIES.length, 7);
+  assert.equal(BRANDING_CATEGORIES.length, 8);
   assert.equal(isStatus("in_review"), true);
   assert.equal(isStatus("waiting"), false);
   assert.equal(isPriority("urgent"), true);
   assert.equal(isPriority("asap"), false);
   assert.equal(isCategory("uniform"), true);
   assert.equal(isCategory("caddies"), true);
+  assert.equal(isCategory("table_numbers"), true);
   assert.equal(isCategory("signage"), true, "legacy values still accepted");
   assert.equal(isCategory(null), false, "non-strings are rejected");
 });
@@ -51,7 +55,8 @@ test("labels and colours read the way the cards do", () => {
   assert.equal(priorityLabel("urgent"), "Urgent");
   assert.equal(categoryLabel("uniform"), "T-shirt");
   assert.equal(categoryLabel("serving_trays"), "Serving trays");
-  assert.equal(categoryLabel("display_board"), "Display board");
+  assert.equal(categoryLabel("display_board"), "Bun display board");
+  assert.equal(categoryLabel("table_numbers"), "Table numbers");
   assert.equal(statusAccent("open"), "red");
   assert.equal(statusAccent("done"), "green");
   assert.equal(statusAccent("declined"), "slate");
@@ -136,4 +141,56 @@ test("the header strip counts every column, unknown statuses as open", () => {
   assert.deepEqual(counts, { open: 3, in_review: 0, in_progress: 0, done: 1, declined: 0 });
   assert.equal(isOpen(req({ id: "a", status: "in_progress" })), true);
   assert.equal(isOpen(req({ id: "b", status: "done" })), false);
+});
+
+test("quantities cap at the owner's limits, flyers snap to print runs", () => {
+  assert.equal(capQty("uniform", 10), 10, "uniforms: 10 per size");
+  assert.equal(capQty("uniform", 11), 10);
+  assert.equal(capQty("serving_trays", 30), 30, "trays: 30 per size");
+  assert.equal(capQty("serving_trays", 31), 30);
+  assert.equal(capQty("hats", 10), 10);
+  assert.equal(capQty("hats", 50), 10);
+  assert.equal(capQty("gift_cards", 100), 100);
+  assert.equal(capQty("gift_cards", 250), 100);
+  assert.equal(capQty("display_board", 1), 1, "bun display board: max 1");
+  assert.equal(capQty("display_board", 3), 1);
+  assert.equal(capQty("caddies", 20), 20);
+  assert.equal(capQty("caddies", 25), 20);
+  assert.equal(capQty("table_numbers", 12), 12, "table numbers: max 12");
+  assert.equal(capQty("table_numbers", 13), 12);
+  // Flyers come in runs of 5k / 10k, up to 25k.
+  assert.equal(capQty("flyers", 5000), 5000);
+  assert.equal(capQty("flyers", 7000), 10000, "rounds up to the next run");
+  assert.equal(capQty("flyers", 25000), 25000);
+  assert.equal(capQty("flyers", 30000), 25000, "25k is the ceiling");
+  assert.equal(capQty("hats", 0), null, "zero and junk quantities are rejected");
+  assert.equal(capQty("hats", NaN), null);
+});
+
+test("combo requests carry several capped item lines for one location", () => {
+  const ok = parseBrandingLines([
+    { category: "uniform", size: "L", qty: 10 },
+    { category: "serving_trays", size: "Small", qty: 30 },
+    { category: "display_board", size: null, qty: 1 },
+    { category: "table_numbers", size: null, qty: 12 },
+  ]);
+  assert.deepEqual(ok.value, [
+    { category: "uniform", size: "L", qty: 10 },
+    { category: "serving_trays", size: "Small", qty: 30 },
+    { category: "display_board", size: null, qty: 1 },
+    { category: "table_numbers", size: null, qty: 12 },
+  ]);
+  assert.equal(brandingLineLabel(ok.value[0]), "T-shirt (L) × 10");
+  assert.equal(brandingLineLabel(ok.value[3]), "Table numbers × 12");
+  for (const bad of [
+    [], // empty combo
+    [{ category: "uniform", size: "XXS", qty: 5 }], // size not on the item
+    [{ category: "uniform", size: "L", qty: 0 }], // missing quantity
+    [{ category: "hats" }], // quantity absent
+    ["uniform"], // not an object
+  ]) {
+    assert.ok(parseBrandingLines(bad).error, JSON.stringify(bad));
+  }
+  const capped = parseBrandingLines([{ category: "caddies", size: null, qty: 99 }]);
+  assert.equal(capped.value?.[0].qty, 20, "quantities clamp to the item cap");
 });

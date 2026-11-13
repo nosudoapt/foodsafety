@@ -10,23 +10,33 @@ import type { BtbRole } from "@/lib/btb-roles";
 import {
   BRANDING_CATEGORIES,
   BRANDING_PRIORITIES,
+  FLYER_RUNS,
   boardColumns,
+  brandingLineLabel,
+  capQty,
   categoryLabel,
   dueTone,
   isCategory,
   isPriority,
   isStatus,
+  parseBrandingLines,
   priorityAccent,
   priorityLabel,
+  qtyLimitFor,
   sizesFor,
   statusAccent,
   statusCounts,
   statusLabel,
+  type BrandingLine,
   type BrandingRequest,
 } from "@/lib/branding-requests";
 
 const COLS =
-  "id, title, category, description, priority, status, requested_by, contact_email, file_url, file_name, size, due_date, location_id, created_at, updated_at";
+  "id, title, category, description, priority, status, requested_by, contact_email, file_url, file_name, size, qty, items, due_date, location_id, created_at, updated_at";
+
+type LineDraft = { category: string; size: string; qty: string };
+
+const emptyLine = (): LineDraft => ({ category: "uniform", size: "", qty: "" });
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -70,13 +80,14 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
   const [requester, setRequester] = useState<string | null>(null);
   const [form, setForm] = useState({
     title: "",
-    category: "uniform",
-    size: "",
     priority: "normal",
     due_date: "",
     description: "",
     contact_email: "",
   });
+  // One request per location can combine several items ("combo request"),
+  // each with its own size and a capped quantity.
+  const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
   const [file, setFile] = useState<{ name: string; url: string } | null>(null);
   const [fileErr, setFileErr] = useState<string | null>(null);
 
@@ -155,12 +166,25 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
       setError("Give the request a title first.");
       return;
     }
+    const draft = lines.map((line) => ({
+      category: line.category,
+      size: line.size || null,
+      qty: line.qty.trim() === "" ? NaN : Number(line.qty),
+    }));
+    const parsed = parseBrandingLines(draft);
+    if (parsed.error || !parsed.value) {
+      setError(parsed.error ?? "Add at least one item line.");
+      return;
+    }
+    const items = parsed.value;
     setSaving(true);
     setError(null);
     const { error: err } = await supabase.from("branding_requests").insert({
       title,
-      category: isCategory(form.category) ? form.category : "other",
-      size: sizesFor(form.category).includes(form.size) ? form.size : null,
+      category: isCategory(items[0].category) ? items[0].category : "other",
+      size: items[0].size,
+      qty: items[0].qty,
+      items,
       priority: isPriority(form.priority) ? form.priority : "normal",
       due_date: form.due_date || null,
       description: form.description.trim() || null,
@@ -171,13 +195,14 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
       location_id: activeLocationId(),
     });
     if (err) {
-      setError("Couldn't file the request — run supabase/schema-branding-requests.sql, schema-branding-attachments.sql and schema-branding-size.sql, then retry.");
+      setError("Couldn't file the request — run supabase/schema-branding-requests.sql, schema-branding-attachments.sql, schema-branding-size.sql and schema-november-13-updates.sql, then retry.");
       setSaving(false);
       return;
     }
-    setForm({ title: "", category: "uniform", size: "", priority: "normal", due_date: "", description: "", contact_email: "" });
+    setForm({ title: "", priority: "normal", due_date: "", description: "", contact_email: "" });
+    setLines([emptyLine()]);
     setFile(null);
-    setNotice(`Filed: ${title}`);
+    setNotice(`Filed: ${title}${items.length > 1 ? ` (${items.length} items)` : ""}`);
     setSaving(false);
     await load();
   };
@@ -253,42 +278,9 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
               accent="amber"
               value={form.title}
               onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              placeholder="Winter window cling for drive-thru"
+              placeholder="Winter re-stock — one combo request per location"
             />
           </label>
-          <label className="text-sm">
-            <span className="block text-xs font-medium text-slate-500 mb-1">Type</span>
-            <select
-              className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-              value={form.category}
-              onChange={(e) => setForm((f) => ({ ...f, category: e.target.value, size: "" }))}
-            >
-              {BRANDING_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {categoryLabel(c)}
-                </option>
-              ))}
-            </select>
-          </label>
-          {sizesFor(form.category).length > 0 && (
-            <label className="text-sm">
-              <span className="block text-xs font-medium text-slate-500 mb-1">
-                {form.category === "uniform" ? "T-shirt size" : "Tray size"}
-              </span>
-              <select
-                className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
-                value={form.size}
-                onChange={(e) => setForm((f) => ({ ...f, size: e.target.value }))}
-              >
-                <option value="">Choose…</option>
-                {sizesFor(form.category).map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           <label className="text-sm">
             <span className="block text-xs font-medium text-slate-500 mb-1">Priority</span>
             <select
@@ -316,6 +308,102 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
           <Button accent="amber" onClick={submit} disabled={saving}>
             {saving ? "Filing…" : "File Request"}
           </Button>
+        </div>
+        <div className="mt-3 space-y-2">
+          <span className="block text-xs font-medium text-slate-500">
+            Items in this combo request — file one request per location and add every item you need
+          </span>
+          {lines.map((line, index) => {
+            const sizes = sizesFor(line.category);
+            const limit = qtyLimitFor(line.category);
+            const flyers = line.category === "flyers";
+            const update = (patch: Partial<LineDraft>) =>
+              setLines((ls) => ls.map((l, i) => (i === index ? { ...l, ...patch } : l)));
+            return (
+              <div key={index} className="flex flex-wrap items-end gap-2">
+                <label className="text-sm">
+                  <span className="block text-xs font-medium text-slate-500 mb-1">Item</span>
+                  <select
+                    className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                    value={line.category}
+                    onChange={(e) => update({ category: e.target.value, size: "", qty: "" })}
+                  >
+                    {BRANDING_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {categoryLabel(c)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {sizes.length > 0 && (
+                  <label className="text-sm">
+                    <span className="block text-xs font-medium text-slate-500 mb-1">
+                      {line.category === "uniform" ? "T-shirt size" : "Tray size"}
+                    </span>
+                    <select
+                      className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      value={line.size}
+                      onChange={(e) => update({ size: e.target.value })}
+                    >
+                      <option value="">Choose…</option>
+                      {sizes.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                {flyers ? (
+                  <label className="text-sm">
+                    <span className="block text-xs font-medium text-slate-500 mb-1">Print run</span>
+                    <select
+                      className="font-bold text-slate-900 text-sm bg-white border border-slate-300 rounded-xl px-3 h-9 outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent"
+                      value={line.qty}
+                      onChange={(e) => update({ qty: e.target.value })}
+                    >
+                      <option value="">Choose…</option>
+                      {FLYER_RUNS.map((run) => (
+                        <option key={run} value={run}>
+                          {run.toLocaleString("en-CA")}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <label className="text-sm">
+                    <span className="block text-xs font-medium text-slate-500 mb-1">Qty{limit ? ` (max ${limit})` : ""}</span>
+                    <Input
+                      accent="amber"
+                      type="number"
+                      min={1}
+                      max={limit}
+                      className="w-28"
+                      value={line.qty}
+                      onChange={(e) => update({ qty: e.target.value })}
+                      placeholder={limit ? `≤ ${limit}` : "Qty"}
+                    />
+                  </label>
+                )}
+                {lines.length > 1 && (
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-slate-400 hover:text-red-600 pb-2"
+                    onClick={() => setLines((ls) => ls.filter((_, i) => i !== index))}
+                  >
+                    remove
+                  </button>
+                )}
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            className="text-xs font-bold text-amber-700 hover:text-amber-800"
+            onClick={() => setLines((ls) => [...ls, emptyLine()])}
+          >
+            + Add another item (combo request)
+          </button>
         </div>
         <label className="block text-sm mt-3">
           <span className="block text-xs font-medium text-slate-500 mb-1">Details</span>
@@ -390,7 +478,13 @@ function BrandingRequests({ readOnly, role }: { readOnly: boolean; role: BtbRole
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         <Badge accent={priorityAccent(r.priority)}>{priorityLabel(r.priority)}</Badge>
                         <Badge accent={statusAccent(r.status)}>{categoryLabel(r.category)}</Badge>
-                        {r.size && <Badge accent="slate">Size {r.size}</Badge>}
+                        {r.items?.map((line, i) => (
+                          <Badge key={`${line.category}-${line.size ?? ""}-${i}`} accent="slate">
+                            {brandingLineLabel(line)}
+                          </Badge>
+                        ))}
+                        {!r.items?.length && r.size && <Badge accent="slate">Size {r.size}</Badge>}
+                        {!r.items?.length && r.qty != null && <Badge accent="slate">Qty {r.qty.toLocaleString("en-CA")}</Badge>}
                       </div>
                       {r.description && (
                         <p className="mt-2 text-xs text-slate-500 line-clamp-3">{r.description}</p>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { Check, CircleAlert, Download, FileText, Info, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { Check, CircleAlert, Bell, BellOff, Download, FileText, Info, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
@@ -20,9 +20,10 @@ interface Doc {
   file_url: string | null;
   expiry_date: string;
   notes: string;
+  notify?: boolean | null;
 }
 
-const COLUMNS = "id, doc_type, name, file_name, file_url, expiry_date, notes";
+const COLUMNS = "id, doc_type, name, file_name, file_url, expiry_date, notes, notify";
 
 /** Insurance certificates, licences and PDFs — the same ceiling staff
  * certificates use (src/app/between-the-buns/staff-licenses). */
@@ -56,6 +57,9 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
   const [notes, setNotes] = useState("");
   const [preset, setPreset] = useState("other");
   const [file, setFile] = useState<File | null>(null);
+  // Reminder toggle — the bell button beside the expiry date entry. On by
+  // default; switching off keeps the document registered without reminders.
+  const [notifyOn, setNotifyOn] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const formId = useId();
@@ -94,7 +98,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
       const attachment = file ? await fileToDataUrl(file) : null;
       const { data, error } = await supabase.from("compliance_documents").insert({
         restaurant_name: restaurant, doc_type: preset, name: name.trim(), expiry_date: expiry,
-        notes: notes.trim(), location_id: locationId,
+        notes: notes.trim(), location_id: locationId, notify: notifyOn,
         ...(file ? { file_name: file.name, file_url: attachment } : {}),
       }).select(COLUMNS).abortSignal(AbortSignal.timeout(15_000)).single();
       if (error || !data) throw new Error("The renewal wasn’t saved. Your details are still here; please try again.");
@@ -126,7 +130,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
   const visible = attentionOnly ? alerts : sorted;
   const actions = <div className="ui-actions">
     <Badge accent={loading || loadError || !rows.length ? "slate" : alerts.length ? "amber" : "green"}>{loading ? "Loading renewals…" : loadError ? "Status unavailable" : !rows.length ? "No renewals yet" : alerts.length ? `${alerts.length} need attention` : "All current"}</Badge>
-    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
+    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setNotifyOn(true); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
   </div>;
 
   return <div className="compliance-workspace">
@@ -149,6 +153,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
             <span className={`ui-icon ui-tone--${LEVEL_ACCENT[level]}`}><ShieldCheck size={21} aria-hidden="true" /></span>
             <div className="compliance-row__body"><h3>{row.name}</h3><p>{type.label} · {new Date(`${row.expiry_date}T12:00:00`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>{row.notes && <p>{row.notes}</p>}</div>
             <Badge accent={LEVEL_ACCENT[level]}>{expiryLabel(row.expiry_date)}</Badge>
+            {row.notify === false && <span className="ui-icon ui-tone--slate" title="Reminders are off for this document"><BellOff size={17} aria-hidden="true" /></span>}
             {row.file_url && <button className="ui-iconbutton" aria-label={`Download ${row.file_name ?? row.name}`} title={row.file_name ?? "Download"} onClick={() => downloadDataUrl(row.file_url!, row.file_name ?? `${row.name}.pdf`)}><Download size={17} aria-hidden="true" /></button>}
             {!readOnly && <button disabled={!!deletingId} onClick={() => remove(row)} className="ui-iconbutton ui-iconbutton--danger" aria-label={`Delete ${row.name}`}><Trash2 size={17} aria-hidden="true" /></button>}
           </article>;
@@ -161,7 +166,12 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
         <fieldset disabled={saving} className="ui-form-stack">
           <div><span className="block text-sm font-medium text-gray-600 mb-2" id={`${formId}-type`}>Renewal type</span><div className="ui-actions" role="group" aria-labelledby={`${formId}-type`}>{COMPLIANCE_PRESETS.map((value) => <Button key={value} variant={preset === value ? "soft" : "ghost"} aria-pressed={preset === value} onClick={() => setPreset(value)}>{complianceType(value).label}</Button>)}</div></div>
           <label htmlFor={`${formId}-name`}>Name<Input id={`${formId}-name`} data-modal-autofocus required maxLength={200} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Food premises licence" /></label>
-          <label htmlFor={`${formId}-expiry`}>Expiry date<Input id={`${formId}-expiry`} type="date" required value={expiry} onChange={(event) => setExpiry(event.target.value)} /><small>Reminder window: {complianceType(preset).notifyDays} days before expiry.</small></label>
+          <div className="ui-actions">
+            <label htmlFor={`${formId}-expiry`} className="grow">Expiry date<Input id={`${formId}-expiry`} type="date" required value={expiry} onChange={(event) => setExpiry(event.target.value)} /><small>Reminder window: {complianceType(preset).notifyDays} days before expiry.</small></label>
+            <Button type="button" variant={notifyOn ? "soft" : "ghost"} aria-pressed={notifyOn} title={notifyOn ? "Reminders are on" : "Reminders are off"} onClick={() => setNotifyOn((on) => !on)}>
+              {notifyOn ? <Bell size={17} aria-hidden="true" /> : <BellOff size={17} aria-hidden="true" />}{notifyOn ? "Remind me" : "No reminder"}
+            </Button>
+          </div>
           <label htmlFor={`${formId}-notes`}>Notes <span>(optional)</span><Input id={`${formId}-notes`} maxLength={1000} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Renewal contact or reference" /></label>
           <div><label htmlFor={`${formId}-file`}>Certificate or document <span>(optional)</span></label><input id={`${formId}-file`} className="mt-2" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(event) => {
             const picked = event.target.files?.[0] || null;

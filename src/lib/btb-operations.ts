@@ -2,9 +2,10 @@ import { defaultClosingItems, defaultOpeningItems, type ChecklistItem } from "./
 import type { TeamMember } from "./btb-team";
 import { isIsoDate } from "./btb-team";
 
-export type ShiftDuty = "service" | "opening" | "closing" | "both";
+export type ShiftDuty = "service" | "opening" | "closing" | "both" | "prep" | "none";
 export const SHIFT_DUTIES: { value: ShiftDuty; label: string }[] = [
-  { value: "opening", label: "Opening" }, { value: "service", label: "Service" },
+  { value: "none", label: "No duty (optional)" }, { value: "opening", label: "Opening" },
+  { value: "service", label: "Service" }, { value: "prep", label: "Prep" },
   { value: "closing", label: "Closing" }, { value: "both", label: "Opening & closing" },
 ];
 export interface BtbShift {

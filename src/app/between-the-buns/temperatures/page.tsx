@@ -133,7 +133,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
         }}
         onDraft={(label, slot, value) => setDraft(`${label}|${slot}`, value)}
       />
-      <p className="ops-meta">Standards printed on the form: coolers at or below 4 °C, up to 4.5 °C (40–41 °F) · freezers at or below −18 °C (0 °F) · sanitizer 200–400 PPM · temperature danger zone 4 °C to 60 °C. A box left empty stays empty — it is never recorded as a zero. Amber = above target but inside tolerance; red = out of range. Saved boxes are locked; correct a wrong reading with an off-form reading note.</p>
+      <p className="ops-meta">Standards printed on the form: coolers 1–3 °C green, 4 °C amber, above 4 °C red · freezers −18 °C or colder green, −17 to −12 °C amber, warmer than −12 °C red · sanitizer 200–400 PPM · temperature danger zone 4 °C to 60 °C. A box left empty stays empty — it is never recorded as a zero. Amber = above target but inside tolerance; red = out of range. Saved boxes are locked; correct a wrong reading with an off-form reading note.</p>
     </section>}
     {data && !error && tab === "history" && <section id="temperature-panel-history" role="tabpanel" aria-labelledby="temperature-tab-history" className="temperature-history">
       <div className="ops-toolbar"><p className="ops-meta">The last 90 days of daily sheets — tap a day to open its sheet.</p>

@@ -39,7 +39,9 @@
 .temperature-sheet__input:focus { outline: 2px solid var(--brand); outline-offset: -2px; }
 .temperature-sheet__input::-webkit-outer-spin-button, .temperature-sheet__input::-webkit-inner-spin-button { appearance: none; margin: 0; }
 .temperature-sheet__input[type="number"] { appearance: textfield; appearance: textfield; -moz-appearance: textfield; }
-.temperature-sheet__unsafe { color: var(--danger); font-weight: 600; }
+/* Out of range: a red box around the reading — on the input while typing and
+   on the saved value afterwards, since the class lives on the shared cell. */
+.temperature-sheet__unsafe { color: var(--danger); font-weight: 600; background: var(--danger-soft); box-shadow: inset 0 0 0 1.5px var(--danger); border-radius: 8px; }
 /* Above target but inside the owner's tolerance (e.g. a cooler at 4.2 °C). */
 .temperature-sheet__warn { color: var(--warning, #b45309); font-weight: 600; }
 /* Compact history: one collapsed row per day, opening the full sheet on tap. */
