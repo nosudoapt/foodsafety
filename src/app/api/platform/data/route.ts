@@ -42,7 +42,7 @@ export async function GET() {
     db.from("marketing_promotions").select("restaurant_name, file_size"),
     db.from("print_manuals").select("restaurant_name, file_size"),
     db.from("btb_file_objects").select("location_id, byte_size"),
-    db.from("btb_ai_usage").select("location_id, used_count, day").gte("day", since.slice(0, 10)),
+    db.from("btb_ai_usage").select("location_id, used, day").gte("day", since.slice(0, 10)),
     db.from("btb_employees").select("restaurant_name, active"),
   ]);
 
@@ -103,7 +103,7 @@ export async function GET() {
   }
 
   const btbFileBytes = (fileObjects.data ?? []).reduce((sum: number, f: Record<string, unknown>) => sum + bytes(f.byte_size as number), 0);
-  const aiTotal = (aiUsage.data ?? []).reduce((sum: number, u: Record<string, unknown>) => sum + Number(u.used_count ?? 0), 0);
+  const aiTotal = (aiUsage.data ?? []).reduce((sum: number, u: Record<string, unknown>) => sum + Number(u.used ?? 0), 0);
   const clientList = [...clients.values()].map((client) => {
     const plan = plansById.get(client.restaurant_name);
     const clientBytes = (storageByRestaurant.get(client.restaurant_name) ?? 0)
