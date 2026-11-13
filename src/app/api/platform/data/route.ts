@@ -42,7 +42,7 @@ export async function GET() {
     db.from("marketing_promotions").select("restaurant_name, file_size, file_url"),
     db.from("print_manuals").select("restaurant_name, file_size, file_url"),
     db.from("compliance_documents").select("restaurant_name, file_url"),
-    db.from("branding_requests").select("restaurant_name, file_url"),
+    db.from("branding_requests").select("location_id, file_url"),
     db.from("btb_file_objects").select("location_id, byte_size"),
     db.from("btb_ai_usage").select("location_id, used, day").gte("day", since.slice(0, 10)),
     db.from("btb_employees").select("restaurant_name, active"),
@@ -87,7 +87,11 @@ export async function GET() {
   addBytes(storagePromos.data ?? []);
   addBytes(storageManuals.data ?? []);
   addBytes(storageCompliance.data ?? []);
-  addBytes(storageBranding.data ?? []);
+  const locationName = new Map((locations.data ?? []).map((l: Record<string, unknown>) => [l.id as string, (l.name as string) || "unknown"]));
+  for (const row of storageBranding.data ?? []) {
+    const key = locationName.get(row.location_id as string) ?? "unknown";
+    storageByRestaurant.set(key, (storageByRestaurant.get(key) ?? 0) + urlBytes(row.file_url));
+  }
 
   const clients = new Map<string, {
     restaurant_name: string; views30d: number; activeUsers: number; users: string[];

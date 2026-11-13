@@ -17,6 +17,9 @@ export interface CorporateDate {
   notes?: string | null;
   created_by?: string | null;
   location_id?: string | null;
+  /** Attached filed document (base64 data URL) + original file name. */
+  file_name?: string | null;
+  file_url?: string | null;
 }
 
 /** Days until `due` relative to `today` (negative = already past). */

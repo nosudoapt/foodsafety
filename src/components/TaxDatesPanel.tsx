@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useId, useState } from "react";
-import { CalendarDays, Check, CircleAlert, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Check, CircleAlert, Download, FileText, Plus, Trash2 } from "lucide-react";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
 import Modal from "@/components/Modal";
 import { supabase } from "@/lib/supabase";
+import { downloadDataUrl, fileToDataUrl, formatFileSize } from "@/lib/files";
 import {
   DATE_CATEGORIES, RECURRENCES, categoryLabel, daysUntil, dueStatus,
   isCategory, isRecurrence, nextOccurrence, prettyDate, sortDates, type CorporateDate,
 } from "@/lib/tax-dates";
 
-const COLUMNS = "id, title, category, due_date, recurrence, notes, created_by, location_id";
+const COLUMNS = "id, title, category, due_date, recurrence, notes, created_by, location_id, file_name, file_url";
 const EMPTY_FORM = { title: "", category: "tax", due_date: "", recurrence: "none", notes: "" };
+
+// Same ceiling the compliance certificates use.
+const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 // Both BTB routes use its company-wide calendar (NULL location in the schema).
 // A separate FoodSafe site's browser selection must not change this register.
@@ -28,6 +32,7 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [file, setFile] = useState<File | null>(null);
   const formId = useId();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -56,15 +61,17 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
     if (readOnly || saving || !form.title.trim() || !form.due_date) return;
     setSaving(true); setFormError(""); setNotice("");
     try {
+      const attachment = file ? await fileToDataUrl(file) : null;
       const { data, error } = await supabase.from("corporate_dates").insert({
         title: form.title.trim(), category: isCategory(form.category) ? form.category : "other",
         due_date: form.due_date, recurrence: isRecurrence(form.recurrence) ? form.recurrence : "none",
         notes: form.notes.trim() || null, created_by: null, location_id: null,
+        ...(file ? { file_name: file.name, file_url: attachment } : {}),
       }).select(COLUMNS).abortSignal(AbortSignal.timeout(15_000)).single();
       if (error || !data) throw new Error("The deadline wasn’t saved. Your details are still here; please try again.");
       setRows((current) => [...current, data as CorporateDate]);
       setNotice(`${form.title.trim()} added to the filing calendar.`);
-      setForm(EMPTY_FORM); setOpen(false); setFilter("all");
+      setForm(EMPTY_FORM); setFile(null); setOpen(false); setFilter("all");
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : "The deadline couldn’t be saved.");
     } finally { setSaving(false); }
@@ -90,7 +97,7 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
   const soon = rows.filter((row) => dueStatus(dueDate(row), today) === "soon").length;
   const actions = <div className="ui-actions">
     <Badge accent={!loading && !loadError && (overdue || soon) ? "amber" : "slate"}>{loading ? "Loading dates…" : loadError ? "Dates unavailable" : `${rows.length} ${rows.length === 1 ? "deadline" : "deadlines"}`}</Badge>
-    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add deadline</Button>}
+    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add deadline</Button>}
   </div>;
 
   return <div className="compliance-workspace">
@@ -113,6 +120,7 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
             <span className="ui-icon ui-tone--amber"><CalendarDays size={21} aria-hidden="true" /></span>
             <div className="compliance-row__body"><h3>{row.title}</h3><p>{categoryLabel(row.category)} · {prettyDate(date)}{row.recurrence !== "none" && ` · Repeats ${row.recurrence}`}</p>{row.notes && <p>{row.notes}</p>}</div>
             <Badge accent={away < 0 ? "red" : away <= 7 ? "amber" : "slate"}>{away < 0 ? `${Math.abs(away)} days overdue` : away === 0 ? "Due today" : `In ${away} days`}</Badge>
+            {row.file_url && <button className="ui-iconbutton" aria-label={`Download ${row.file_name ?? row.title}`} title={row.file_name ?? "Download"} onClick={() => downloadDataUrl(row.file_url!, row.file_name ?? `${row.title}.pdf`)}><Download size={17} aria-hidden="true" /></button>}
             {!readOnly && <button disabled={!!deletingId} onClick={() => remove(row)} className="ui-iconbutton ui-iconbutton--danger" aria-label={`Delete ${row.title}`}><Trash2 size={17} aria-hidden="true" /></button>}
           </article>;
         })}</div>}
@@ -130,6 +138,12 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
           <label htmlFor={`${formId}-date`}>Due date<Input id={`${formId}-date`} type="date" required value={form.due_date} onChange={(event) => setForm((current) => ({ ...current, due_date: event.target.value }))} /></label>
           <label htmlFor={`${formId}-repeat`}>Repeats<select id={`${formId}-repeat`} className="ui-input" value={form.recurrence} onChange={(event) => setForm((current) => ({ ...current, recurrence: event.target.value }))}>{RECURRENCES.map((recurrence) => <option key={recurrence} value={recurrence}>{recurrence === "none" ? "Doesn’t repeat" : recurrence[0].toUpperCase() + recurrence.slice(1)}</option>)}</select></label>
           <label htmlFor={`${formId}-notes`}>Notes <span>(optional)</span><Input id={`${formId}-notes`} maxLength={1000} value={form.notes} onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))} placeholder="Filing reference or contact" /></label>
+          <div><label htmlFor={`${formId}-file`}>Attach the document <span>(optional)</span></label><input id={`${formId}-file`} className="mt-2" type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" onChange={(event) => {
+            const picked = event.target.files?.[0] || null;
+            if (picked && picked.size > MAX_FILE_BYTES) { setFormError("Choose a file no larger than 5 MB."); event.target.value = ""; return; }
+            setFormError(""); setFile(picked);
+          }} /><small>The return, remittance or certificate this deadline refers to — PDF, image or Word document, maximum 5 MB.</small></div>
+          {file && <p className="text-sm text-gray-600"><FileText size={14} className="inline-block align-[-2px]" aria-hidden="true" /> Attached: {file.name} ({formatFileSize(file.size)})</p>}
         </fieldset>
         <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={() => setOpen(false)}>Cancel</Button><Button type="submit" disabled={saving || !form.title.trim() || !form.due_date}>{saving ? "Saving deadline…" : "Save deadline"}</Button></div>
       </form>
