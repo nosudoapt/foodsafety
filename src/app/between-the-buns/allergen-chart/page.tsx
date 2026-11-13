@@ -4,6 +4,7 @@ import Image from "next/image";
 import { bunAllergens, AllergenStatus } from "@/lib/btb-allergens";
 import BtbWordmark from "@/components/BtbWordmark";
 import PrintButton from "@/components/PrintButton";
+import ManualPdfSlot from "@/components/ManualPdfSlot";
 
 // Brand palette, sampled from the printed Bun Allergy cheat sheet:
 //   cream #fdf8e8 · rust #b65a2e · sage #7fa24e · deep green #1c4a2a · red #d8382c
@@ -138,6 +139,7 @@ export default function AllergenChartPage() {
           </p>
         </div>
       </div>
+      <ManualPdfSlot title="Bun allergy chart" category="safety" heading="Bun Allergy Chart (PDF)" accent="rust" />
     </div>
   );
 }

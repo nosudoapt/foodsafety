@@ -26,6 +26,22 @@ const categories = [
   { value: "other", label: "Other", icon: "📎" },
 ];
 
+// The nine standing procedure manuals — one tap fills in the title and
+// category so the team's library always uses the same names (the PDF slots on
+// the Prep manual, Allergy chart, Fryer chart, Gluten-free and Loyalty pages
+// find their file by these exact titles).
+const STANDARD_MANUALS: { title: string; category: string }[] = [
+  { title: "Application form", category: "general" },
+  { title: "Incident report", category: "safety" },
+  { title: "Warning letter", category: "general" },
+  { title: "Prep manual", category: "operations" },
+  { title: "Recipe chart (chewy sheet)", category: "operations" },
+  { title: "Loyalty manual", category: "training" },
+  { title: "Fryer chart", category: "safety" },
+  { title: "Bun allergy chart", category: "safety" },
+  { title: "Gluten-free menu", category: "operations" },
+];
+
 type ManualRow = {
   id: string;
   title: string;
@@ -269,6 +285,28 @@ export default function PrintManuals({ application, readOnly = false }: { applic
             <h3 className="font-bold text-gray-900 text-lg mb-4">Upload Manual</h3>
 
             <div className="space-y-4">
+              <div>
+                <span className="block text-sm font-medium text-gray-700 mb-1">Standard manuals</span>
+                <div className="flex flex-wrap gap-1.5">
+                  {STANDARD_MANUALS.map((manual) => (
+                    <button
+                      key={manual.title}
+                      type="button"
+                      onClick={() => {
+                        setTitle(manual.title);
+                        setCategory(manual.category);
+                      }}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                        title === manual.title
+                          ? "bg-[#E07B2E] text-white border-[#E07B2E]"
+                          : "bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100"
+                      }`}
+                    >
+                      {manual.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Title

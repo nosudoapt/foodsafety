@@ -53,6 +53,8 @@ const SERVICES: Group[] = [
   { id: "grease_trap", label: "Grease Trap", icon: "🛢️" },
   { id: "pest_control", label: "Pest Control", icon: "🐛" },
   { id: "canadian_linen", label: "Canadian Linen", icon: "👔" },
+  { id: "redux_oil_change", label: "Redux — Used Cooking Oil", icon: "🛢️" },
+  { id: "garbage_recycling", label: "Garbage & Recycling", icon: "🗑️" },
   { id: "internet_provider", label: "Internet Provider", icon: "🌐" },
   { id: "security_system", label: "Security System", icon: "🔒" },
   { id: "hoods_repair", label: "Hoods Repair & Cleaning", icon: "🧹" },

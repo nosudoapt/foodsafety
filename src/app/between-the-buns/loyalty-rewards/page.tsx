@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { BadgeCheck, Gift, Phone, ScanBarcode } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
+import ManualPdfSlot from "@/components/ManualPdfSlot";
 import { Badge, Card, PageHeader, TabList } from "@/components/ui";
 import { LOYALTY_CHANNELS, LOYALTY_ESCALATION, LOYALTY_EXCLUDED_CHANNELS, LOYALTY_POINTS, LOYALTY_REDEMPTION, LOYALTY_REWARDS, LOYALTY_SEQUENCE, LOYALTY_WORKAROUND } from "@/lib/btb-loyalty";
 
@@ -25,6 +26,7 @@ function Channels() {
 function LoyaltyGuides() {
   const [view, setView] = useState<"employee" | "customer">("employee");
   return <div className="ops-workspace"><PageHeader title="Loyalty rewards" subtitle="Two clear guides. One simple rule: show and scan the barcode first." /><TabList id="loyalty" label="Loyalty guides" value={view} onChange={setView} tabs={[{ id: "employee", label: "Employee guide" }, { id: "customer", label: "Customer guide" }]} />
+    <ManualPdfSlot title="Loyalty manual" category="training" heading="Loyalty Manual (PDF)" accent="rust" />
     {view === "employee" ? <div className="ops-workspace" role="tabpanel" id="loyalty-panel-employee" aria-labelledby="loyalty-tab-employee"><section className="loyalty-hero"><ScanBarcode size={32} aria-hidden="true" /><p className="dash-focus__label">At the register</p><h2>Barcode first. Payment last.</h2><p>Ask whether the customer has loyalty. Scan their digital barcode <strong>before entering the order</strong>, then review the offers on their account.</p><div className="loyalty-sequence" aria-label={LOYALTY_SEQUENCE.join(" → ")}>{LOYALTY_SEQUENCE.map((step, index) => <span key={step}>{index > 0 && <span aria-hidden="true">→</span>}<strong>{step}</strong></span>)}</div></section>
       <section className="ops-workspace"><div className="ops-section-heading"><h2>Know the rewards</h2><Badge accent="purple">Check the account pop-up</Badge></div><RewardCards /></section>
       <div className="loyalty-two-column"><Card className="loyalty-block"><h2>Redeem a reward</h2><Steps steps={LOYALTY_REDEMPTION} /><p className="ops-meta">Apply only the customer’s chosen, visible and eligible reward. Collect the cost of extras and any remaining order balance.</p></Card><Card className="loyalty-block"><h2>Redeem points</h2><Steps steps={LOYALTY_POINTS} /><p className="ops-meta">Use the points actually available in the customer’s account.</p></Card></div>

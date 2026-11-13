@@ -24,7 +24,11 @@ WITH wanted (category, name, kind, phone, phone_2, contact_name, email, rank, no
     -- SERVICES
     ('grease_trap',     'BlueWater Grease Trap',        'service', '(519) 555-0105', NULL,                    'Marta Silva',     'bookings@bluewater.example',   1, 'Monthly pump-out — first Tuesday'),
     ('pest_control',    'Shield Pest Control',          'service', '(519) 555-0106', NULL,                    'Ken Patel',       'ops@shieldpest.example',       1, 'Monthly service + health-inspection reports'),
-    ('canadian_linen',  'Canadian Linen',               'service', '(519) 555-0107', NULL,                    'Route driver',    NULL,                           1, 'Uniform and apron exchange — Tuesday delivery'),
+    -- Owner-supplied services: added 13 Nov 2026. Numbers left blank on purpose
+    -- — a manager fills them in on the Emergency page (edit is MGR_ONLY).
+    ('canadian_linen',  'Canadian Linen',               'service', '', NULL, NULL, NULL, 1, 'Uniform / mat service — add pickup and delivery days'),
+    ('redux_oil_change','Redux — Used Cooking Oil',     'service', '', NULL, NULL, NULL, 1, 'Oil change / used cooking oil pickup — add schedule'),
+    ('garbage_recycling','Garbage & Recycling',         'service', '', NULL, NULL, NULL, 1, 'Garbage and recycling pickup — add days and bin notes'),
     ('internet_provider','FiberLink Business Internet', 'service', '(519) 555-0108', '(519) 555-0188',        'Support desk',    'support@fiberlink.example',    1, 'Second line is the after-hours NOC — keeps POS online'),
     ('security_system', 'SecureWatch Alarms',           'service', '(519) 555-0109', NULL,                    'Monitoring centre','alarm@securewatch.example',    1, 'Alarm codes, camera and safe service'),
     ('hoods_repair',    'ProHood Duct & Hood Cleaning', 'service', '(519) 555-0110', NULL,                    'Gordon Lee',      'bookings@prohood.example',     1, 'Kitchen exhaust cleaning — required for insurance'),

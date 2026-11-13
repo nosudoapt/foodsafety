@@ -3,6 +3,7 @@
 import { fryerItems } from "@/lib/btb-fryer";
 import BtbWordmark from "@/components/BtbWordmark";
 import PrintButton from "@/components/PrintButton";
+import ManualPdfSlot from "@/components/ManualPdfSlot";
 
 // Fryer Timing & Portions — rebuilt from the printed BTB chart in brand
 // colours (cream + rust). The whole surface is the print target: @media print
@@ -57,6 +58,7 @@ export default function FryerTimingPage() {
           Always cook to the full time — times are minimums for food safety.
         </p>
       </div>
+      <ManualPdfSlot title="Fryer chart" category="safety" heading="Fryer Chart (PDF)" accent="rust" />
     </div>
   );
 }

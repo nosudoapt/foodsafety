@@ -2,6 +2,7 @@
 
 import BtbWordmark from "@/components/BtbWordmark";
 import PrintButton from "@/components/PrintButton";
+import ManualPdfSlot from "@/components/ManualPdfSlot";
 
 export default function GlutenFreeMenuPage() {
   return (
@@ -144,6 +145,7 @@ export default function GlutenFreeMenuPage() {
           </p>
         </div>
       </div>
+      <ManualPdfSlot title="Gluten-free menu" category="operations" heading="Gluten-Free Menu (PDF)" accent="rust" />
     </div>
   );
 }
