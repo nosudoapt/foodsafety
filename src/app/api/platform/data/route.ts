@@ -1,19 +1,32 @@
 import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { createHash } from "node:crypto";
 import { inventoryDb } from "@/lib/supabase-server";
-import { hasPlatformSession, PLATFORM_COOKIE } from "@/lib/platform-admin";
+import { PLATFORM_COOKIE } from "@/lib/platform-admin";
 import { PRIVATE_HEADERS } from "@/lib/btb-api";
 
 // The platform pane's data: every client (restaurant) — BTB and FoodSafe alike
-// — with usage, storage, heatmap and the pricing game. Platform cookie only.
+// — with usage, storage, heatmap and the pricing game. Platform cookie only,
+// verified against the passcode hash stored in platform_auth.
+
+async function hasSession(cookieValue: string | undefined | null): Promise<boolean> {
+  const envValue = process.env.PLATFORM_ADMIN_PASSCODE;
+  let expected = envValue?.trim() ? createHash("sha256").update(envValue.trim()).digest("hex") : null;
+  if (!expected) {
+    const { data } = await inventoryDb().from("platform_auth").select("passcode_hash").eq("id", 1).maybeSingle();
+    expected = (data?.passcode_hash as string) ?? null;
+  }
+  if (!expected || !cookieValue) return false;
+  return cookieValue === expected;
+}
 
 const gb = (n: number) => Math.round((n / 1_073_741_824) * 100) / 100;
 const bytes = (n: number | null | undefined) => n ?? 0;
 
 export async function GET() {
   const cookieStore = await cookies();
-  if (!hasPlatformSession(cookieStore.get(PLATFORM_COOKIE)?.value)) {
+  if (!(await hasSession(cookieStore.get(PLATFORM_COOKIE)?.value))) {
     return NextResponse.json({ ok: false }, { status: 401, headers: PRIVATE_HEADERS });
   }
   const db = inventoryDb();
@@ -129,7 +142,7 @@ export async function GET() {
 /** Owner edits a client's plan/seats/price — the "pricing game". */
 export async function PUT(request: Request) {
   const cookieStore = await cookies();
-  if (!hasPlatformSession(cookieStore.get(PLATFORM_COOKIE)?.value)) {
+  if (!(await hasSession(cookieStore.get(PLATFORM_COOKIE)?.value))) {
     return NextResponse.json({ ok: false }, { status: 401, headers: PRIVATE_HEADERS });
   }
   let body: Record<string, unknown>;

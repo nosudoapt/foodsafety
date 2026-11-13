@@ -69,12 +69,18 @@ export default function PlatformPage() {
 
 function SignIn({ onDone, configured }: { onDone: () => void; configured: boolean }) {
   const [passcode, setPasscode] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const firstTime = !configured;
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (busy || !passcode) return;
+    if (firstTime && passcode !== confirm) {
+      setError("The two entries don't match.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -101,14 +107,13 @@ function SignIn({ onDone, configured }: { onDone: () => void; configured: boolea
         </div>
         <h1 className="text-xl font-bold text-slate-900">Platform owner</h1>
         <p className="text-sm text-slate-500 mt-1 mb-6">
-          One pane for every client on the site — both products included. Sign in with the platform passcode.
+          {firstTime
+            ? "First sign-in claims the platform passcode — whatever you set here becomes the key (stored hashed in the database)."
+            : "One pane for every client on the site — both products included. Sign in with the platform passcode."}
         </p>
-        {!configured && (
-          <p className="mb-4 text-sm text-red-600">Platform access isn&apos;t configured yet — set PLATFORM_ADMIN_PASSCODE on the server.</p>
-        )}
         {error && <p className="mb-4 text-sm text-red-600" role="alert">{error}</p>}
         <label className="block text-sm">
-          <span className="block text-xs font-semibold text-slate-500 mb-1">Passcode</span>
+          <span className="block text-xs font-semibold text-slate-500 mb-1">{firstTime ? "New passcode (min 8 characters)" : "Passcode"}</span>
           <input
             type="password"
             required
@@ -119,12 +124,25 @@ function SignIn({ onDone, configured }: { onDone: () => void; configured: boolea
             placeholder="••••••••"
           />
         </label>
+        {firstTime && (
+          <label className="block text-sm mt-3">
+            <span className="block text-xs font-semibold text-slate-500 mb-1">Confirm passcode</span>
+            <input
+              type="password"
+              required
+              value={confirm}
+              onChange={(e) => setConfirm(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 bg-white outline-none focus:ring-2 focus:ring-slate-500"
+              placeholder="••••••••"
+            />
+          </label>
+        )}
         <button
           type="submit"
-          disabled={busy || !passcode}
+          disabled={busy || !passcode || (firstTime && !confirm)}
           className="mt-5 w-full bg-slate-900 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-slate-800 disabled:opacity-50"
         >
-          {busy ? "Checking…" : "Sign in"}
+          {busy ? "Checking…" : firstTime ? "Set passcode & sign in" : "Sign in"}
         </button>
       </form>
     </div>

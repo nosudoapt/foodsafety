@@ -32,6 +32,15 @@ CREATE TABLE IF NOT EXISTS platform_plans (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Platform-owner passcode: a single row, SHA-256 hash only. The /platform
+-- sign-in reads it through the service-role server client; no policies means
+-- anon/authenticated roles can never touch it. First sign-in claims the row.
+CREATE TABLE IF NOT EXISTS platform_auth (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  passcode_hash TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 ALTER TABLE app_activity ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform_plans ENABLE ROW LEVEL SECURITY;
 
