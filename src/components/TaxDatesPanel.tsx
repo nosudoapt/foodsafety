@@ -19,7 +19,7 @@ const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 // Both BTB routes use its company-wide calendar (NULL location in the schema).
 // A separate FoodSafe site's browser selection must not change this register.
-export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnly: boolean; showHeader?: boolean }) {
+export default function TaxDatesPanel({ readOnly, showHeader = true, embedded = false }: { readOnly: boolean; showHeader?: boolean; embedded?: boolean }) {
   const [rows, setRows] = useState<CorporateDate[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -97,12 +97,12 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
   const soon = rows.filter((row) => dueStatus(dueDate(row), today) === "soon").length;
   const actions = <div className="ui-actions">
     <Badge accent={!loading && !loadError && (overdue || soon) ? "amber" : "slate"}>{loading ? "Loading dates…" : loadError ? "Dates unavailable" : `${rows.length} ${rows.length === 1 ? "deadline" : "deadlines"}`}</Badge>
-    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add deadline</Button>}
+    {!readOnly && !embedded && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add deadline</Button>}
   </div>;
 
   return <div className="compliance-workspace">
     {showHeader ? <PageHeader title="Tax & Renewal Dates" subtitle="Filing deadlines and recurring dates, with the next due date always in view." action={actions} />
-      : <div className="dash-section__head"><div><h2>Tax & filing dates</h2><p>The shared BTB calendar for returns, renewals and recurring deadlines.</p></div>{actions}</div>}
+      : <div className="dash-section__head"><div><h2>Tax & filing dates</h2><p>{embedded ? "The shared BTB calendar for returns, renewals and recurring deadlines — new dates come from the Add documents tab." : "The shared BTB calendar for returns, renewals and recurring deadlines."}</p></div>{actions}</div>}
     {notice && <div className="ui-notice ui-notice--success" role="status"><Check size={18} aria-hidden="true" />{notice}</div>}
     {error && <div className="ui-notice ui-notice--error" role="alert"><CircleAlert size={18} aria-hidden="true" />{error}</div>}
     {loading ? <Card className="ui-empty"><span className="ui-loader" aria-hidden="true" /><p role="status">Loading your filing calendar…</p></Card> : loadError ? (
@@ -125,7 +125,7 @@ export default function TaxDatesPanel({ readOnly, showHeader = true }: { readOnl
           </article>;
         })}</div>}
     </>}
-    {!readOnly && <Modal open={open} title="Add deadline" description="Choose the due date and repeat schedule that apply to your business." busy={saving} onClose={() => setOpen(false)}>
+    {!readOnly && !embedded && <Modal open={open} title="Add deadline" description="Choose the due date and repeat schedule that apply to your business." busy={saving} onClose={() => setOpen(false)}>
       <form onSubmit={save}>
         {formError && <div className="ui-notice ui-notice--error" role="alert">{formError}</div>}
         <fieldset disabled={saving} className="ui-form-stack">

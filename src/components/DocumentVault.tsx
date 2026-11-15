@@ -47,6 +47,9 @@ export interface DocumentVaultProps {
    * verifies role/page access; a FoodSafe session is never reused as its identity.
    */
   uploader?: { restaurantName: string };
+  /** Embedded in a hub that has a shared intake — hides this section's own
+   * upload button and modal so there is one way to add documents. */
+  embedded?: boolean;
 }
 
 export default function DocumentVault(props: DocumentVaultProps) {
@@ -55,7 +58,7 @@ export default function DocumentVault(props: DocumentVaultProps) {
   return <DocumentWorkspace key={`${props.uploader ? "independent" : user?.id}:${restaurant}`} {...props} restaurant={restaurant} />;
 }
 
-function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = true, uploader, restaurant }: DocumentVaultProps & { restaurant: string }) {
+function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = true, uploader, embedded = false, restaurant }: DocumentVaultProps & { restaurant: string }) {
   const [rows, setRows] = useState<VaultRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -212,7 +215,7 @@ function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = tru
   const matching = rows.filter((row) => `${row.name} ${row.file_name} ${row.notes ?? ""}`.toLowerCase().includes(query.trim().toLowerCase()));
   const actions = <div className="ui-actions">
     <Badge>{loading ? "Loading files…" : loadError ? "Files unavailable" : `${rows.length} ${rows.length === 1 ? "file" : "files"}`}</Badge>
-    {!readOnly && <Button disabled={!uploadConnected || !restaurant || loading || !!loadError} aria-describedby={!uploadConnected ? `${formId}-connection` : undefined} onClick={() => { setUploadError(""); setShowUpload(true); }}>
+    {!readOnly && !embedded && <Button disabled={!uploadConnected || !restaurant || loading || !!loadError} aria-describedby={!uploadConnected ? `${formId}-connection` : undefined} onClick={() => { setUploadError(""); setShowUpload(true); }}>
       <Plus size={17} aria-hidden="true" />Upload document
     </Button>}
   </div>;
@@ -273,7 +276,7 @@ function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = tru
         </div>
       )}
 
-      {!readOnly && <Modal open={showUpload} title="Upload document" description="Give the file a clear name so your team can find it. Add an expiry date to also get renewal reminders." busy={saving} onClose={() => setShowUpload(false)}>
+      {!readOnly && !embedded && <Modal open={showUpload} title="Upload document" description="Give the file a clear name so your team can find it. Add an expiry date to also get renewal reminders." busy={saving} onClose={() => setShowUpload(false)}>
         <form onSubmit={(event) => { event.preventDefault(); void upload(); }}>
           {uploadError && <div className="ui-notice ui-notice--error" role="alert">{uploadError}</div>}
           <fieldset disabled={saving} className="ui-form-stack">

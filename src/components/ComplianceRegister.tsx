@@ -32,19 +32,19 @@ const COLUMNS = "id, doc_type, name, file_name, file_url, other_file_name, other
  * certificates use (src/app/between-the-buns/staff-licenses). */
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
-export default function ComplianceRegister({ readOnly = false, restaurant: fixedRestaurant, showHeader = true }: {
-  readOnly?: boolean; restaurant?: string; showHeader?: boolean;
+export default function ComplianceRegister({ readOnly = false, restaurant: fixedRestaurant, showHeader = true, embedded = false }: {
+  readOnly?: boolean; restaurant?: string; showHeader?: boolean; embedded?: boolean;
 }) {
   const auth = useAuth();
   const restaurant = fixedRestaurant ?? auth.restaurantName;
   // BTB's independent company register never inherits a FoodSafe site selection.
   const locationId = fixedRestaurant ? null : auth.locationId;
   const scopeLabel = fixedRestaurant ?? auth.locations.find((site) => site.id === locationId)?.name ?? "Location unavailable";
-  return <RenewalWorkspace key={`${restaurant}:${locationId}`} {...{ readOnly, restaurant, locationId, scopeLabel, showHeader }} companyWide={!!fixedRestaurant} />;
+  return <RenewalWorkspace key={`${restaurant}:${locationId}`} {...{ readOnly, restaurant, locationId, scopeLabel, showHeader, embedded }} companyWide={!!fixedRestaurant} />;
 }
 
-function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, companyWide, showHeader }: {
-  readOnly: boolean; restaurant: string; locationId: string | null; scopeLabel: string; companyWide: boolean; showHeader: boolean;
+function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, companyWide, showHeader, embedded }: {
+  readOnly: boolean; restaurant: string; locationId: string | null; scopeLabel: string; companyWide: boolean; showHeader: boolean; embedded: boolean;
 }) {
   const [rows, setRows] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -140,11 +140,11 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
   const visible = attentionOnly ? alerts : sorted;
   const actions = <div className="ui-actions">
     <Badge accent={loading || loadError || !rows.length ? "slate" : alerts.length ? "amber" : "green"}>{loading ? "Loading renewals…" : loadError ? "Status unavailable" : !rows.length ? "No renewals yet" : alerts.length ? `${alerts.length} need attention` : "All current"}</Badge>
-    {!readOnly && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setOtherFile(null); setNotifyChoice("default"); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
+    {!readOnly && !embedded && <Button disabled={loading || !!loadError} onClick={() => { setFormError(""); setFile(null); setOtherFile(null); setNotifyChoice("default"); setOpen(true); }}><Plus size={17} aria-hidden="true" />Add renewal</Button>}
   </div>;
 
   return <div className="compliance-workspace">
-    {showHeader ? <PageHeader title="Compliance & Renewals" subtitle="Licences, permits and agreements — with the next renewal always in view." action={actions} /> : <div className="dash-section__head"><div><h2>Renewal register</h2><p>Licences, permits and agreements for {scopeLabel}.</p></div>{actions}</div>}
+    {showHeader ? <PageHeader title="Compliance & Renewals" subtitle="Licences, permits and agreements — with the next renewal always in view." action={actions} /> : <div className="dash-section__head"><div><h2>Renewal register</h2><p>Licences, permits and agreements for {scopeLabel}{embedded ? " — add new ones from the Add documents tab." : "."}</p></div>{actions}</div>}
     <p className="document-hint"><Info size={17} aria-hidden="true" /><span>{DOC_ROUTING_HINT}</span></p>
     {notice && <div className="ui-notice ui-notice--success" role="status"><Check size={18} aria-hidden="true" />{notice}</div>}
     {error && <div className="ui-notice ui-notice--error" role="alert"><CircleAlert size={18} aria-hidden="true" />{error}</div>}
@@ -171,7 +171,7 @@ function RenewalWorkspace({ readOnly, restaurant, locationId, scopeLabel, compan
         })}</div>
       )}
     </>}
-    {!readOnly && <Modal open={open} title="Add renewal" description="Choose a type and expiry date. The register highlights it when the reminder window begins." busy={saving} onClose={() => setOpen(false)}>
+    {!readOnly && !embedded && <Modal open={open} title="Add renewal" description="Choose a type and expiry date. The register highlights it when the reminder window begins." busy={saving} onClose={() => setOpen(false)}>
       <form onSubmit={add}>
         {formError && <div className="ui-notice ui-notice--error" role="alert">{formError}</div>}
         <fieldset disabled={saving} className="ui-form-stack">

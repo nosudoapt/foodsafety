@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock, FileText,
-  Inbox, Mail, Plus, ShieldCheck, UploadCloud, X,
+  Inbox, Mail, ShieldCheck, UploadCloud, X,
 } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import ComplianceRegister from "@/components/ComplianceRegister";
@@ -82,11 +82,11 @@ function ComplianceHub({ readOnly }: { readOnly: boolean }) {
 
       {active === "home" && <ComplianceHome readOnly={readOnly} onOpen={(next) => setTab(next)} tabs={tabs.map((t) => t.id)} />}
       {active === "upload" && <MultiDocumentUpload restaurant={BTB_RESTAURANT} />}
-      {active === "renewals" && <ComplianceRegister readOnly={readOnly} restaurant={BTB_RESTAURANT} showHeader={false} />}
+      {active === "renewals" && <ComplianceRegister readOnly={readOnly} restaurant={BTB_RESTAURANT} showHeader={false} embedded />}
       {active === "certs" && <StaffLicencesPage />}
-      {active === "dates" && <TaxDatesPanel readOnly={!btbCanEdit("tax_dates", identity.role)} showHeader={false} />}
+      {active === "dates" && <TaxDatesPanel readOnly={!btbCanEdit("tax_dates", identity.role)} showHeader={false} embedded />}
       {active === "documents" && <DocumentVault title="Business documents" subtitle="Forms, SOPs, brand assets & menus — files that don’t expire."
-        readOnly={!btbCanEdit("documents", identity.role)} showHeader={false} uploader={{ restaurantName: BTB_RESTAURANT }} />}
+        readOnly={!btbCanEdit("documents", identity.role)} showHeader={false} embedded uploader={{ restaurantName: BTB_RESTAURANT }} />}
       {active === "reminders" && <LicenceRemindersPage />}
     </div>
   );
@@ -181,7 +181,6 @@ function ComplianceHome({ readOnly, onOpen, tabs }: { readOnly: boolean; onOpen:
 
     <div className="compliance-overview__actions">
       {!readOnly && canUpload && <Button variant="soft" onClick={() => onOpen("upload")}><UploadCloud size={17} aria-hidden="true" />Add documents &amp; deadlines</Button>}
-      {!readOnly && <Button variant="soft" onClick={() => onOpen("renewals")}><Plus size={17} aria-hidden="true" />Add a renewal</Button>}
       <Button variant="ghost" onClick={() => onOpen("reminders")}><Mail size={17} aria-hidden="true" />Check email reminders</Button>
     </div>
 
