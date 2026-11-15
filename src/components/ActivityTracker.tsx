@@ -4,8 +4,9 @@ import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
 /** Mounted once per product layout: reports each page visit to /api/activity.
- * The server resolves identity from the session cookie — the browser only
- * sends the path and tab title. 401s (logged-out pages) are silent no-ops. */
+ * The server resolves identity from the session cookie and derives the page
+ * name from the path — the browser only sends the path. 401s (logged-out
+ * pages) are silent no-ops. */
 export default function ActivityTracker() {
   const pathname = usePathname();
   const last = useRef<{ path: string; at: number }>({ path: "", at: 0 });
@@ -18,7 +19,7 @@ export default function ActivityTracker() {
     void fetch("/api/activity", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ path: pathname, title: typeof document !== "undefined" ? document.title : "" }),
+      body: JSON.stringify({ path: pathname }),
       keepalive: true,
     }).catch(() => undefined);
   }, [pathname]);

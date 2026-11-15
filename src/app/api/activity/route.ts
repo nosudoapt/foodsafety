@@ -6,6 +6,7 @@ import { inventoryDb } from "@/lib/supabase-server";
 import { btbIdentityFromSession, PRIVATE_HEADERS } from "@/lib/btb-api";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { BTB_RESTAURANT } from "@/lib/btb-team";
+import { friendlyPathTitle } from "@/lib/page-titles";
 
 // Page-visit tracking for "recently used / most used" chips and the owner's
 // platform dashboard. Identity is resolved server-side from the session
@@ -57,8 +58,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false }, { status: 400, headers: PRIVATE_HEADERS });
   }
   const path = typeof body.path === "string" && body.path.startsWith("/") ? body.path.slice(0, 300) : null;
-  const title = typeof body.title === "string" ? body.title.slice(0, 200) : "";
   if (!path) return NextResponse.json({ ok: false }, { status: 400, headers: PRIVATE_HEADERS });
+  // The stored title comes from the path, not the browser tab — page titles
+  // are unreliable (several products share one generic tagline).
+  const title = friendlyPathTitle(path);
 
   // Throttle: the same page revisit within 2 minutes is not a new visit.
   const since = new Date(Date.now() - 2 * 60_000).toISOString();
@@ -96,7 +99,9 @@ export async function GET() {
 
 type Row = { path: string; title: string; created_at: string };
 
-/** Shared reducer: first visit = recency, count = usage. */
+/** Shared reducer: first visit = recency, count = usage. Titles are always
+ * derived from the path so old rows (which stored a generic tab title) still
+ * display correctly. */
 function activitySummary(rows: Row[]): { recent: { path: string; title: string; at: string }[]; top: { path: string; title: string; visits: number }[] } {
   const firstSeen = new Map<string, Row>();
   const counts = new Map<string, number>();
@@ -107,9 +112,9 @@ function activitySummary(rows: Row[]): { recent: { path: string; title: string; 
   const recent = [...firstSeen.values()]
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, 12)
-    .map((r) => ({ path: r.path, title: r.title || r.path, at: r.created_at }));
+    .map((r) => ({ path: r.path, title: friendlyPathTitle(r.path), at: r.created_at }));
   const top = [...counts.entries()]
-    .map(([path, visits]) => ({ path, title: firstSeen.get(path)?.title || path, visits }))
+    .map(([path, visits]) => ({ path, title: friendlyPathTitle(path), visits }))
     .sort((a, b) => b.visits - a.visits)
     .slice(0, 8);
   return { recent, top };
