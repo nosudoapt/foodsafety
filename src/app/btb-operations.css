@@ -435,3 +435,50 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
 .ui-list-row:last-child { border-bottom: 0; }
 .ui-list-row > div { min-width: 0; }
 .ui-text-warning { color: var(--warning, #9a6700); }
+
+/* Revised compliance hub: overview tiles, attention list, timeline, multi-upload. */
+.compliance-hub__tabs { flex-wrap: wrap; margin-bottom: 20px; }
+.compliance-overview__tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.compliance-overview__tile { padding: 16px; display: flex; flex-direction: column; gap: 2px; }
+.compliance-overview__tile .ui-icon { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; margin-bottom: 8px; }
+.compliance-overview__value { font-size: 1.75rem; font-weight: 700; line-height: 1.1; }
+.compliance-overview__label { font-weight: 600; font-size: 0.875rem; }
+.compliance-overview__hint { color: var(--muted); font-size: 0.75rem; }
+.compliance-overview__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.compliance-overview__panel { padding: 18px; }
+.compliance-overview__panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.compliance-overview__panel-head h2 { font-size: 1.05rem; font-weight: 700; }
+.compliance-overview__list, .compliance-overview__timeline { list-style: none; display: flex; flex-direction: column; }
+.compliance-overview__list li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.compliance-overview__list li:first-child { border-top: 0; }
+.compliance-overview__list .ui-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; }
+.compliance-overview__item { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.compliance-overview__item strong { font-size: 0.9375rem; }
+.compliance-overview__item span, .compliance-overview__item .ops-meta { color: var(--muted); font-size: 0.8125rem; }
+.compliance-overview__timeline li { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+.compliance-overview__timeline li:first-child { border-top: 0; }
+.compliance-overview__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--brand); flex-shrink: 0; margin-left: 4px; }
+
+/* Multi-document upload */
+.compliance-upload { display: flex; flex-direction: column; gap: 14px; }
+.compliance-upload__intro { padding: 18px; }
+.compliance-upload__intro h2 { font-weight: 700; margin-bottom: 4px; }
+.compliance-upload__drop { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 34px 20px; text-align: center;
+  border: 2px dashed var(--line); border-radius: var(--r-sm); background: var(--paper-2); cursor: pointer; transition: border-color 180ms, background 180ms; }
+.compliance-upload__drop:hover, .compliance-upload__drop.is-dragging { border-color: var(--brand); background: var(--brand-soft); }
+.compliance-upload__drop:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.compliance-upload__input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.compliance-upload__queue { padding: 18px; }
+.compliance-upload__list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+.compliance-upload__list li { display: flex; gap: 12px; align-items: flex-start; padding: 12px; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.compliance-upload__list li.is-error { border-color: var(--danger); }
+.compliance-upload__list > li > .ui-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0; }
+.compliance-upload__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; flex: 1; min-width: 0; }
+.compliance-upload__fields label { display: flex; flex-direction: column; gap: 3px; font-size: 0.75rem; font-weight: 600; color: var(--muted-2); }
+.compliance-upload__fields input, .compliance-upload__fields select { width: 100%; }
+.compliance-upload__file { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.compliance-upload__file .ops-meta { min-width: 0; overflow-wrap: anywhere; }
+.compliance-upload__file .ui-actions { gap: 6px; }
+.compliance-upload__status { flex-shrink: 0; padding-top: 4px; }
+.compliance-upload__preview { width: 100%; height: 60vh; border: 1px solid var(--line); border-radius: var(--r-sm); background: white; }
+@media print { .compliance-hub__tabs, .compliance-overview__actions, .compliance-upload { display: none !important; } }
