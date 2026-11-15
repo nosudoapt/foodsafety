@@ -180,7 +180,7 @@ function ComplianceHome({ readOnly, onOpen, tabs }: { readOnly: boolean; onOpen:
     </div>
 
     <div className="compliance-overview__actions">
-      {!readOnly && canUpload && <Button variant="soft" onClick={() => onOpen("upload")}><UploadCloud size={17} aria-hidden="true" />Upload documents</Button>}
+      {!readOnly && canUpload && <Button variant="soft" onClick={() => onOpen("upload")}><UploadCloud size={17} aria-hidden="true" />Add documents &amp; deadlines</Button>}
       {!readOnly && <Button variant="soft" onClick={() => onOpen("renewals")}><Plus size={17} aria-hidden="true" />Add a renewal</Button>}
       <Button variant="ghost" onClick={() => onOpen("reminders")}><Mail size={17} aria-hidden="true" />Check email reminders</Button>
     </div>
@@ -233,23 +233,39 @@ function ComplianceHome({ readOnly, onOpen, tabs }: { readOnly: boolean; onOpen:
 }
 
 /* ------------------------------------------------------------------ */
-/* Add documents: drop many files, answer three questions each, save all */
+/* Add documents: ONE intake. Drop files (or add a date-only deadline),  */
+/* answer a few questions, save — each item is auto-categorised and      */
+/* routed to Tax & filing dates, Renewals or Business documents.         */
 /* ------------------------------------------------------------------ */
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
+/** Where each "what is it?" answer goes. tax / payroll → the tax & filing
+ * calendar (corporate_dates); certificate types with an expiry → the renewal
+ * register; "file" (no date) → the business documents vault. */
+const FILING_KINDS = [
+  { value: "tax", label: "Tax return (CRA, GST/HST…)" },
+  { value: "payroll", label: "Payroll remittance" },
+] as const;
+const FILE_KIND = "file";
+const isFilingKind = (kind: string) => FILING_KINDS.some((f) => f.value === kind);
+
 interface QueueItem {
   id: string;
-  file: File;
+  file: File | null;
   name: string;
-  type: string;
+  kind: string;
   expiry: string;
   notifyChoice: string;
+  recurrence: string;
+  notes: string;
   status: "queued" | "saving" | "saved" | "error";
+  savedTo?: string;
   error?: string;
 }
 
 function MultiDocumentUpload({ restaurant }: { restaurant: string }) {
+  const auth = useAuth();
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
@@ -272,66 +288,110 @@ function MultiDocumentUpload({ restaurant }: { restaurant: string }) {
       fresh.push({
         id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2, 7)}`,
         file, name: file.name.replace(/\.[^.]+$/, "").replace(/[_-]+/g, " "),
-        type: "other", expiry: "", notifyChoice: "default", status: "queued",
+        kind: "other", expiry: "", notifyChoice: "default", recurrence: "none", notes: "", status: "queued",
       });
     }
     if (fresh.length) setQueue((current) => [...current, ...fresh]);
   };
 
+  /** A deadline without a document — tax & filing dates don't need a file. */
+  const addDeadline = () => {
+    setNotice("");
+    setQueue((current) => [...current, {
+      id: `deadline-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      file: null, name: "", kind: "tax", expiry: "", notifyChoice: "default",
+      recurrence: "none", notes: "", status: "queued",
+    }]);
+  };
+
+  const routeFor = (item: QueueItem) =>
+    isFilingKind(item.kind) ? "Tax & filing dates" : item.kind === FILE_KIND ? "Business documents" : "the Renewals register";
+
   const saveAll = async () => {
     const pending = queue.filter((item) => item.status === "queued" || item.status === "error");
-    const incomplete = pending.filter((item) => !item.name.trim() || !item.expiry);
-    if (!pending.length || incomplete.length || saving) {
-      if (incomplete.length) setNotice("Give every file a name and an expiry date before saving. If a document never expires, keep it under “Business documents” instead.");
+    if (!pending.length || saving) return;
+    const incomplete = pending.filter((item) => !item.name.trim() || (item.kind !== FILE_KIND && !item.expiry));
+    if (incomplete.length) {
+      setNotice("Give every item a name, and a date for anything with a deadline, before saving.");
       return;
     }
+    const missingUser = pending.some((item) => item.kind === FILE_KIND) && !auth.user?.id;
+    if (missingUser) { setNotice("Sign in again, then retry — your profile is needed to store plain files."); return; }
     setSaving(true); setNotice("");
     let saved = 0;
     for (const item of pending) {
       patch(item.id, { status: "saving", error: undefined });
       try {
-        const attachment = await fileToDataUrl(item.file);
-        const notify = item.notifyChoice !== "none";
-        const notifyDays = notify && item.notifyChoice !== "default" ? Number(item.notifyChoice) : null;
-        const { error } = await supabase.from("compliance_documents").insert({
-          restaurant_name: restaurant, doc_type: item.type, name: item.name.trim(), expiry_date: item.expiry,
-          notes: "", location_id: null, notify, notify_days: notifyDays,
-          file_name: item.file.name, file_url: attachment,
-        }).select("id").abortSignal(AbortSignal.timeout(15_000)).single();
-        if (error) throw new Error(error.message);
+        let destination = "";
+        if (isFilingKind(item.kind)) {
+          // Filing deadline → the tax & filing calendar (with the file if one
+          // was attached). Recurrence rolls the next date forward automatically.
+          const { error } = await supabase.from("corporate_dates").insert({
+            title: item.name.trim(), category: item.kind, due_date: item.expiry,
+            recurrence: item.recurrence, notes: item.notes.trim() || null, location_id: null,
+            created_by: auth.user?.id ?? null,
+            ...(item.file ? { file_name: item.file.name, file_url: await fileToDataUrl(item.file) } : {}),
+          }).select("id").abortSignal(AbortSignal.timeout(15_000)).single();
+          if (error) throw new Error(error.message);
+          destination = "Tax & filing dates";
+        } else if (item.kind === FILE_KIND) {
+          // No deadline — a plain document for the vault.
+          const { error } = await supabase.from("business_documents").insert({
+            user_id: auth.user!.id, uploaded_by: auth.user!.id, restaurant_name: restaurant,
+            doc_type: "other", name: item.name.trim(), file_name: item.file!.name,
+            file_url: await fileToDataUrl(item.file!), file_size: item.file!.size,
+            expiry_date: null, notes: item.notes.trim(),
+          }).select("id").abortSignal(AbortSignal.timeout(15_000)).single();
+          if (error) throw new Error(error.message);
+          destination = "Business documents";
+        } else {
+          // Everything else that expires → the renewal register.
+          const notify = item.notifyChoice !== "none";
+          const notifyDays = notify && item.notifyChoice !== "default" ? Number(item.notifyChoice) : null;
+          const { error } = await supabase.from("compliance_documents").insert({
+            restaurant_name: restaurant, doc_type: item.kind, name: item.name.trim(), expiry_date: item.expiry,
+            notes: item.notes.trim(), location_id: null, notify, notify_days: notifyDays,
+            ...(item.file ? { file_name: item.file.name, file_url: await fileToDataUrl(item.file) } : {}),
+          }).select("id").abortSignal(AbortSignal.timeout(15_000)).single();
+          if (error) throw new Error(error.message);
+          destination = "the Renewals register";
+        }
         saved += 1;
-        setQueue((current) => current.filter((row) => row.id !== item.id));
+        setQueue((current) => current.map((row) => (row.id === item.id ? { ...row, status: "saved", savedTo: destination } : row)));
       } catch (cause) {
-        patch(item.id, { status: "error", error: cause instanceof Error ? cause.message : "Couldn’t save this file." });
+        patch(item.id, { status: "error", error: cause instanceof Error ? cause.message : "Couldn’t save this one." });
       }
     }
     setSaving(false);
-    if (saved) setNotice(`${saved} document${saved === 1 ? "" : "s"} saved to the renewal register.`);
+    if (saved) setNotice(`Saved. ${saved} item${saved === 1 ? "" : "s"} filed automatically into the right section${saved === 1 ? "" : " — see the badges below"}.`);
   };
 
   return <div className="compliance-upload">
     <Card className="compliance-upload__intro">
-      <h2>Add several documents in one go</h2>
-      <p className="ops-meta">Drop certificates, licences, leases or inspection reports here. For each file you answer three quick questions — what it is, what type it is, and when it expires — then save everything at once. PDF, photo or Word file, up to 5 MB each.</p>
+      <h2>Add it once — it files itself</h2>
+      <p className="ops-meta">Drop in documents, or just a deadline. Say what it is and when it’s due, add a reminder if you want one, and press Save all. Each item is automatically categorised: filing deadlines go to <strong>Tax &amp; filing dates</strong>, expiring certificates to <strong>Renewals</strong>, and plain files to <strong>Business documents</strong>. No need to know which tab is which.</p>
     </Card>
 
-    <label
-      className={`compliance-upload__drop ${dragging ? "is-dragging" : ""}`}
-      onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={(event) => { event.preventDefault(); setDragging(false); addFiles(event.dataTransfer.files); }}
-    >
-      <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="compliance-upload__input"
-        onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
-      <UploadCloud size={28} aria-hidden="true" />
-      <strong>{dragging ? "Drop the files here" : "Drop files here, or tap to choose"}</strong>
-      <span className="ops-meta">You can add as many as you like — nothing is saved until you press Save all.</span>
-    </label>
+    <div className="compliance-upload__sources">
+      <label
+        className={`compliance-upload__drop ${dragging ? "is-dragging" : ""}`}
+        onDragOver={(event) => { event.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(event) => { event.preventDefault(); setDragging(false); addFiles(event.dataTransfer.files); }}
+      >
+        <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" className="compliance-upload__input"
+          onChange={(event) => { addFiles(event.target.files); event.target.value = ""; }} />
+        <UploadCloud size={28} aria-hidden="true" />
+        <strong>{dragging ? "Drop the files here" : "Drop documents here, or tap to choose"}</strong>
+        <span className="ops-meta">Certificates, licences, tax papers — anything. PDF, photo or Word, up to 5 MB each.</span>
+      </label>
+      {!saving && <Button variant="ghost" onClick={addDeadline}><CalendarClock size={17} aria-hidden="true" />Just a deadline (no document)</Button>}
+    </div>
 
     {notice && <div className="ui-notice ui-notice--success" role="status">{notice}</div>}
 
     {queue.length > 0 && <Card className="compliance-upload__queue">
-      <div className="compliance-overview__panel-head"><h2>Your files ({queue.length})</h2>
+      <div className="compliance-overview__panel-head"><h2>Your list ({queue.length})</h2>
         <Button onClick={() => void saveAll()} disabled={saving || queue.every((item) => item.status !== "queued" && item.status !== "error")}>
           {saving ? "Saving…" : "Save all"}
         </Button>
@@ -339,58 +399,87 @@ function MultiDocumentUpload({ restaurant }: { restaurant: string }) {
       <ul className="compliance-upload__list">
         {queue.map((item) => (
           <li key={item.id} className={item.status === "error" ? "is-error" : ""}>
-            <span className="ui-icon ui-tone--slate"><FileText size={17} aria-hidden="true" /></span>
+            <span className="ui-icon ui-tone--slate">{item.file ? <FileText size={17} aria-hidden="true" /> : <CalendarClock size={17} aria-hidden="true" />}</span>
             <div className="compliance-upload__fields">
-              <label>What is this document?
+              <label>What is it?
                 <input className="ui-input" value={item.name} maxLength={200} disabled={saving || item.status === "saved"}
-                  onChange={(event) => patch(item.id, { name: event.target.value })} placeholder="e.g. Food premises licence 2026" />
+                  onChange={(event) => patch(item.id, { name: event.target.value })} placeholder="e.g. GST return — Q3 2026" />
               </label>
-              <label>Type
-                <select className="ui-input" value={item.type} disabled={saving || item.status === "saved"}
-                  onChange={(event) => patch(item.id, { type: event.target.value })}>
-                  {COMPLIANCE_PRESETS.map((value) => <option key={value} value={value}>{complianceType(value).label}</option>)}
+              <label>Type — decides where it goes
+                <select className="ui-input" value={item.kind} disabled={saving || item.status === "saved"}
+                  onChange={(event) => patch(item.id, { kind: event.target.value })}>
+                  <optgroup label="Filing deadlines → Tax & filing dates">
+                    {FILING_KINDS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
+                  </optgroup>
+                  <optgroup label="Certificates & agreements → Renewals">
+                    {COMPLIANCE_PRESETS.map((value) => <option key={value} value={value}>{complianceType(value).label}</option>)}
+                  </optgroup>
+                  {item.file && <optgroup label="No expiry → Business documents">
+                    <option value={FILE_KIND}>Just a file (never expires)</option>
+                  </optgroup>}
                 </select>
               </label>
-              <label>Expiry date
-                <input className="ui-input" type="date" value={item.expiry} disabled={saving || item.status === "saved"}
+              <label>{isFilingKind(item.kind) ? "Due date" : item.kind === FILE_KIND ? "No date needed" : "Expiry date"}
+                <input className="ui-input" type="date" value={item.expiry} required={item.kind !== FILE_KIND}
+                  disabled={saving || item.status === "saved" || item.kind === FILE_KIND}
                   onChange={(event) => patch(item.id, { expiry: event.target.value })} />
               </label>
-              <label>Remind me
+              {isFilingKind(item.kind) && <label>Repeats
+                <select className="ui-input" value={item.recurrence} disabled={saving || item.status === "saved"}
+                  onChange={(event) => patch(item.id, { recurrence: event.target.value })}>
+                  <option value="none">One-off</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                  <option value="annual">Annual</option>
+                </select>
+              </label>}
+              {item.kind !== FILE_KIND && !isFilingKind(item.kind) && <label>Remind me
                 <select className="ui-input" value={item.notifyChoice} disabled={saving || item.status === "saved"}
                   onChange={(event) => patch(item.id, { notifyChoice: event.target.value })}>
-                  <option value="default">Type default ({complianceType(item.type).notifyDays} days before)</option>
+                  <option value="default">Type default ({complianceType(item.kind).notifyDays} days before)</option>
                   {REMINDER_LEAD_OPTIONS.map((days) => (
                     <option key={days} value={days}>{days === 0 ? "On the due date" : `${days} days before`}</option>
                   ))}
                   <option value="none">No reminder</option>
                 </select>
+              </label>}
+              <label className="compliance-upload__wide">Note (optional)
+                <input className="ui-input" value={item.notes} maxLength={500} disabled={saving || item.status === "saved"}
+                  onChange={(event) => patch(item.id, { notes: event.target.value })} placeholder="Reference, who it’s filed with…" />
               </label>
-              <div className="compliance-upload__file">
+              {item.file && <div className="compliance-upload__file">
                 <span className="ops-meta">{item.file.name} · {formatFileSize(item.file.size)}</span>
                 <span className="ui-actions">
-                  <Button variant="ghost" onClick={() => { setPreview(item.id); setPreviewName(item.file.name); }}>Check file</Button>
+                  <Button variant="ghost" onClick={() => { setPreview(item.id); setPreviewName(item.file!.name); }}>Check file</Button>
                   <button className="ui-iconbutton" aria-label={`Remove ${item.file.name}`} disabled={saving}
                     onClick={() => setQueue((current) => current.filter((row) => row.id !== item.id))}><X size={15} aria-hidden="true" /></button>
                 </span>
-              </div>
+              </div>}
+              {!item.file && item.status !== "saved" && <div className="compliance-upload__file">
+                <span className="ops-meta">Deadline only — no document attached.</span>
+                <span className="ui-actions">
+                  <button className="ui-iconbutton" aria-label="Remove this deadline" disabled={saving}
+                    onClick={() => setQueue((current) => current.filter((row) => row.id !== item.id))}><X size={15} aria-hidden="true" /></button>
+                </span>
+              </div>}
             </div>
             <span className="compliance-upload__status">
               {item.status === "saving" && <span className="ui-loader" aria-hidden="true" />}
-              {item.status === "saved" && <Badge accent="green"><CheckCircle2 size={14} aria-hidden="true" /> Saved</Badge>}
+              {item.status === "saved" && <Badge accent="green"><CheckCircle2 size={14} aria-hidden="true" /> {item.savedTo ?? "Saved"}</Badge>}
               {item.status === "error" && <Badge accent="red">{item.error ?? "Failed"}</Badge>}
             </span>
           </li>
         ))}
       </ul>
-      <p className="ops-meta">Every document is saved to the Renewals register with its certificate attached — the register then reminds you before each one expires.</p>
+      <p className="ops-meta">When you press “Save all”, every line is filed into the right section automatically — you’ll see where each one went on its green badge.</p>
     </Card>}
 
-    {queue.length === 0 && <Card className="ui-empty"><Inbox size={30} aria-hidden="true" /><h2>Nothing waiting</h2><p>Files you drop here wait in this list until you press “Save all”. Nothing is saved by accident.</p></Card>}
+    {queue.length === 0 && <Card className="ui-empty"><Inbox size={30} aria-hidden="true" /><h2>Nothing waiting</h2><p>Files and deadlines you add here wait in this list until you press “Save all”. Nothing is saved by accident.</p></Card>}
 
     <Modal open={preview !== null} title="Check the file" description={previewName} onClose={() => setPreview(null)}>
       {preview && (() => {
         const item = queue.find((row) => row.id === preview);
-        if (!item) return null;
+        if (!item?.file) return null;
         const url = URL.createObjectURL(item.file);
         return item.file.type === "application/pdf"
           ? <iframe src={url} title={item.file.name} className="compliance-upload__preview" />

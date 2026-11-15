@@ -463,6 +463,10 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
 .compliance-upload { display: flex; flex-direction: column; gap: 14px; }
 .compliance-upload__intro { padding: 18px; }
 .compliance-upload__intro h2 { font-weight: 700; margin-bottom: 4px; }
+.compliance-upload__intro strong { color: var(--ink); }
+.compliance-upload__sources { display: flex; align-items: stretch; gap: 10px; flex-wrap: wrap; }
+.compliance-upload__sources .compliance-upload__drop { flex: 1 1 320px; }
+.compliance-upload__sources > .ui-button { align-self: center; min-height: 44px; }
 .compliance-upload__drop { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 34px 20px; text-align: center;
   border: 2px dashed var(--line); border-radius: var(--r-sm); background: var(--paper-2); cursor: pointer; transition: border-color 180ms, background 180ms; }
 .compliance-upload__drop:hover, .compliance-upload__drop.is-dragging { border-color: var(--brand); background: var(--brand-soft); }
@@ -476,6 +480,7 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
 .compliance-upload__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; flex: 1; min-width: 0; }
 .compliance-upload__fields label { display: flex; flex-direction: column; gap: 3px; font-size: 0.75rem; font-weight: 600; color: var(--muted-2); }
 .compliance-upload__fields input, .compliance-upload__fields select { width: 100%; }
+.compliance-upload__wide { grid-column: 1 / -1; }
 .compliance-upload__file { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .compliance-upload__file .ops-meta { min-width: 0; overflow-wrap: anywhere; }
 .compliance-upload__file .ui-actions { gap: 6px; }
