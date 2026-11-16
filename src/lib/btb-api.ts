@@ -8,6 +8,7 @@ import { BTB_CARDS } from "./btb-hub";
 import { pageSlug } from "./btb-page-access";
 import { BTB_RESTAURANT, type BtbEmployee, type BtbIdentity } from "./btb-team";
 import { inventoryDb } from "./supabase-server";
+import { btbOriginAllowed } from "./btb-origin";
 
 export const PRIVATE_HEADERS = { "Cache-Control": "private, no-store" };
 export const EMPLOYEE_COLUMNS = "id,name,email,phone,position,role,active,login_enabled,version,created_at";
@@ -124,13 +125,7 @@ export function apiFailure(error: unknown): NextResponse {
 }
 
 export function requireBtbOrigin(request: Request, message = "Open this form in your BTB workspace and try again."): void {
-  const origin = request.headers.get("origin");
-  if (!origin) return;
-  const expected = new URL(request.url);
-  // NextURL normalizes 127.0.0.1 to localhost. The browser's Host header keeps
-  // the actual request authority, including its port, for an exact comparison.
-  expected.host = request.headers.get("host") ?? expected.host;
-  if (origin !== expected.origin) throw new BtbApiError(message, 403);
+  if (!btbOriginAllowed(request)) throw new BtbApiError(message, 403);
 }
 
 export function btbRoute(feature: BtbFeature | undefined, edit: boolean, handler: (context: BtbApiContext, request: Request) => Promise<unknown>, options?: { allowLocationWorkspace?: boolean }) {

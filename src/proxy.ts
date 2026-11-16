@@ -3,9 +3,19 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DEFAULT_ROLE } from "@/lib/roles";
 import { isProtectedPath, requiredRolesFor } from "@/lib/route-guards";
 import { BTB_COOKIE, tokenValid } from "@/lib/btb-auth";
+import { btbOriginAllowed } from "@/lib/btb-origin";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Covers the legacy inventory handlers as well as btbRoute-based handlers.
+  // Authorization still runs inside every API; this is an additional CSRF gate.
+  if (pathname.startsWith("/api/btb/") && !["GET", "HEAD", "OPTIONS"].includes(request.method)
+      && !btbOriginAllowed(request)) {
+    return NextResponse.json({ error: "Open this form in your BTB workspace and try again." }, {
+      status: 403, headers: { "Cache-Control": "private, no-store" },
+    });
+  }
 
   // Between the Buns is a separate, cookie-gated surface — independent of the
   // green demo's Supabase auth. Its own /login and the /api/btb/* routes stay open.
@@ -90,6 +100,7 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
+    "/api/btb/:path*",
     "/dashboard/:path*",
     "/admin/:path*",
     "/checks/:path*",
