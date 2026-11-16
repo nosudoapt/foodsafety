@@ -24,6 +24,8 @@ export interface ReplaceResult {
   recovered: boolean;
   inserted: number;
   message?: string;
+  /** Internal diagnostics for the server; never serialize this to the client. */
+  cause?: unknown;
 }
 
 export interface ReplaceOps<T> {
@@ -48,7 +50,8 @@ export async function replaceRows<T>(ops: ReplaceOps<T>): Promise<ReplaceResult>
       stage: "backup",
       recovered: true,
       inserted: 0,
-      message: `${ops.label} aborted before deleting anything: couldn't back up existing rows (${backupErr?.message ?? "no data"})`,
+      message: `${ops.label} aborted before deleting anything: couldn't back up existing rows. Please retry.`,
+      cause: backupErr,
     };
   }
 
@@ -60,7 +63,8 @@ export async function replaceRows<T>(ops: ReplaceOps<T>): Promise<ReplaceResult>
       stage: "delete",
       recovered: true,
       inserted: 0,
-      message: `${ops.label} failed while replacing existing rows (${delErr.message}) — previous rows are still in place`,
+      message: `${ops.label} failed while replacing existing rows — previous rows are still in place. Please retry.`,
+      cause: delErr,
     };
   }
 
@@ -76,7 +80,8 @@ export async function replaceRows<T>(ops: ReplaceOps<T>): Promise<ReplaceResult>
       stage: "insert",
       recovered: true,
       inserted: 0,
-      message: `${ops.label} failed: ${insErr.message}`,
+      message: `${ops.label} failed. Please retry.`,
+      cause: insErr,
     };
   }
 
@@ -87,7 +92,8 @@ export async function replaceRows<T>(ops: ReplaceOps<T>): Promise<ReplaceResult>
       stage: "insert",
       recovered: true,
       inserted: 0,
-      message: `${ops.label} failed (${insErr.message}) — the previous rows were restored`,
+      message: `${ops.label} failed — the previous rows were restored. Please retry.`,
+      cause: insErr,
     };
   }
 
@@ -97,8 +103,9 @@ export async function replaceRows<T>(ops: ReplaceOps<T>): Promise<ReplaceResult>
     recovered: false,
     inserted: 0,
     message:
-      `CRITICAL: ${ops.label} failed (${insErr.message}) AND restoring the previous rows also failed ` +
-      `(${restoreErr.message}). The previous rows were deleted and the new ones were not written — ` +
+      `CRITICAL: ${ops.label} failed AND restoring the previous rows also failed. ` +
+      `The previous rows were deleted and the new ones were not written — ` +
       `re-enter this month's data before finalizing.`,
+    cause: restoreErr,
   };
 }

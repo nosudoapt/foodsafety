@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { MONTH_END_EDIT_ROLES, parseSummarySave, requireRole } from "@/lib/btb-inventory-api";
 import { requireEditableMonth } from "@/lib/inventory-server-guards";
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
 
   const db = inventoryDb();
   const editable = await requireEditableMonth(db, month);
-  if (!editable.ok) return NextResponse.json({ error: editable.error }, { status: editable.status });
+  if (!editable.ok) return databaseFailure(editable.cause, editable.error, editable.status);
 
   const outcome = await replaceRows({
     label: "sales save",
@@ -55,6 +55,6 @@ export async function POST(req: Request) {
     },
   });
 
-  if (!outcome.ok) return NextResponse.json({ error: outcome.message }, { status: 500 });
+  if (!outcome.ok) return databaseFailure(outcome, outcome.message);
   return NextResponse.json({ ok: true });
 }

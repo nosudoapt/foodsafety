@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireVaultSession } from "@/lib/vault-server";
 import { decryptSecret } from "@/lib/vault-crypto";
+import { databaseFailure } from "@/lib/btb-api";
 
 export async function POST(request: NextRequest) {
   const auth = await requireVaultSession();
@@ -17,15 +18,12 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? "Entry not found." }, { status: 404 });
+    return databaseFailure(error, "Entry not found or unavailable.", 404, auth.session.restaurantName);
   }
 
   try {
     return NextResponse.json({ secret: decryptSecret(data.secret ?? "") });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Unable to decrypt entry." },
-      { status: 500 }
-    );
+    return databaseFailure(err, "Unable to decrypt this entry. Ask your administrator to check the vault configuration.", 503, auth.session.restaurantName);
   }
 }

@@ -5,6 +5,7 @@ import { BtbApiError } from "./btb-api";
 import { BTB_COOKIE, employeeClaimsFromSession, roleFromSession } from "./btb-auth";
 import { isBtbRole, type BtbRole } from "./btb-roles";
 import { inventoryDb } from "./supabase-server";
+import { publicPlatformFailure } from "./api-errors";
 
 export interface PlatformActor {
   db: SupabaseClient;
@@ -50,14 +51,4 @@ export async function platformRpc<T>(
   return data as T;
 }
 
-const MISSING_SURFACE = ["42P01", "42883", "PGRST205", "PGRST202"];
-
-export function platformFailure(message: string, code: string | undefined, fallback: string): BtbApiError {
-  const text = message.replace(/^[A-Z0-9_]+:\s*/, "").trim();
-  if (code === "42501") return new BtbApiError(text || "Your role cannot make this change.", 403);
-  if (code === "40001") return new BtbApiError(text || "This record changed on another device. Reload before saving.", 409);
-  if (MISSING_SURFACE.includes(code ?? "")) {
-    return new BtbApiError("The location workspace is not connected yet. Ask your administrator to apply the location release, then retry.", 503);
-  }
-  return new BtbApiError(text || fallback, 400);
-}
+export const platformFailure = publicPlatformFailure;

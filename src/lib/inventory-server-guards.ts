@@ -1,9 +1,12 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+function unavailable(cause: unknown, message: string): DbGuardResult {
+  return { ok: false, status: 500, error: message, cause };
+}
 
 export type DbGuardResult =
   | { ok: true }
-  | { ok: false; status: 409 | 500; error: string };
+  | { ok: false; status: 409 | 500; error: string; cause?: unknown };
 
 /** A finalized month is immutable until a manager explicitly reopens it. */
 export async function requireEditableMonth(db: SupabaseClient, month: string): Promise<DbGuardResult> {
@@ -14,7 +17,7 @@ export async function requireEditableMonth(db: SupabaseClient, month: string): P
     .eq("count_month", month)
     .maybeSingle();
 
-  if (error) return { ok: false, status: 500, error: `could not check month status: ${error.message}` };
+  if (error) return unavailable(error, "The month status could not be checked. Please retry.");
   if (data?.status === "finalized") {
     return { ok: false, status: 409, error: "month is finalized; reopen it before making changes" };
   }
@@ -36,7 +39,7 @@ export async function requireItemWithoutFinalizedHistory(
     .is("location_id", null)
     .eq("item_id", itemId);
 
-  if (countError) return { ok: false, status: 500, error: `could not check item history: ${countError.message}` };
+  if (countError) return unavailable(countError, "The item history could not be checked. Please retry.");
   const months = [...new Set((counts ?? []).map((row) => String(row.count_month)))];
   if (months.length === 0) return { ok: true };
 
@@ -49,7 +52,7 @@ export async function requireItemWithoutFinalizedHistory(
     .limit(1);
 
   if (snapshotError) {
-    return { ok: false, status: 500, error: `could not check finalized history: ${snapshotError.message}` };
+    return unavailable(snapshotError, "The finalized history could not be checked. Please retry.");
   }
   if ((finalized ?? []).length > 0) {
     return {

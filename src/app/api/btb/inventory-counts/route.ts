@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
 import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, parseCountSave, requireRole } from "@/lib/btb-inventory-api";
@@ -34,9 +34,9 @@ export async function GET(req: Request) {
     db.from("inventory_counts").select(COUNT_COLS).is("location_id", null).eq("count_month", prevMonth(month)),
     db.from("inventory_month_summary").select("sales").is("location_id", null).eq("count_month", month),
   ]);
-  if (countsRes.error) return NextResponse.json({ error: countsRes.error.message }, { status: 500 });
-  if (prevRes.error) return NextResponse.json({ error: prevRes.error.message }, { status: 500 });
-  if (summaryRes.error) return NextResponse.json({ error: summaryRes.error.message }, { status: 500 });
+  if (countsRes.error) return databaseFailure(countsRes.error);
+  if (prevRes.error) return databaseFailure(prevRes.error);
+  if (summaryRes.error) return databaseFailure(summaryRes.error);
 
   const row = (summaryRes.data?.[0] as { sales: number } | undefined) ?? null;
   return NextResponse.json({
@@ -59,7 +59,7 @@ export async function POST(req: Request) {
 
   const db = inventoryDb();
   const editable = await requireEditableMonth(db, month);
-  if (!editable.ok) return NextResponse.json({ error: editable.error }, { status: editable.status });
+  if (!editable.ok) return databaseFailure(editable.cause, editable.error, editable.status);
 
   // Reject unknown IDs before deleting anything. Without this preflight, a
   // typo would fail the insert on the FK after the old month had been deleted.
@@ -70,7 +70,7 @@ export async function POST(req: Request) {
       .select("id")
       .is("location_id", null)
       .in("id", itemIds);
-    if (itemError) return NextResponse.json({ error: itemError.message }, { status: 500 });
+    if (itemError) return databaseFailure(itemError);
     if ((knownItems ?? []).length !== itemIds.length) {
       return NextResponse.json({ error: "one or more inventory items do not exist" }, { status: 400 });
     }
@@ -107,6 +107,6 @@ export async function POST(req: Request) {
     },
   });
 
-  if (!outcome.ok) return NextResponse.json({ error: outcome.message }, { status: 500 });
+  if (!outcome.ok) return databaseFailure(outcome, outcome.message);
   return NextResponse.json({ ok: true, saved: outcome.inserted });
 }

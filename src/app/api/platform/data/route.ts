@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { inventoryDb } from "@/lib/supabase-server";
 import { PLATFORM_COOKIE } from "@/lib/platform-admin";
-import { PRIVATE_HEADERS } from "@/lib/btb-api";
+import { databaseFailure, PRIVATE_HEADERS } from "@/lib/btb-api";
 
 // The platform pane's data: every client (restaurant) — BTB and FoodSafe alike
 // — with usage, storage, heatmap and the pricing game. Platform cookie only,
@@ -51,7 +51,7 @@ export async function GET() {
   const errs = [activity, plans, locations, storageDocs, storageLicenses, storagePromos, storageManuals, storageCompliance, storageBranding, fileObjects, aiUsage, employees]
     .map((r) => r.error).filter(Boolean);
   if (errs.length) {
-    return NextResponse.json({ ok: false, error: errs[0]!.message }, { status: 503, headers: PRIVATE_HEADERS });
+    return databaseFailure(errs[0], "Platform data could not be loaded. Please retry.", 503, "platform");
   }
 
   const rows = activity.data ?? [];
@@ -172,6 +172,6 @@ export async function PUT(request: Request) {
     updated_at: new Date().toISOString(),
   };
   const { error } = await inventoryDb().from("platform_plans").upsert(row, { onConflict: "restaurant_name" });
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 503, headers: PRIVATE_HEADERS });
+  if (error) return databaseFailure(error, "The client plan could not be saved. Please retry.", 503, "platform");
   return NextResponse.json({ ok: true }, { headers: PRIVATE_HEADERS });
 }

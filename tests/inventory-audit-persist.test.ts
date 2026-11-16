@@ -82,7 +82,8 @@ test("REGRESSION finalize: audit INSERT FAILS → ok:false, snapshot rolled back
   assert.ok(calls.audit >= 1, "audit write was attempted");
   assert.equal(calls.rollback, 1, "failed audit MUST trigger a compensating rollback");
   assert.match(String(out.message), /audit log write failed/i);
-  assert.match(String(out.message), /permission denied/i, "error detail is surfaced, not swallowed");
+  assert.doesNotMatch(String(out.message), /permission denied/i, "raw DB diagnostics must not enter the response");
+  assert.equal(out.cause, AUDIT_FAILURE, "diagnostics remain available to the server logger");
 });
 
 test("REGRESSION reopen: audit INSERT FAILS → ok:false, status flip rolled back", async () => {

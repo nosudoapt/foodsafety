@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireVaultSession } from "@/lib/vault-server";
 import { encryptSecret, isEncrypted } from "@/lib/vault-crypto";
+import { databaseFailure } from "@/lib/btb-api";
 
 const LIST_COLUMNS = "id, service, category, username, secret, url, notes";
 
@@ -23,7 +24,7 @@ export async function GET() {
     .select(LIST_COLUMNS)
     .order("service");
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return databaseFailure(error, "Vault entries could not be loaded. Please retry.", 503, auth.session.restaurantName);
 
   const entries = ((data ?? []) as VaultRow[]).map((row) => ({
     id: row.id,
@@ -57,10 +58,7 @@ export async function POST(request: NextRequest) {
     try {
       stored = encryptSecret(secret);
     } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "Encryption failed." },
-        { status: 500 }
-      );
+      return databaseFailure(err, "Encryption is unavailable. Ask your administrator to check the vault configuration.", 503, auth.session.restaurantName);
     }
   }
 
@@ -84,8 +82,8 @@ export async function POST(request: NextRequest) {
     const message =
       error.code === "23514"
         ? "That category needs supabase/schema-vault-categories.sql run against the database."
-        : error.message;
-    return NextResponse.json({ error: message }, { status: 400 });
+        : "The vault entry could not be saved. Please retry.";
+    return databaseFailure(error, message, error.code === "23514" ? 400 : 503, auth.session.restaurantName);
   }
 
   const entry = data as {
@@ -110,7 +108,7 @@ export async function DELETE(request: NextRequest) {
   if (!id) return NextResponse.json({ error: "Missing id." }, { status: 400 });
 
   const { error } = await auth.session.supabase.from("login_vault").delete().eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return databaseFailure(error, "The vault entry could not be deleted. Please retry.", 503, auth.session.restaurantName);
 
   return NextResponse.json({ ok: true });
 }

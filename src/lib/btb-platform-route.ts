@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { PRIVATE_HEADERS, requireBtbOrigin } from "./btb-api";
+import { apiFailure, PRIVATE_HEADERS, requireBtbOrigin } from "./btb-api";
 import { platformActor, platformRpc, type PlatformActor } from "./btb-platform-server";
 
 export { platformActor, platformRpc };
@@ -26,15 +26,7 @@ export function platformRoute<A extends unknown[], B>(
       if (data instanceof Response) return data;
       return NextResponse.json(data, { headers: PLATFORM_HEADERS });
     } catch (error) {
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : "The location workspace could not complete this request." },
-        { status: platformStatus(error), headers: PLATFORM_HEADERS },
-      );
+      return apiFailure(error, request);
     }
   };
-}
-
-function platformStatus(error: unknown): number {
-  const status = (error as { status?: unknown } | null)?.status;
-  return typeof status === "number" && status >= 400 && status <= 599 ? status : 503;
 }

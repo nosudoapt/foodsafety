@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
 import { resolveOpening } from "@/lib/inventory-accounting";
@@ -26,7 +26,7 @@ export async function GET(req: Request) {
     .is("location_id", null)
     .eq("count_month", pm)
     .maybeSingle();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return databaseFailure(error);
 
   const resolved = resolveOpening(
     data && data.status === "finalized"

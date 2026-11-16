@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 import { isDateInMonth } from "@/lib/btb-inventory-api";
@@ -54,14 +54,14 @@ export async function POST(req: Request) {
 
   const db = inventoryDb();
   const editable = await requireEditableMonth(db, count_month);
-  if (!editable.ok) return NextResponse.json({ error: editable.error }, { status: editable.status });
+  if (!editable.ok) return databaseFailure(editable.cause, editable.error, editable.status);
 
   // Duplicate-invoice guard for GFS entries that carry a reference.
   if (type === "gfs" && ref) {
     const { data: existingRows, error: duplicateReadError } = await db
       .from("inventory_purchases")
       .select("id, type, supplier, reference, purchase_date, amount, description, count_month").is("location_id", null);
-    if (duplicateReadError) return NextResponse.json({ error: duplicateReadError.message }, { status: 500 });
+    if (duplicateReadError) return databaseFailure(duplicateReadError);
     const entries = (existingRows ?? []) as PurchaseEntry[];
     const candidate: PurchaseEntry = { count_month, purchase_date, type, supplier: sup, description: description.trim(), amount: amt, reference: ref };
     if (isDuplicateInvoice(entries, candidate)) {
@@ -88,7 +88,7 @@ export async function POST(req: Request) {
   if (error) {
     // 23505 = the DB unique index on (type, supplier, reference) caught a race.
     const status = error.code === "23505" ? 409 : 500;
-    return NextResponse.json({ error: error.code === "23505" ? "duplicate invoice reference" : error.message }, { status });
+    return databaseFailure(error, error.code === "23505" ? "duplicate invoice reference" : "The purchase could not be saved. Please retry.", status);
   }
   return NextResponse.json({ purchase: data });
 }
@@ -110,6 +110,6 @@ export async function GET(req: Request) {
     .eq("count_month", month)
     .order("purchase_date")
     .order("created_at");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return databaseFailure(error);
   return NextResponse.json({ purchases: data ?? [] });
 }

@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure, dbError, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth, toLines, totalValue, type InventoryCount, type InventoryItem } from "@/lib/month-end-inventory";
 import { computeAccounting } from "@/lib/inventory-accounting";
@@ -27,14 +27,14 @@ async function serverClosingValue(db: SupabaseClient, month: string): Promise<nu
   const { data: items, error: itemError } = await db
     .from("inventory_items")
     .select("id, name, unit, category, unit_cost, position").is("location_id", null);
-  if (itemError) throw new Error(`could not read inventory items: ${itemError.message}`);
+  dbError(itemError, "The inventory items could not be read. Please retry.");
 
   const { data: counts, error: countError } = await db
     .from("inventory_counts")
     .select("item_id, qty")
     .is("location_id", null)
     .eq("count_month", month);
-  if (countError) throw new Error(`could not read inventory counts: ${countError.message}`);
+  dbError(countError, "The inventory counts could not be read. Please retry.");
 
   const lines = toLines(
     ((items ?? []) as InventoryItem[]),
@@ -50,7 +50,7 @@ async function serverPurchases(db: SupabaseClient, month: string): Promise<numbe
     .select("amount")
     .is("location_id", null)
     .eq("count_month", month);
-  if (error) throw new Error(`could not read inventory purchases: ${error.message}`);
+  dbError(error, "The inventory purchases could not be read. Please retry.");
   const sum = (data ?? []).reduce((total, row) => {
     const amount = Number(row.amount);
     if (!Number.isFinite(amount) || amount < 0) throw new Error("stored purchase amount is invalid");
@@ -71,7 +71,7 @@ async function serverOpening(
     .is("location_id", null)
     .eq("count_month", pm)
     .maybeSingle();
-  if (error) throw new Error(`could not read prior snapshot: ${error.message}`);
+  dbError(error, "The prior snapshot could not be read. Please retry.");
   if (!data) return { opening: null, priorDraft: false }; // first period / missing immediate prior
   if (data.status !== "finalized") return { opening: null, priorDraft: true };
   const closing = Number(data.closing_value);
@@ -99,7 +99,7 @@ export async function POST(req: Request) {
     .is("location_id", null)
     .eq("count_month", count_month)
     .maybeSingle();
-  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+  if (existingError) return databaseFailure(existingError);
   if (existing && existing.status === "finalized") {
     return NextResponse.json({ error: "already finalized" }, { status: 409 });
   }
@@ -116,10 +116,7 @@ export async function POST(req: Request) {
       serverOpening(db, count_month),
     ]);
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "could not read persisted accounting data" },
-      { status: 500 },
-    );
+    return databaseFailure(error, "The persisted accounting data could not be read. Please retry.");
   }
 
   if (openingResult.priorDraft) {
@@ -208,7 +205,7 @@ export async function POST(req: Request) {
 
   if (!outcome.ok) {
     // recovered=false needs a human; recovered=true is a clean rollback.
-    return NextResponse.json({ error: outcome.message }, { status: 500 });
+    return databaseFailure(outcome, outcome.message);
   }
 
   return NextResponse.json({

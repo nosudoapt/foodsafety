@@ -58,6 +58,8 @@ export interface PersistOutcome<T> {
    */
   recovered: boolean;
   message?: string;
+  /** Internal diagnostics for correlated server logs, not response JSON. */
+  cause?: unknown;
 }
 
 export interface PersistOps<T> {
@@ -88,7 +90,8 @@ export async function persistWithAudit<T>(
       ok: false,
       stage: "snapshot",
       recovered: true,
-      message: writeErr?.message ?? `${ops.actionLabel} failed: could not write snapshot`,
+      message: `${ops.actionLabel} failed: could not write snapshot. Please retry.`,
+      cause: writeErr,
     };
   }
 
@@ -108,7 +111,8 @@ export async function persistWithAudit<T>(
       stage: "audit",
       snapshot: written,
       recovered: true,
-      message: `${ops.actionLabel} rolled back: audit log write failed (${auditErr.message})`,
+      message: `${ops.actionLabel} rolled back: audit log write failed. Please retry.`,
+      cause: auditErr,
     };
   }
 
@@ -118,6 +122,7 @@ export async function persistWithAudit<T>(
     stage: "rollback",
     snapshot: written,
     recovered: false,
+    cause: rollbackErr,
     message:
       `CRITICAL: ${ops.actionLabel} wrote the ${month} snapshot but the audit log write ` +
       `AND the rollback both failed. The snapshot may be inconsistent with the audit ` +

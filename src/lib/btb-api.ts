@@ -1,5 +1,6 @@
 import "server-only";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BTB_COOKIE, btbAccountFor, employeeClaimsFromSession, roleFromSession } from "./btb-auth";
@@ -9,20 +10,18 @@ import { pageSlug } from "./btb-page-access";
 import { BTB_RESTAURANT, type BtbEmployee, type BtbIdentity } from "./btb-team";
 import { inventoryDb } from "./supabase-server";
 import { btbOriginAllowed } from "./btb-origin";
+import { BtbApiError, failureDetails, publicFailure } from "./api-errors";
+export { BtbApiError } from "./api-errors";
 
 export const PRIVATE_HEADERS = { "Cache-Control": "private, no-store" };
 export const EMPLOYEE_COLUMNS = "id,name,email,phone,position,role,active,login_enabled,version,created_at";
 export const TEAM_COLUMNS = "id,name,position,role,active";
 
-export class BtbApiError extends Error {
-  constructor(message: string, public status = 400) { super(message); }
-}
-
 export function dbError(error: { code?: string; message?: string } | null, message: string): void {
   if (!error) return;
-  if (error.code === "23505") throw new BtbApiError("That record already exists. Reload before trying again.", 409);
-  if (error.code === "40001") throw new BtbApiError("This record changed on another device. Reload the latest version before saving your draft.", 409);
-  throw new BtbApiError(message, 503);
+  if (error.code === "23505") throw new BtbApiError("That record already exists. Reload before trying again.", 409, error);
+  if (error.code === "40001") throw new BtbApiError("This record changed on another device. Reload the latest version before saving your draft.", 409, error);
+  throw new BtbApiError(message, 503, error);
 }
 
 export async function readBody(request: Request, maxBytes = 256_000): Promise<Record<string, unknown>> {
@@ -120,8 +119,23 @@ export async function requireBtbAccess(feature?: BtbFeature, edit = false, optio
   return { db, identity };
 }
 
-export function apiFailure(error: unknown): NextResponse {
-  return NextResponse.json({ error: error instanceof BtbApiError ? error.message : "The workspace could not complete this request. Please try again." }, { status: error instanceof BtbApiError ? error.status : 503, headers: PRIVATE_HEADERS });
+export async function apiFailure(error: unknown, request?: Request, tenant = BTB_RESTAURANT): Promise<NextResponse> {
+  const incoming = request?.headers ?? await headers();
+  const supplied = incoming.get("x-request-id");
+  const requestId = supplied && /^[A-Za-z0-9_-]{1,64}$/.test(supplied) ? supplied : randomUUID();
+  const failure = publicFailure(error);
+  if (failure.status >= 500 || (error instanceof BtbApiError && error.cause)) {
+    console.error(JSON.stringify({ event: "request_failed", request_id: requestId, tenant,
+      ...(request ? { path: new URL(request.url).pathname, method: request.method } : {}),
+      status: failure.status, operation: failure.error, details: failureDetails(error) }));
+  }
+  return NextResponse.json({ error: failure.error, request_id: requestId }, {
+    status: failure.status, headers: { ...PRIVATE_HEADERS, "x-request-id": requestId },
+  });
+}
+
+export function databaseFailure(error: unknown, message = "The inventory request could not be completed. Please retry.", status = 500, tenant = BTB_RESTAURANT) {
+  return apiFailure(new BtbApiError(message, status, error), undefined, tenant);
 }
 
 export function requireBtbOrigin(request: Request, message = "Open this form in your BTB workspace and try again."): void {
@@ -136,7 +150,7 @@ export function btbRoute(feature: BtbFeature | undefined, edit: boolean, handler
       }
       const data = await handler(await requireBtbAccess(feature, edit, options), request);
       return NextResponse.json(data, { headers: PRIVATE_HEADERS });
-    } catch (error) { return apiFailure(error); }
+    } catch (error) { return apiFailure(error, request); }
   };
 }
 

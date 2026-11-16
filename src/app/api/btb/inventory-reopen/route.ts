@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
-import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 import { persistWithAudit, snapshotRestoreFields, type SnapshotRow } from "@/lib/inventory-audit-persist";
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
     .is("location_id", null)
     .eq("status", "finalized")
     .gt("count_month", count_month);
-  if (laterError) return NextResponse.json({ error: laterError.message }, { status: 500 });
+  if (laterError) return databaseFailure(laterError);
   if ((later ?? []).length > 0) {
     const months = (later as { count_month: string }[]).map((r) => r.count_month).join(", ");
     return NextResponse.json(
@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     .is("location_id", null)
     .eq("count_month", count_month)
     .maybeSingle();
-  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 });
+  if (existingError) return databaseFailure(existingError);
   if (!existing) return NextResponse.json({ error: "not finalized" }, { status: 404 });
   if (existing.status !== "finalized") return NextResponse.json({ error: "already reopened" }, { status: 409 });
   const prior = existing as SnapshotRow;
@@ -104,7 +104,7 @@ export async function POST(req: Request) {
   });
 
   if (!outcome.ok) {
-    return NextResponse.json({ error: outcome.message }, { status: 500 });
+    return databaseFailure(outcome, outcome.message);
   }
 
   return NextResponse.json({ ok: true, snapshot: outcome.snapshot });

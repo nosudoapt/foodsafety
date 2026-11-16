@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireVaultSession } from "@/lib/vault-server";
 import { encryptSecret, isEncrypted } from "@/lib/vault-crypto";
+import { databaseFailure } from "@/lib/btb-api";
 
 export async function POST() {
   const auth = await requireVaultSession();
@@ -11,7 +12,7 @@ export async function POST() {
     .select("id, secret")
     .not("secret", "is", null);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  if (error) return databaseFailure(error, "Vault entries could not be checked. Please retry.", 503, auth.session.restaurantName);
 
   const rows: { id: string; secret: string | null }[] = data ?? [];
   const plaintext = rows.filter((row) => row.secret && !isEncrypted(row.secret));
@@ -23,7 +24,7 @@ export async function POST() {
       .update({ secret: encryptSecret(row.secret as string) })
       .eq("id", row.id);
     if (updateError) {
-      return NextResponse.json({ error: updateError.message, updated }, { status: 400 });
+      return databaseFailure(updateError, `Vault hardening stopped after ${updated} entries. Retry to encrypt the remaining entries.`, 503, auth.session.restaurantName);
     }
     updated += 1;
   }

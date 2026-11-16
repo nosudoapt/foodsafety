@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { inventoryDb } from "@/lib/supabase-server";
 import { PLATFORM_COOKIE, hashOf, matchesBootstrapToken, verifyAgainst } from "@/lib/platform-admin";
-import { PRIVATE_HEADERS } from "@/lib/btb-api";
+import { apiFailure, databaseFailure, dbError, PRIVATE_HEADERS } from "@/lib/btb-api";
 
 // Sign in / out for the platform owner pane at /platform. Independent of both
 // FoodSafe admin roles and BTB logins. The passcode lives in the database
@@ -19,7 +19,7 @@ async function storedHash(): Promise<string | null> {
   const envValue = process.env.PLATFORM_ADMIN_PASSCODE;
   if (envValue?.trim()) return hashOf(envValue.trim());
   const { data, error } = await inventoryDb().from("platform_auth").select("passcode_hash").eq("id", 1).maybeSingle();
-  if (error) throw new Error(error.message);
+  dbError(error, "Platform sign-in could not be verified. Please retry.");
   return (data?.passcode_hash as string) ?? null;
 }
 
@@ -29,12 +29,18 @@ export async function GET() {
     const token = await storedHash();
     const authed = !!token && cookieStore.get(PLATFORM_COOKIE)?.value === token;
     return NextResponse.json({ ok: true, authed, configured: !!token }, { headers: PRIVATE_HEADERS });
-  } catch {
+  } catch (error) {
+    await apiFailure(error, undefined, "platform");
     return NextResponse.json({ ok: true, authed: false, configured: false }, { headers: PRIVATE_HEADERS });
   }
 }
 
 export async function POST(request: Request) {
+  try { return await signIn(request); }
+  catch (error) { return apiFailure(error, request, "platform"); }
+}
+
+async function signIn(request: Request) {
   let body: { passcode?: unknown; bootstrapToken?: unknown };
   try {
     body = (await request.json()) as typeof body;
@@ -57,7 +63,7 @@ export async function POST(request: Request) {
     const { error } = await inventoryDb()
       .from("platform_auth")
       .upsert({ id: 1, passcode_hash: hashOf(passcode), updated_at: new Date().toISOString() }, { onConflict: "id" });
-    if (error) return NextResponse.json({ ok: false, error: "The platform passcode could not be saved. Please try again." }, { status: 503, headers: PRIVATE_HEADERS });
+    if (error) return databaseFailure(error, "The platform passcode could not be saved. Please try again.", 503, "platform");
   } else if (result === "wrong") {
     return NextResponse.json({ ok: false, error: "Wrong passcode." }, { status: 401, headers: PRIVATE_HEADERS });
   }
