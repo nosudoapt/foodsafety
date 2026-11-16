@@ -2,7 +2,9 @@ import { test as base, expect, type APIRequestContext, type Page, type TestInfo 
 
 export const fixtureUrl = "http://127.0.0.1:5102";
 export const password = "BrowserTest!234";
-export const workspacePassword = "admin1234";
+// BTB_PASSWORD is the synthetic value configured for the QA sandbox (qa/env.json);
+// there is no built-in fallback in the product.
+export const workspacePassword = process.env.BTB_PASSWORD ?? "";
 export const east = "20000000-0000-4000-8000-000000000001";
 export const west = "20000000-0000-4000-8000-000000000002";
 export const bun = "30000000-0000-4000-8000-000000000001";

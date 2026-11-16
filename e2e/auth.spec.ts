@@ -82,7 +82,7 @@ test("BTB backend login recovers old cookies and loads account shortcuts without
   await expect(response).toBeOK();
   const info = await response.json();
   expect(info.authenticated).toBe(false);
-  expect(info.passwordHint).toBeNull();
+  expect("passwordHint" in info).toBe(false);
   expect(info.accounts).toHaveLength(5);
   expect(JSON.stringify(info)).not.toContain(workspacePassword);
   await signInBtb(page, "manager");

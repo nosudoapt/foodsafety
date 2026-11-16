@@ -10,7 +10,7 @@ import { safeNextPath } from "@/lib/auth-redirect";
 import { fetchJson, RequestError } from "@/lib/fetch-json";
 import "@/app/auth.css";
 
-interface PublicInfo { authenticated?: boolean; accounts?: { role: string; email: string; name: string }[]; passwordHint?: string | null }
+interface PublicInfo { authenticated?: boolean; accounts?: { role: string; email: string; name: string }[] }
 
 export default function BtbLogin() {
   const [email, setEmail] = useState("");
@@ -59,7 +59,7 @@ export default function BtbLogin() {
         <button className="btn btn--primary" type="submit" disabled={loading}>{loading ? <><span className="btn__spinner" aria-hidden="true" />Signing in…</> : <>Open my workspace<ArrowRight size={17} aria-hidden="true" /></>}</button>
       </form>
       {info.authenticated && <p className="foot"><a href="/between-the-buns">Continue with your current session</a></p>}
-      {!!info.accounts?.length && <details className="btb-auth__accounts"><summary>Shared workspace accounts</summary><p>Individual employee sign-in is required to record daily checks and training.</p><div>{info.accounts.map((account) => <button key={account.role} type="button" aria-pressed={email === account.email} onClick={() => setEmail(account.email)}><strong>{isBtbRole(account.role) ? BTB_ROLE_LABELS[account.role] : account.role}</strong><span>{account.name}</span></button>)}</div>{info.passwordHint && <p className="btb-auth__hint">Development workspace password: <code>{info.passwordHint}</code></p>}</details>}
+      {!!info.accounts?.length && <details className="btb-auth__accounts"><summary>Shared workspace accounts</summary><p>Individual employee sign-in is required to record daily checks and training.</p><div>{info.accounts.map((account) => <button key={account.role} type="button" aria-pressed={email === account.email} onClick={() => setEmail(account.email)}><strong>{isBtbRole(account.role) ? BTB_ROLE_LABELS[account.role] : account.role}</strong><span>{account.name}</span></button>)}</div></details>}
       {infoError && <p className="foot" role="status">Account shortcuts couldn’t load. You can enter your email above. <button className="link" onClick={() => setRevision((value) => value + 1)}>Try again</button></p>}
       <p className="foot">Need your account details? Ask your restaurant manager.</p>
     </div></div></main>

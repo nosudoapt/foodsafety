@@ -1,6 +1,13 @@
 # BTB — next-session handoff
 
-Updated: 2026-11-04 after publishing and verifying temperature/prep-history restoration. Continue with focused reads; completed features do not need rebuilding. The November 2 verification is retained separately from the latest work.
+Updated: 2026-11-16 after the QA security pass. Continue with focused reads; completed features do not need rebuilding. The November 2 verification is retained separately from the latest work.
+
+## November 2026 QA correction (HTTP-01)
+
+- **Supersedes the November 4 login correction below.** The shared workspace password is no longer built into the server. `src/lib/btb-auth.ts` now reads `BTB_PASSWORD`; there is no built-in value in any environment, and sign-in fails closed (503) until `BTB_PASSWORD` is set on the server.
+- `BTB_PASSWORD` must be configured in Vercel (and in each environment) before deploying this build, then rotate the shared credential to a new value. Employee passwords are unaffected.
+- The anonymous `passwordHint` on `/api/btb/me` was removed; the login screen no longer displays a password.
+- Session signing still derives from `SUPABASE_SERVICE_ROLE_KEY`; `BTB_SESSION_TOKEN` remains unused.
 
 ## November 4 temperature and saved-sheet restoration
 

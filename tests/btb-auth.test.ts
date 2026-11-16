@@ -9,7 +9,6 @@ import {
   BTB_ROLES,
   accountForCredentials,
   btbPassword,
-  btbPasswordIsDefault,
   isBtbRole,
   roleFromSession,
   sessionValueFor,
@@ -20,6 +19,10 @@ import { cardsForRole, hiddenCardsForRole, BTB_CARDS } from "../src/lib/btb-hub"
 // Compiled tests run from .test-dist/tests/, so the project root is two levels up.
 const ROOT = join(__dirname, "..", "..");
 const read = (rel: string) => readFileSync(join(ROOT, rel), "utf8");
+
+// The shared workspace password must come from the environment (HTTP-01).
+// This is a synthetic test value, never a real credential.
+process.env.BTB_PASSWORD = "test-only-shared-password";
 
 // --- 1. BTB's own credential list -------------------------------------------
 
@@ -53,28 +56,33 @@ test("one shared password unlocks every BTB account", () => {
   assert.equal(accountForCredentials("", ""), null);
 });
 
-test("one password works on both sign-in pages, but each checks its own list", () => {
-  // BTB maintains its own single shared workspace password.
-  assert.equal(btbPasswordIsDefault(), process.env.NODE_ENV !== "production");
-
+test("the shared password comes from BTB_PASSWORD and fails closed when it is missing", () => {
   // BTB still validates against BTB_ACCOUNTS only — an address it doesn't
   // know fails even with the correct shared password.
   assert.ok(accountForCredentials("manager@btb.demo", btbPassword()));
   assert.equal(accountForCredentials("nobody@btb.demo", btbPassword()), null);
+  assert.equal(accountForCredentials("manager@btb.demo", "wrong"), null);
+  // No built-in fallback may exist in any environment.
+  const saved = process.env.BTB_PASSWORD;
+  delete process.env.BTB_PASSWORD;
+  try {
+    assert.throws(() => btbPassword(), /not configured/);
+    assert.throws(() => accountForCredentials("manager@btb.demo", "admin1234"), /not configured/);
+  } finally {
+    if (saved === undefined) delete process.env.BTB_PASSWORD; else process.env.BTB_PASSWORD = saved;
+  }
 });
 
-test("production logins need no BTB environment settings and retain private, role-bound sessions", () => {
+test("production logins require BTB_PASSWORD and retain private, role-bound sessions", () => {
   const env: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "production", SUPABASE_SERVICE_ROLE_KEY: "test-only-backend-service-key" };
-  delete env.BTB_PASSWORD;
-  delete env.BTB_SESSION_TOKEN;
+  env.BTB_PASSWORD = "test-only-shared-password";
   execFileSync(process.execPath, ["-e", `
     const assert = require("node:assert/strict");
     const auth = require(${JSON.stringify(join(ROOT, ".test-dist/src/lib/btb-auth.js"))});
     for (const account of auth.BTB_ACCOUNTS) {
-      assert.equal(auth.accountForCredentials(account.email, "admin1234").role, account.role);
+      assert.equal(auth.accountForCredentials(account.email, "test-only-shared-password").role, account.role);
     }
     assert.equal(auth.accountForCredentials("manager@btb.demo", "wrong"), null);
-    assert.equal(auth.btbPasswordIsDefault(), false);
     const shared = auth.sessionValueFor("manager");
     const employee = auth.employeeSessionValueFor({ id: "50000000-0000-4000-8000-000000000001", role: "staff", version: 1 });
     assert.equal(auth.roleFromSession(shared), "manager");
@@ -82,13 +90,14 @@ test("production logins need no BTB environment settings and retain private, rol
     assert.equal(auth.roleFromSession(shared.replace(/^manager/, "admin")), null);
     assert.equal(auth.roleFromSession("manager.btb-dev-session-token"), null);
     for (const cookie of [shared, employee]) {
-      assert.ok(!cookie.includes("admin1234"));
+      assert.ok(!cookie.includes("test-only-shared-password"));
       assert.ok(!cookie.includes(process.env.SUPABASE_SERVICE_ROLE_KEY));
     }
-    process.env.BTB_PASSWORD = "obsolete-env-password";
-    process.env.BTB_SESSION_TOKEN = "obsolete-env-signing-key";
-    assert.equal(auth.accountForCredentials("manager@btb.demo", "admin1234").role, "manager");
-    assert.equal(auth.accountForCredentials("manager@btb.demo", "obsolete-env-password"), null);
+    // The environment is read live, so rotating BTB_PASSWORD takes effect
+    // without a rebuild; the previous value must stop working.
+    process.env.BTB_PASSWORD = "rotated-test-password";
+    assert.equal(auth.accountForCredentials("manager@btb.demo", "rotated-test-password").role, "manager");
+    assert.equal(auth.accountForCredentials("manager@btb.demo", "test-only-shared-password"), null);
     assert.equal(auth.sessionValueFor("manager"), shared);
     assert.equal(auth.roleFromSession(employee), "staff");
     process.env.SUPABASE_SERVICE_ROLE_KEY = "rotated-test-backend-key";
@@ -97,6 +106,18 @@ test("production logins need no BTB environment settings and retain private, rol
     delete process.env.SUPABASE_SERVICE_ROLE_KEY;
     assert.throws(() => auth.sessionValueFor("manager"), auth.BtbConfigurationError);
   `], { env, stdio: "pipe" });
+
+  // Fail closed: production with no BTB_PASSWORD must reject every login
+  // instead of falling back to a built-in password.
+  const closed: NodeJS.ProcessEnv = { ...process.env, NODE_ENV: "production", SUPABASE_SERVICE_ROLE_KEY: "test-only-backend-service-key" };
+  delete closed.BTB_PASSWORD;
+  delete closed.NEXT_PUBLIC_SUPABASE_URL;
+  execFileSync(process.execPath, ["-e", `
+    const assert = require("node:assert/strict");
+    const auth = require(${JSON.stringify(join(ROOT, ".test-dist/src/lib/btb-auth.js"))});
+    assert.throws(() => auth.accountForCredentials("manager@btb.demo", "admin1234"), auth.BtbConfigurationError);
+    assert.throws(() => auth.accountForCredentials("manager@btb.demo", "rotated-test-password"), auth.BtbConfigurationError);
+  `], { env: closed, stdio: "pipe" });
 });
 
 // --- 2. the session cookie carries the role ---------------------------------
@@ -116,7 +137,7 @@ test("tampered, legacy and role-less session values are rejected", () => {
   assert.equal(roleFromSession(undefined), null);
   assert.equal(roleFromSession(null), null);
   assert.equal(roleFromSession(""), null);
-  assert.equal(roleFromSession("admin1234"), null); // old shared-token format
+  assert.equal(roleFromSession("legacy-shared-token"), null); // old role-less token format
   assert.equal(roleFromSession("owner."), null);
   assert.equal(roleFromSession(".btb-dev-session-token"), null);
   assert.equal(roleFromSession("wizard.btb-dev-session-token"), null);
@@ -205,9 +226,10 @@ test("no client component imports the module holding BTB's password", () => {
   assert.deepEqual(offenders, [], `client files must import ./btb-roles, not ./btb-auth: ${offenders.join(", ")}`);
 });
 
-test("the password hint is gated to local development", () => {
+test("the anonymous account list never exposes a password", () => {
   const me = read("src/app/api/btb/me/route.ts");
-  assert.ok(me.includes("btbPasswordIsDefault()"), "hint must be gated to local development");
+  assert.ok(!me.includes("passwordHint"), "no password hint may be returned to anonymous callers");
+  assert.ok(!me.includes("btbPassword"), "the password module must not be consulted by the anonymous response");
   assert.ok(me.includes("authenticated: false"), "signed-out response must expose the account list");
 
   const login = read("src/app/api/btb/login/route.ts");

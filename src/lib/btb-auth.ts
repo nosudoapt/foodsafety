@@ -43,16 +43,17 @@ export function btbAccountFor(role: string): BtbAccount | undefined {
   return BTB_ACCOUNTS.find((a) => a.role === role);
 }
 
-// Backend-owned credentials for the five shared role workspaces. Keep the
-// existing login working in development and production without login env vars.
+// Backend-owned credentials for the five shared role workspaces. The shared
+// password is deployed as the BTB_PASSWORD environment variable; there is
+// deliberately no built-in value, so a leaked copy of this file cannot unlock
+// any workspace, and a missing value fails closed at sign-in.
 // Individual employee passwords remain hashed in the backend database.
 export function btbPassword(): string {
-  return "admin1234";
-}
-
-// Local-development convenience only; the live login never returns a password.
-export function btbPasswordIsDefault(): boolean {
-  return process.env.NODE_ENV !== "production";
+  const fromEnv = process.env.BTB_PASSWORD?.trim();
+  if (!fromEnv) {
+    throw new BtbConfigurationError("The BTB workspace password is not configured. Set BTB_PASSWORD on the server and restart.");
+  }
+  return fromEnv;
 }
 
 // The backend already requires this private database credential. Derive a

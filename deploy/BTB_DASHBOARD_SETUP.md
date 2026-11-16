@@ -39,8 +39,7 @@ with these values (use separate development/test values for other environments):
 
 BTB shared login details are maintained in server-only `src/lib/btb-auth.ts`, and
 individual employee passwords are stored in the backend database. Session signing
-uses the existing backend key automatically. `BTB_PASSWORD` and `BTB_SESSION_TOKEN`
-are no longer read or required; this login change needs no SQL installation.
+uses the existing backend key automatically. **November 2026 QA correction (HTTP-01):** `BTB_PASSWORD` is now required and sign-in fails closed without it; there is no built-in default. Set it in Vercel before deploying (no SQL installation is needed for login itself). `BTB_SESSION_TOKEN` is not read.
 
 Choose **Node.js 22.x** in the project's build/runtime settings. For the
 `nosudoapt/foodsafety` repository, `package.json` is at the repository root, so

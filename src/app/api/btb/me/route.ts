@@ -6,13 +6,11 @@ import { inventoryDb } from "@/lib/supabase-server";
 import {
   BTB_ACCOUNTS,
   BTB_COOKIE,
-  btbPasswordIsDefault,
-  btbPassword,
 } from "@/lib/btb-auth";
 
 // Who is signed in to BTB (used by the hub header), plus — when signed out —
-// the list of shared accounts for the login screen. Password hints are only
-// returned in local development; production never exposes a login password.
+// the list of shared accounts for the login screen. No password is ever
+// returned to callers.
 export async function GET() {
   try {
   const cookieStore = await cookies();
@@ -36,7 +34,6 @@ export async function GET() {
     return NextResponse.json({
       authenticated: false,
       accounts: [...BTB_ACCOUNTS.map((a) => ({ role: a.role, email: a.email, name: a.name })), ...employeeList],
-      passwordHint: btbPasswordIsDefault() ? btbPassword() : null,
     }, { headers: PRIVATE_HEADERS });
   }
 
