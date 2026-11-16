@@ -70,6 +70,7 @@ export default function PlatformPage() {
 function SignIn({ onDone, configured }: { onDone: () => void; configured: boolean }) {
   const [passcode, setPasscode] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [bootstrapToken, setBootstrapToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const firstTime = !configured;
@@ -81,13 +82,17 @@ function SignIn({ onDone, configured }: { onDone: () => void; configured: boolea
       setError("The two entries don't match.");
       return;
     }
+    if (firstTime && !bootstrapToken.trim()) {
+      setError("Enter the one-time bootstrap token from the server environment.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
       const res = await fetch("/api/platform/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ passcode }),
+        body: JSON.stringify(firstTime ? { passcode, bootstrapToken: bootstrapToken.trim() } : { passcode }),
       });
       const json = (await res.json()) as { ok: boolean; error?: string };
       if (!res.ok || !json.ok) throw new Error(json.error ?? "Sign in failed. Try again.");
@@ -108,10 +113,24 @@ function SignIn({ onDone, configured }: { onDone: () => void; configured: boolea
         <h1 className="text-xl font-bold text-slate-900">Platform owner</h1>
         <p className="text-sm text-slate-500 mt-1 mb-6">
           {firstTime
-            ? "First sign-in claims the platform passcode — whatever you set here becomes the key (stored hashed in the database)."
+            ? "First sign-in sets the platform passcode. Enter the one-time bootstrap token from the server environment (PLATFORM_ADMIN_BOOTSTRAP_TOKEN) and choose a passcode to store."
             : "One pane for every client on the site — both products included. Sign in with the platform passcode."}
         </p>
         {error && <p className="mb-4 text-sm text-red-600" role="alert">{error}</p>}
+        {firstTime && (
+          <label className="block text-sm mb-3">
+            <span className="block text-xs font-semibold text-slate-500 mb-1">One-time bootstrap token</span>
+            <input
+              type="password"
+              required
+              value={bootstrapToken}
+              onChange={(e) => setBootstrapToken(e.target.value)}
+              className="w-full border border-slate-300 rounded-xl px-3 py-2.5 text-slate-900 bg-white outline-none focus:ring-2 focus:ring-slate-500"
+              placeholder="PLATFORM_ADMIN_BOOTSTRAP_TOKEN"
+              autoComplete="off"
+            />
+          </label>
+        )}
         <label className="block text-sm">
           <span className="block text-xs font-semibold text-slate-500 mb-1">{firstTime ? "New passcode (min 8 characters)" : "Passcode"}</span>
           <input
@@ -139,11 +158,15 @@ function SignIn({ onDone, configured }: { onDone: () => void; configured: boolea
         )}
         <button
           type="submit"
-          disabled={busy || !passcode || (firstTime && !confirm)}
+          disabled={busy || !passcode || (firstTime && (!confirm || !bootstrapToken.trim()))}
           className="mt-5 w-full bg-slate-900 text-white rounded-xl py-2.5 text-sm font-bold hover:bg-slate-800 disabled:opacity-50"
         >
           {busy ? "Checking…" : firstTime ? "Set passcode & sign in" : "Sign in"}
         </button>
+        {/*
+          The claim is not anonymous: PLATFORM_ADMIN_BOOTSTRAP_TOKEN authorizes
+          the first passcode only, and is inert afterwards.
+        */}
       </form>
     </div>
   );

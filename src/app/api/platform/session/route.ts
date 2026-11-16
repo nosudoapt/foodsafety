@@ -2,14 +2,15 @@ import "server-only";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { inventoryDb } from "@/lib/supabase-server";
-import { PLATFORM_COOKIE, hashOf, verifyAgainst } from "@/lib/platform-admin";
+import { PLATFORM_COOKIE, hashOf, matchesBootstrapToken, verifyAgainst } from "@/lib/platform-admin";
 import { PRIVATE_HEADERS } from "@/lib/btb-api";
 
 // Sign in / out for the platform owner pane at /platform. Independent of both
 // FoodSafe admin roles and BTB logins. The passcode lives in the database
-// (platform_auth, hash only): if nothing is stored yet, the FIRST sign-in
-// claims it — no environment variables needed. PLATFORM_ADMIN_PASSCODE, when
-// set, overrides the DB value.
+// (platform_auth, hash only): PLATFORM_ADMIN_PASSCODE, when set, overrides the
+// DB value. A first passcode may only be claimed by presenting the one-time
+// PLATFORM_ADMIN_BOOTSTRAP_TOKEN from the server environment — there is no
+// anonymous claim (HTTP-05).
 
 const MAX_AGE = 60 * 60 * 24 * 14; // two weeks
 
@@ -34,7 +35,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  let body: { passcode?: unknown };
+  let body: { passcode?: unknown; bootstrapToken?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -47,14 +48,18 @@ export async function POST(request: Request) {
 
   const stored = await storedHash();
   const result = verifyAgainst(stored, passcode);
-  if (result === "wrong") {
-    return NextResponse.json({ ok: false, error: "Wrong passcode." }, { status: 401, headers: PRIVATE_HEADERS });
-  }
   if (result === "claim") {
+    // HTTP-05: without a stored passcode, the claim must present the one-time
+    // bootstrap token from the environment. Anonymous claiming is refused.
+    if (!matchesBootstrapToken(typeof body.bootstrapToken === "string" ? body.bootstrapToken : null)) {
+      return NextResponse.json({ ok: false, error: "Platform access is not configured. Ask the owner to set PLATFORM_ADMIN_BOOTSTRAP_TOKEN." }, { status: 403, headers: PRIVATE_HEADERS });
+    }
     const { error } = await inventoryDb()
       .from("platform_auth")
       .upsert({ id: 1, passcode_hash: hashOf(passcode), updated_at: new Date().toISOString() }, { onConflict: "id" });
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 503, headers: PRIVATE_HEADERS });
+    if (error) return NextResponse.json({ ok: false, error: "The platform passcode could not be saved. Please try again." }, { status: 503, headers: PRIVATE_HEADERS });
+  } else if (result === "wrong") {
+    return NextResponse.json({ ok: false, error: "Wrong passcode." }, { status: 401, headers: PRIVATE_HEADERS });
   }
 
   const cookieStore = await cookies();
