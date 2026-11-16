@@ -18,9 +18,11 @@ test("the session route gates the first claim behind the bootstrap token", () =>
   const route = read("src/app/api/platform/session/route.ts");
   // The bootstrap check must happen before anything is persisted.
   const check = route.indexOf("matchesBootstrapToken(");
-  const upsert = route.indexOf(".upsert(");
+   const insert = route.indexOf(".insert(");
   assert.ok(check > 0, "claim path must call matchesBootstrapToken");
-  assert.ok(upsert > check, "the platform_auth upsert must come after the bootstrap check");
+  assert.ok(insert > check, "the insert-only singleton claim must come after the bootstrap check");
+  assert.ok(!route.includes(".upsert("), "an upsert must never overwrite a concurrent bootstrap winner");
+  assert.ok(route.includes('error?.code === "23505"'), "a concurrent primary-key conflict must be refused before setting a cookie");
   assert.ok(route.includes("403"), "an unauthorised claim must be refused with 403");
 });
 

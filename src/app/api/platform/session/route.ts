@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { inventoryDb } from "@/lib/supabase-server";
 import { PLATFORM_COOKIE, hashOf, matchesBootstrapToken, verifyAgainst } from "@/lib/platform-admin";
-import { apiFailure, databaseFailure, dbError, PRIVATE_HEADERS } from "@/lib/btb-api";
+import { apiFailure, databaseFailure, dbError, PRIVATE_HEADERS, requireBtbOrigin } from "@/lib/btb-api";
 
 // Sign in / out for the platform owner pane at /platform. Independent of both
 // FoodSafe admin roles and BTB logins. The passcode lives in the database
@@ -36,7 +36,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  try { return await signIn(request); }
+  try { requireBtbOrigin(request); return await signIn(request); }
   catch (error) { return apiFailure(error, request, "platform"); }
 }
 
@@ -44,12 +44,13 @@ async function signIn(request: Request) {
   let body: { passcode?: unknown; bootstrapToken?: unknown };
   try {
     body = (await request.json()) as typeof body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Invalid form");
   } catch {
     return NextResponse.json({ ok: false }, { status: 400, headers: PRIVATE_HEADERS });
   }
   const passcode = typeof body.passcode === "string" ? body.passcode : "";
-  if (passcode.length < 8) {
-    return NextResponse.json({ ok: false, error: "Use at least 8 characters." }, { status: 400, headers: PRIVATE_HEADERS });
+  if (passcode.length < 8 || passcode.length > 256) {
+    return NextResponse.json({ ok: false, error: "Use 8 to 256 characters." }, { status: 400, headers: PRIVATE_HEADERS });
   }
 
   const stored = await storedHash();
@@ -62,7 +63,12 @@ async function signIn(request: Request) {
     }
     const { error } = await inventoryDb()
       .from("platform_auth")
-      .upsert({ id: 1, passcode_hash: hashOf(passcode), updated_at: new Date().toISOString() }, { onConflict: "id" });
+      .insert({ id: 1, passcode_hash: hashOf(passcode), updated_at: new Date().toISOString() });
+    // The singleton primary key is the atomic claim, not the earlier read. A
+    // concurrent loser must never overwrite the winner or receive a cookie.
+    if (error?.code === "23505") {
+      return NextResponse.json({ ok: false, error: "Platform access was just configured. Sign in with the owner's chosen passcode." }, { status: 409, headers: PRIVATE_HEADERS });
+    }
     if (error) return databaseFailure(error, "The platform passcode could not be saved. Please try again.", 503, "platform");
   } else if (result === "wrong") {
     return NextResponse.json({ ok: false, error: "Wrong passcode." }, { status: 401, headers: PRIVATE_HEADERS });

@@ -97,7 +97,11 @@ export async function btbPostgrest(table, method, params, body, headers, isRpc) 
       const saved = [];
       for (const row of rows) {
         const columns = Object.keys(row).map(identifier).join(",");
-        const created = await tx.query(`WITH saved AS (INSERT INTO ${identifier(table)} (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::${identifier(table)}, $1::jsonb) RETURNING *) SELECT to_jsonb(saved) AS row FROM saved`, [JSON.stringify(row)]);
+        const keys = (params.get("on_conflict") ?? primaryKey(table)).split(",");
+        const updates = Object.keys(row).filter(key => !keys.includes(key)).map(key => `${identifier(key)}=excluded.${identifier(key)}`);
+        const conflict = headers.prefer?.includes("resolution=merge-duplicates")
+          ? ` ON CONFLICT (${keys.map(identifier)}) DO ${updates.length ? `UPDATE SET ${updates}` : "NOTHING"}` : "";
+        const created = await tx.query(`WITH saved AS (INSERT INTO ${identifier(table)} (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::${identifier(table)}, $1::jsonb)${conflict} RETURNING *) SELECT to_jsonb(saved) AS row FROM saved`, [JSON.stringify(row)]);
         saved.push(...created.rows);
       }
       result = { rows: saved };

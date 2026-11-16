@@ -9,6 +9,7 @@ export const btbDatabaseTables = [
   "btb_employees", "btb_employee_credentials", "btb_login_limits", "btb_shifts", "btb_shift_checks", "btb_check_revisions",
   "btb_order_sheets", "btb_order_revisions", "training_topics", "training_sections", "btb_training_records", "btb_training_reviews",
   "btb_franchise_tasks", "btb_staff_licences", "btb_notification_settings", "btb_licence_email_log",
+  "platform_auth",
 ];
 
 export function identifier(value) {
@@ -63,6 +64,7 @@ export async function createBtbDatabase(legacy = {}) {
     ${readFileSync(new URL("schema-rbac.sql", schemaDirectory), "utf8").replaceAll("uuid_generate_v4()", "gen_random_uuid()")}
     ${readFileSync(new URL("schema-marketing-fields.sql", schemaDirectory), "utf8")}
     ${declaration("schema-tax-dates.sql", "corporate_dates")}
+    ${declaration("schema-platform-admin.sql", "platform_auth")}
   `);
   for (const [table, rows] of Object.entries(legacy)) await insertRows(db, table, rows);
   // Release 07 (schema-btb-platform-operations.sql) scopes shift checks with
@@ -71,6 +73,7 @@ export async function createBtbDatabase(legacy = {}) {
     // Release 07 / platform marketing scope rows with location_id; the BTB API
     // filters .is("location_id", null) on both tables.
     await db.exec("ALTER TABLE btb_shift_checks ADD COLUMN location_id uuid; ALTER TABLE social_media_calendar ADD COLUMN location_id uuid;");
+    await db.exec(readFileSync(new URL("fix-platform-bootstrap-security.sql", schemaDirectory), "utf8"));
   }
   catch (error) { await db.close(); throw error; }
   return db;
