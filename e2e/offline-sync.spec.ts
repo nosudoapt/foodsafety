@@ -2,6 +2,26 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { test, expect, signInFoodSafe } from "./fixtures";
+import type * as Queue from "../src/lib/offline-queue";
+
+declare global {
+  interface Window {
+    offlineTest: typeof Queue;
+    offlineSendCount: number;
+    offlineSendStarted: boolean;
+    releaseOfflineSend: () => void;
+    offlineDrain: Promise<Queue.DrainResult>;
+  }
+}
+
+async function installQueue(page: Page) {
+  await page.goto("/auth/sign-in");
+  const code = readFileSync(join(process.cwd(), ".test-dist/src/lib/offline-queue.js"), "utf8");
+  await page.evaluate((source) => {
+    const exports = {}; new Function("exports", source)(exports);
+    window.offlineTest = exports as typeof Queue; window.offlineSendCount = 0;
+  }, code);
+}
 
 async function retained(page: Page) {
   return page.evaluate(async () => {
@@ -65,4 +85,32 @@ test("OFF-01: real IndexedDB overflow remains visible and every captured payload
   const download = page.waitForEvent("download"); await page.getByRole("button", { name: "Export retained records" }).click();
   const path = await (await download).path(); expect(path).not.toBeNull();
   expect(JSON.parse(readFileSync(path!, "utf8")).operations).toHaveLength(51);
+});
+
+test("OFF-03 / OFF-04 / OFF-05: distinct Chromium tabs serialize mutations and drains without losing in-flight captures", async ({ page, context }) => {
+  const tab = await context.newPage(); await installQueue(page); await installQueue(tab);
+  await Promise.all([page.evaluate(async () => {
+    const q = window.offlineTest, store = q.idbStore();
+    await Promise.all(Array.from({ length: 20 }, (_, i) => q.enqueue(store, { ...q.newOp("temp_record", `Tab A ${i}`, { i }), id: `tab-a-${i}` })));
+  }), tab.evaluate(async () => {
+    const q = window.offlineTest, store = q.idbStore();
+    await Promise.all(Array.from({ length: 20 }, (_, i) => q.enqueue(store, { ...q.newOp("temp_record", `Tab B ${i}`, { i }), id: `tab-b-${i}` })));
+  })]);
+  expect(await retained(page)).toHaveLength(40);
+  const counts = await Promise.all([page.evaluate(async () => {
+    const q = window.offlineTest; await q.drain(q.idbStore(), async () => { window.offlineSendCount++; }); return window.offlineSendCount;
+  }), tab.evaluate(async () => {
+    const q = window.offlineTest; await q.drain(q.idbStore(), async () => { window.offlineSendCount++; }); return window.offlineSendCount;
+  })]);
+  expect(counts.reduce((sum, value) => sum + value, 0)).toBe(40); expect(await retained(page)).toHaveLength(0);
+  await page.evaluate(async () => {
+    const q = window.offlineTest, store = q.idbStore(); await q.enqueue(store, { ...q.newOp("temp_record", "In flight", {}), id: "in-flight" });
+    window.offlineDrain = q.drain(store, async () => {
+      window.offlineSendStarted = true; await new Promise<void>(resolve => { window.releaseOfflineSend = resolve; });
+    });
+  });
+  await expect.poll(() => page.evaluate(() => window.offlineSendStarted)).toBe(true);
+  await tab.evaluate(async () => { const q = window.offlineTest; await q.enqueue(q.idbStore(), { ...q.newOp("temp_record", "Captured during send", {}), id: "during-send" }); });
+  await page.evaluate(async () => { window.releaseOfflineSend(); await window.offlineDrain; });
+  expect((await retained(tab)).map(op => op.id)).toEqual(["during-send"]);
 });

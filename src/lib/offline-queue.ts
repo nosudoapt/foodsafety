@@ -25,6 +25,10 @@ export interface OfflineOp {
 export interface QueueStore {
   read(): Promise<OfflineOp[]>;
   write(ops: OfflineOp[]): Promise<void>;
+  /** The read/modify/write must be one storage transaction across tabs. */
+  mutate?(change: (ops: OfflineOp[]) => OfflineOp[]): Promise<OfflineOp[]>;
+  /** Drain coordination is separate so enqueue inside a sender cannot deadlock. */
+  exclusive?<T>(work: () => Promise<T>): Promise<T>;
 }
 
 export interface DrainResult {
@@ -99,14 +103,31 @@ export function newOp(kind: OfflineKind, label: string, payload: unknown, now = 
   };
 }
 
+const locks = new WeakMap<QueueStore, Map<string, Promise<unknown>>>();
+function serialized<T>(store: QueueStore, name: string, work: () => Promise<T>): Promise<T> {
+  let state = locks.get(store);
+  if (!state) { state = new Map(); locks.set(store, state); }
+  const previous = state.get(name) ?? Promise.resolve();
+  const next = previous.catch(() => {}).then(work);
+  state.set(name, next);
+  void next.finally(() => { if (state!.get(name) === next) state!.delete(name); }).catch(() => {});
+  return next;
+}
+function mutate(store: QueueStore, change: (ops: OfflineOp[]) => OfflineOp[]): Promise<OfflineOp[]> {
+  if (store.mutate) return store.mutate(change);
+  return serialized(store, "mutation", async () => {
+    const next = change(await store.read()); await store.write(next); return next;
+  });
+}
+
 /** Preserve every capture. Overflow is retained visibly for manual retry/export. */
 export async function enqueue(store: QueueStore, op: OfflineOp): Promise<OfflineOp[]> {
-  const ops = await store.read();
-  const overflow = ops.filter((item) => item.state !== "dead_letter").length >= QUEUE_LIMIT;
-  const next = [{ ...op, state: overflow ? "dead_letter" as const : "pending" as const,
-    ...(overflow ? { failure_reason: "queue_overflow" as const } : {}) }, ...ops];
-  await store.write(next);
-  return next;
+  return mutate(store, (ops) => {
+    if (ops.some((item) => item.id === op.id)) return ops;
+    const overflow = ops.filter((item) => item.state !== "dead_letter").length >= QUEUE_LIMIT;
+    return [{ ...op, state: overflow ? "dead_letter" as const : "pending" as const,
+      ...(overflow ? { failure_reason: "queue_overflow" as const } : {}) }, ...ops];
+  });
 }
 
 /**
@@ -120,38 +141,31 @@ export async function drain(
   send: (op: OfflineOp) => Promise<void>,
   kinds?: readonly OfflineKind[],
 ): Promise<DrainResult> {
-  const ops = await store.read();
-  const targeted = ops.filter((o) => o.state !== "dead_letter" && (!kinds || kinds.includes(o.kind)))
-    .slice()
-    .sort((a, b) => a.created_at.localeCompare(b.created_at));
-  const targetIds = new Set(targeted.map((o) => o.id));
-
-  const kept: OfflineOp[] = [];
-  let sent = 0;
-  let failed = 0;
-  for (const op of targeted) {
-    try {
-      await send(op);
-      sent += 1;
-    } catch {
-      const attempts = op.attempts + 1;
-      kept.push({ ...op, attempts, ...(attempts >= MAX_ATTEMPTS
-        ? { state: "dead_letter" as const, failure_reason: "send_failed" as const } : {}) });
-      failed += 1;
+  const work = async () => {
+    const targeted = (await store.read()).filter((o) => o.state !== "dead_letter" && (!kinds || kinds.includes(o.kind)))
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    let sent = 0, failed = 0;
+    for (const op of targeted) {
+      let accepted = false;
+      try { await send(op); accepted = true; } catch { /* Retain the exact capture. */ }
+      // Persist each acknowledgement separately. Never replace a stale full
+      // snapshot: captures enqueued while the HTTP request was in flight survive.
+      await mutate(store, (ops) => accepted ? ops.filter((item) => item.id !== op.id) : ops.map((item) => {
+        if (item.id !== op.id) return item;
+        const attempts = item.attempts + 1;
+        return { ...item, attempts, ...(attempts >= MAX_ATTEMPTS
+          ? { state: "dead_letter" as const, failure_reason: "send_failed" as const } : {}) };
+      }));
+      if (accepted) sent++; else failed++;
     }
-  }
-
-  const next = [...ops.filter((o) => !targetIds.has(o.id)), ...kept].sort((a, b) =>
-    a.created_at.localeCompare(b.created_at),
-  );
-  await store.write(next);
-  return { sent, failed, dropped: 0, remaining: next.length };
+    return { sent, failed, dropped: 0, remaining: (await store.read()).length };
+  };
+  return store.exclusive ? store.exclusive(work) : serialized(store, "drain", work);
 }
 
 /** A user recovery action; neither payload nor stable operation ID is changed. */
 export async function retryDeadLetters(store: QueueStore, kinds?: readonly OfflineKind[]): Promise<void> {
-  const ops = await store.read();
-  await store.write(ops.map((op) => {
+  await mutate(store, (ops) => ops.map((op) => {
     if (op.state !== "dead_letter" || (kinds && !kinds.includes(op.kind))) return op;
     const { failure_reason: _reason, ...retained } = op;
     return { ...retained, state: "pending", attempts: 0 };
@@ -203,6 +217,12 @@ function done(tx: IDBTransaction): Promise<void> {
 /** IndexedDB-backed store — survives reloads and runs while the site is offline. */
 export function idbStore(): QueueStore {
   return {
+    async exclusive(work) {
+      // Web Locks release on page/process loss and coordinate distinct tabs.
+      // Without that primitive, retain/export rather than risk double delivery.
+      if (typeof navigator === "undefined" || !navigator.locks) throw new Error("Coordinated offline sync is unavailable in this browser. Retained records can be exported.");
+      return navigator.locks.request(`${DB_NAME}:drain`, { mode: "exclusive" }, work);
+    },
     async read() {
       const db = await openDb();
       try {
@@ -226,6 +246,25 @@ export function idbStore(): QueueStore {
       } finally {
         db.close();
       }
+    },
+    async mutate(change) {
+      const db = await openDb();
+      try {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const complete = done(tx);
+        const store = tx.objectStore(STORE_NAME);
+        let next: OfflineOp[] = [];
+        let failure: unknown;
+        const request = store.getAll();
+        request.onsuccess = () => {
+          try {
+            next = change(request.result as OfflineOp[]);
+            store.clear(); for (const op of next) store.put(op);
+          } catch (error) { failure = error; tx.abort(); }
+        };
+        try { await complete; } catch (error) { throw failure ?? error; }
+        return next;
+      } finally { db.close(); }
     },
   };
 }

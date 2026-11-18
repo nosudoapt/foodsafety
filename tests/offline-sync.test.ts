@@ -125,6 +125,41 @@ test("kinds filter so a page only replays its own ops", async () => {
   assert.equal(left[0].kind, "prep_save");
 });
 
+test("OFF-03: simultaneous enqueue serializes every read-modify-write", async () => {
+  const store = memoryStore();
+  await Promise.all(Array.from({ length: 100 }, (_, index) => enqueue(store, newOp("temp_record", `Capture ${index}`, { index }))));
+  assert.equal((await store.read()).length, 100);
+  assert.equal(new Set((await store.read()).map(op => op.id)).size, 100);
+});
+
+test("OFF-04: competing drains coordinate before reading their target snapshot", async () => {
+  const store = memoryStore([newOp("temp_record", "Once", {})]);
+  let sends = 0;
+  await Promise.all(Array.from({ length: 20 }, () => drain(store, async () => { sends++; await Promise.resolve(); })));
+  assert.equal(sends, 1);
+});
+
+test("OFF-05: enqueue inside an in-flight sender survives without lock deadlock", async () => {
+  const first = newOp("temp_record", "First", {}), second = newOp("temp_record", "Later", {});
+  const store = memoryStore([first]);
+  await drain(store, async () => { await enqueue(store, second); });
+  assert.deepEqual((await store.read()).map(op => op.id), [second.id]);
+});
+
+test("each accepted operation is acknowledged before attempting the next", async () => {
+  const first = newOp("temp_record", "First", {}, new Date("2020-01-01"));
+  const second = newOp("temp_record", "Second", {}, new Date("2020-01-02"));
+  const store = memoryStore([first, second]);
+  await drain(store, async (op) => {
+    if (op.id === second.id) {
+      assert.deepEqual((await store.read()).map(item => item.id), [second.id]);
+      throw new Error("Second request unavailable");
+    }
+  });
+  assert.deepEqual((await store.read()).map(op => op.id), [second.id]);
+  assert.equal((await store.read())[0].attempts, 1);
+});
+
 test("queued payloads carry everything the replay needs", async () => {
   const prep = newOp("prep_save", "Prep sheet · 2026-10-04", {
     date: "2026-10-04",
