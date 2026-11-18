@@ -18,7 +18,7 @@ export default function OfflineQueueNotice({ ops, syncing, onRetry }: {
   };
   return <section aria-label="Offline records" className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-900">
     <p role="status">{ops.length} record{ops.length === 1 ? "" : "s"} stored on this device, not yet confirmed in the database. Pending records retry when the connection returns.</p>
-    {attention > 0 && <p role="alert" className="mt-2 font-semibold">{attention} need{attention === 1 ? "s" : ""} attention after repeated failure or queue overflow. Nothing has been discarded. Retry or export these records before clearing this device.</p>}
+    {attention > 0 && <p role="alert" className="mt-2 font-semibold">{attention} need{attention === 1 ? "s" : ""} attention after repeated failure or queue overflow. Nothing has been discarded. Retry these records to resume ordered sync, or export them before clearing this device.</p>}
     <details className="mt-2"><summary className="min-h-11 flex items-center cursor-pointer">View retained records</summary>
       <ul className="list-disc pl-5 space-y-1">{ops.map((op) => <li key={op.id}>{op.label} — {op.state === "dead_letter" ? "needs attention" : "waiting to sync"}</li>)}</ul>
     </details>

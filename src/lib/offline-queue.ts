@@ -10,8 +10,10 @@ export type OfflineKind = "prep_save" | "temp_record";
 export interface OfflineOp {
   id: string;
   kind: OfflineKind;
-  /** ISO timestamp — replay is oldest-first. */
+  /** Device capture time for display only; never authoritative replay order. */
   created_at: string;
+  /** Durable logical capture sequence; legacy captures are normalized on open. */
+  sequence?: number;
   /** Failed attempts so far; exhausted operations remain as recoverable evidence. */
   attempts: number;
   /** Missing on legacy captures, which are treated as pending. */
@@ -26,7 +28,7 @@ export interface QueueStore {
   read(): Promise<OfflineOp[]>;
   write(ops: OfflineOp[]): Promise<void>;
   /** The read/modify/write must be one storage transaction across tabs. */
-  mutate?(change: (ops: OfflineOp[]) => OfflineOp[]): Promise<OfflineOp[]>;
+  mutate?(change: (ops: OfflineOp[], sequence: number) => OfflineOp[]): Promise<OfflineOp[]>;
   /** Drain coordination is separate so enqueue inside a sender cannot deadlock. */
   exclusive?<T>(work: () => Promise<T>): Promise<T>;
 }
@@ -104,6 +106,14 @@ export function newOp(kind: OfflineKind, label: string, payload: unknown, now = 
 }
 
 const locks = new WeakMap<QueueStore, Map<string, Promise<unknown>>>();
+const watermarks = new WeakMap<QueueStore, number>();
+function logicalOrder(ops: OfflineOp[], watermark = 0): { ops: OfflineOp[]; watermark: number } {
+  const valid = (value: number | undefined): value is number => Number.isSafeInteger(value) && (value ?? 0) > 0;
+  let last = ops.reduce((last, op) => Math.max(last, valid(op.sequence) ? op.sequence : 0), watermark);
+  // Old stores did not record capture order. Retain their deterministic stored
+  // order, without inventing wall-clock chronology or modifying any payload.
+  return { ops: ops.map(op => valid(op.sequence) ? op : { ...op, sequence: ++last }), watermark: last };
+}
 function serialized<T>(store: QueueStore, name: string, work: () => Promise<T>): Promise<T> {
   let state = locks.get(store);
   if (!state) { state = new Map(); locks.set(store, state); }
@@ -113,25 +123,28 @@ function serialized<T>(store: QueueStore, name: string, work: () => Promise<T>):
   void next.finally(() => { if (state!.get(name) === next) state!.delete(name); }).catch(() => {});
   return next;
 }
-function mutate(store: QueueStore, change: (ops: OfflineOp[]) => OfflineOp[]): Promise<OfflineOp[]> {
+function mutate(store: QueueStore, change: (ops: OfflineOp[], sequence: number) => OfflineOp[]): Promise<OfflineOp[]> {
   if (store.mutate) return store.mutate(change);
   return serialized(store, "mutation", async () => {
-    const next = change(await store.read()); await store.write(next); return next;
+    const ordered = logicalOrder(await store.read(), watermarks.get(store));
+    const sequence = ordered.watermark + 1;
+    const next = change(ordered.ops, sequence); await store.write(next);
+    watermarks.set(store, sequence); return next;
   });
 }
 
 /** Preserve every capture. Overflow is retained visibly for manual retry/export. */
 export async function enqueue(store: QueueStore, op: OfflineOp): Promise<OfflineOp[]> {
-  return mutate(store, (ops) => {
+  return mutate(store, (ops, sequence) => {
     if (ops.some((item) => item.id === op.id)) return ops;
     const overflow = ops.filter((item) => item.state !== "dead_letter").length >= QUEUE_LIMIT;
-    return [{ ...op, state: overflow ? "dead_letter" as const : "pending" as const,
+    return [{ ...op, sequence, state: overflow ? "dead_letter" as const : "pending" as const,
       ...(overflow ? { failure_reason: "queue_overflow" as const } : {}) }, ...ops];
   });
 }
 
 /**
- * Replay queued ops oldest-first. `kinds` limits a page to its own ops (the
+ * Replay queued ops in durable capture order. `kinds` limits a page to its own ops (the
  * prep sheet must not consume temperature records). A failing send keeps the
  * op for the next drain. Exhausted operations stop automatic retries but remain
  * visible and exportable until the user explicitly retries them.
@@ -142,10 +155,11 @@ export async function drain(
   kinds?: readonly OfflineKind[],
 ): Promise<DrainResult> {
   const work = async () => {
-    const targeted = (await store.read()).filter((o) => o.state !== "dead_letter" && (!kinds || kinds.includes(o.kind)))
-      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const targeted = logicalOrder(await store.read()).ops.filter((o) => !kinds || kinds.includes(o.kind))
+      .sort((a, b) => a.sequence! - b.sequence!);
     let sent = 0, failed = 0;
     for (const op of targeted) {
+      if (op.state === "dead_letter") break; // Resolve older evidence before later writes.
       let accepted = false;
       try { await send(op); accepted = true; } catch { /* Retain the exact capture. */ }
       // Persist each acknowledgement separately. Never replace a stale full
@@ -156,7 +170,8 @@ export async function drain(
         return { ...item, attempts, ...(attempts >= MAX_ATTEMPTS
           ? { state: "dead_letter" as const, failure_reason: "send_failed" as const } : {}) };
       }));
-      if (accepted) sent++; else failed++;
+      if (accepted) sent++;
+      else { failed++; break; } // A lost response must not let later writes overtake it.
     }
     return { sent, failed, dropped: 0, remaining: (await store.read()).length };
   };
@@ -179,7 +194,7 @@ export async function pendingCount(store: QueueStore, kinds?: readonly OfflineKi
 
 /** In-memory store — tests, and the SSR/Node fallback for defaultStore(). */
 export function memoryStore(seed: OfflineOp[] = []): QueueStore {
-  let ops = seed.slice();
+  let ops = logicalOrder(seed).ops;
   return {
     async read() {
       return ops.slice();
@@ -192,14 +207,23 @@ export function memoryStore(seed: OfflineOp[] = []): QueueStore {
 
 const DB_NAME = "foodsafe-offline";
 const STORE_NAME = "ops";
+const META_NAME = "meta";
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
+    const req = indexedDB.open(DB_NAME, 2);
     req.onupgradeneeded = () => {
       if (!req.result.objectStoreNames.contains(STORE_NAME)) {
         req.result.createObjectStore(STORE_NAME, { keyPath: "id" });
       }
+      if (!req.result.objectStoreNames.contains(META_NAME)) req.result.createObjectStore(META_NAME, { keyPath: "key" });
+      const store = req.transaction!.objectStore(STORE_NAME);
+      const legacy = store.getAll();
+      legacy.onsuccess = () => {
+        const ordered = logicalOrder(legacy.result as OfflineOp[]);
+        for (const op of ordered.ops) store.put(op);
+        req.transaction!.objectStore(META_NAME).put({ key: "sequence", value: ordered.watermark });
+      };
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
@@ -238,7 +262,7 @@ export function idbStore(): QueueStore {
     async write(next) {
       const db = await openDb();
       try {
-        const tx = db.transaction(STORE_NAME, "readwrite");
+        const tx = db.transaction([STORE_NAME, META_NAME], "readwrite");
         const store = tx.objectStore(STORE_NAME);
         store.clear();
         for (const op of next) store.put(op);
@@ -250,17 +274,25 @@ export function idbStore(): QueueStore {
     async mutate(change) {
       const db = await openDb();
       try {
-        const tx = db.transaction(STORE_NAME, "readwrite");
+        const tx = db.transaction([STORE_NAME, META_NAME], "readwrite");
         const complete = done(tx);
         const store = tx.objectStore(STORE_NAME);
         let next: OfflineOp[] = [];
         let failure: unknown;
         const request = store.getAll();
         request.onsuccess = () => {
-          try {
-            next = change(request.result as OfflineOp[]);
-            store.clear(); for (const op of next) store.put(op);
-          } catch (error) { failure = error; tx.abort(); }
+          const meta = tx.objectStore(META_NAME);
+          const watermark = meta.get("sequence");
+          watermark.onsuccess = () => {
+            try {
+              const ordered = logicalOrder(request.result as OfflineOp[], Number(watermark.result?.value) || 0);
+              const sequence = ordered.watermark + 1;
+              if (!Number.isSafeInteger(sequence)) throw new Error("Offline capture sequence is exhausted. Export retained records.");
+              next = change(ordered.ops, sequence);
+              store.clear(); for (const op of next) store.put(op);
+              meta.put({ key: "sequence", value: sequence });
+            } catch (error) { failure = error; tx.abort(); }
+          };
         };
         try { await complete; } catch (error) { throw failure ?? error; }
         return next;

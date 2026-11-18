@@ -30,7 +30,7 @@ async function retained(page: Page) {
       request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
     });
     try {
-      return await new Promise<{ id: string; attempts: number; state?: string; label: string; payload: Record<string, unknown> }[]>((resolve, reject) => {
+      return await new Promise<{ id: string; attempts: number; sequence?: number; state?: string; label: string; payload: Record<string, unknown> }[]>((resolve, reject) => {
         const request = db.transaction("ops").objectStore("ops").getAll();
         request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
       });
@@ -113,4 +113,36 @@ test("OFF-03 / OFF-04 / OFF-05: distinct Chromium tabs serialize mutations and d
   await tab.evaluate(async () => { const q = window.offlineTest; await q.enqueue(q.idbStore(), { ...q.newOp("temp_record", "Captured during send", {}), id: "during-send" }); });
   await page.evaluate(async () => { window.releaseOfflineSend(); await window.offlineDrain; });
   expect((await retained(tab)).map(op => op.id)).toEqual(["during-send"]);
+});
+
+test("OFF-08: IndexedDB upgrade retains legacy payloads and the logical counter survives empty-queue reload and clock rollback", async ({ page }) => {
+  await page.goto("/auth/sign-in");
+  await page.evaluate(async () => {
+    const request = indexedDB.open("foodsafe-offline", 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("ops", { keyPath: "id" });
+    const db = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+    const tx = db.transaction("ops", "readwrite"), store = tx.objectStore("ops");
+    store.put({ id: "legacy-a", kind: "temp_record", attempts: 0, created_at: "2099-01-01", label: "Legacy A", payload: { temperature: 2 } });
+    store.put({ id: "legacy-b", kind: "temp_record", attempts: 0, created_at: "1990-01-01", label: "Legacy B", payload: { temperature: 3 } });
+    await new Promise<void>((resolve, reject) => { tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); db.close();
+  });
+  await installQueue(page);
+  const upgraded = await page.evaluate(async () => window.offlineTest.idbStore().read());
+  expect(upgraded.map(op => op.payload)).toEqual([{ temperature: 2 }, { temperature: 3 }]);
+  expect(upgraded.map(op => op.created_at)).toEqual(["2099-01-01", "1990-01-01"]);
+  expect(upgraded.map(op => op.sequence)).toEqual([1, 2]);
+  const first = await page.evaluate(async () => {
+    const q = window.offlineTest, store = q.idbStore(); await q.drain(store, async () => {});
+    await q.enqueue(store, q.newOp("temp_record", "Before empty reload", {}));
+    const sequence = (await store.read())[0].sequence!; await q.drain(store, async () => {}); return sequence;
+  });
+  await installQueue(page);
+  const next = await page.evaluate(async () => {
+    const q = window.offlineTest, store = q.idbStore();
+    await q.enqueue(store, { ...q.newOp("temp_record", "First capture", {}, new Date("2099-01-01")), id: "logical-first" });
+    await q.enqueue(store, { ...q.newOp("temp_record", "Clock rollback", {}, new Date("1990-01-01")), id: "logical-second" });
+    const minimum = Math.min(...(await store.read()).map(op => op.sequence!)), order: string[] = [];
+    await q.drain(store, async op => { order.push(op.id); }); return { minimum, order };
+  });
+  expect(next.minimum).toBeGreaterThan(first); expect(next.order).toEqual(["logical-first", "logical-second"]);
 });

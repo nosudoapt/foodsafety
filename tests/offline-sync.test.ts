@@ -49,19 +49,19 @@ test("OFF-01: enqueue retains every overflow capture as recoverable evidence", a
   assert.equal(ops[0].failure_reason, "queue_overflow");
 });
 
-test("drain replays oldest-first and clears what succeeded", async () => {
+test("OFF-08: drain replays durable capture order, not device wall time", async () => {
   const store = memoryStore();
   const older = newOp("prep_save", "first", {}, new Date("2026-10-04T06:00:00Z"));
-  const newer = newOp("prep_save", "second", {}, new Date("2026-10-04T07:00:00Z"));
-  await enqueue(store, newer);
+  const newer = newOp("prep_save", "second", {}, new Date("2000-01-01T07:00:00Z"));
   await enqueue(store, older);
+  await enqueue(store, newer);
 
   const order: string[] = [];
   const res = await drain(store, async (op) => {
     order.push(op.label);
   });
 
-  assert.deepEqual(order, ["first", "second"], "oldest queued op replays first");
+  assert.deepEqual(order, ["first", "second"], "later clock-skewed capture cannot overtake the first");
   assert.deepEqual(res, { sent: 2, failed: 0, dropped: 0, remaining: 0 });
   assert.equal((await store.read()).length, 0);
 });
@@ -158,6 +158,20 @@ test("each accepted operation is acknowledged before attempting the next", async
   });
   assert.deepEqual((await store.read()).map(op => op.id), [second.id]);
   assert.equal((await store.read())[0].attempts, 1);
+});
+
+test("OFF-08: capture high-watermark survives an empty queue and failures do not allow overtaking", async () => {
+  const store = memoryStore();
+  const first = newOp("prep_save", "First", {}); await enqueue(store, first);
+  const sequence = (await store.read())[0].sequence!;
+  await drain(store, async () => {});
+  const second = newOp("prep_save", "Second", {}, new Date("1990-01-01")); await enqueue(store, second);
+  assert.ok((await store.read())[0].sequence! > sequence);
+  const third = newOp("prep_save", "Third", {}); await enqueue(store, third);
+  let sends = 0;
+  await drain(store, async () => { sends++; throw new Error("Lost response"); });
+  assert.equal(sends, 1, "later writes cannot overtake an uncertain earlier save");
+  assert.equal((await store.read()).length, 2);
 });
 
 test("queued payloads carry everything the replay needs", async () => {
