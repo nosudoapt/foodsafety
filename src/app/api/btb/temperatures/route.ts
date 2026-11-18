@@ -1,6 +1,6 @@
 import { btbRoute, BtbApiError, dbError, readAll, readBody } from "@/lib/btb-api";
 import { attributionName, BTB_RESTAURANT, btbToday } from "@/lib/btb-team";
-import { parseTemperature, temperatureInRange, type BtbTemperatureRecord } from "@/lib/btb-temperatures";
+import { matchesTemperatureStandard, parseTemperature, temperatureInRange, type BtbTemperatureRecord, type TemperatureStandard } from "@/lib/btb-temperatures";
 import { temperatureOwner } from "@/lib/btb-temperature-store";
 
 const COLUMNS = "id,record_type,equipment_name,food_item,temperature,min_safe_temp,max_safe_temp,unit,is_safe,notes,recorded_at,business_date,slot";
@@ -12,7 +12,10 @@ export const GET = btbRoute("temperatures", false, async ({ db }) => {
     .select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).eq("user_id", owner).is("location_id", null)
     .gte("recorded_at", cutoff).order("recorded_at", { ascending: false }).order("id").range(from, to),
   "Temperature history couldn’t be loaded. Please try again.");
-  return { records, today: btbToday() };
+  const standards = await readAll<TemperatureStandard>((from, to) => db.from("btb_temperature_standards")
+    .select("record_type,equipment_name,min_safe_temp,max_safe_temp").eq("restaurant_name", BTB_RESTAURANT)
+    .order("record_type").order("equipment_name").range(from, to), "Approved temperature standards couldn’t be loaded. Please try again.");
+  return { records, standards, today: btbToday() };
 }, { allowLocationWorkspace: true });
 
 export const POST = btbRoute("temperatures", true, async ({ db, identity }, request) => {
@@ -40,6 +43,15 @@ export const POST = btbRoute("temperatures", true, async ({ db, identity }, requ
   };
   const previous = await savedReading();
   if (previous) return { record: previous };
+  const configured = await db.from("btb_temperature_standards").select("record_type,equipment_name,min_safe_temp,max_safe_temp")
+    .eq("restaurant_name", BTB_RESTAURANT).eq("record_type", input.record_type).eq("equipment_name", input.equipment_name).maybeSingle();
+  dbError(configured.error, "Approved temperature standards could not be checked. Keep this form and retry.");
+  const standard = configured.data as TemperatureStandard | null;
+  if (!standard) throw new BtbApiError("Ask your manager to confirm an approved standard for this equipment and record type before saving.");
+  if (!matchesTemperatureStandard(input, standard)) throw new BtbApiError("The target range must match the approved restaurant standard. Reload the form before saving.", 403);
+  payload.min_safe_temp = standard.min_safe_temp;
+  payload.max_safe_temp = standard.max_safe_temp;
+  payload.is_safe = temperatureInRange(input.temperature, standard.min_safe_temp, standard.max_safe_temp);
   const result = await db.from("temperature_records").insert({ ...payload, recorded_at: new Date().toISOString() }).select(COLUMNS).single();
   // A retry (including two simultaneous saves) is append-once, never an upsert
   // that silently replaces a previously recorded reading.

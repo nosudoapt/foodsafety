@@ -21,6 +21,20 @@ export interface TemperatureInput {
   notes: string;
 }
 
+export interface TemperatureStandard {
+  record_type: TemperatureType;
+  equipment_name: string;
+  min_safe_temp: number;
+  max_safe_temp: number;
+}
+
+/** Equality is deliberate: a client cannot widen OR narrow an approved standard
+ * and later present that alternative range as the restaurant's compliance rule. */
+export function matchesTemperatureStandard(input: TemperatureInput, standard: TemperatureStandard): boolean {
+  return input.record_type === standard.record_type && input.equipment_name === standard.equipment_name
+    && input.min_safe_temp === standard.min_safe_temp && input.max_safe_temp === standard.max_safe_temp;
+}
+
 export interface BtbTemperatureRecord extends TemperatureInput {
   // "PPM" occurs for sanitizer rows saved from the daily sheet; the table's
   // unit column is free text and the sheet records sanitizer strength honestly.

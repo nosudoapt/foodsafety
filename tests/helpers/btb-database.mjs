@@ -10,6 +10,7 @@ export const btbDatabaseTables = [
   "btb_order_sheets", "btb_order_revisions", "training_topics", "training_sections", "btb_training_records", "btb_training_reviews",
   "btb_franchise_tasks", "btb_staff_licences", "btb_notification_settings", "btb_licence_email_log",
   "platform_auth",
+  "btb_temperature_standards",
 ];
 
 export function identifier(value) {
@@ -74,6 +75,7 @@ export async function createBtbDatabase(legacy = {}) {
     // filters .is("location_id", null) on both tables.
     await db.exec("ALTER TABLE btb_shift_checks ADD COLUMN location_id uuid; ALTER TABLE social_media_calendar ADD COLUMN location_id uuid;");
     await db.exec(readFileSync(new URL("fix-platform-bootstrap-security.sql", schemaDirectory), "utf8"));
+    await db.exec(readFileSync(new URL("fix-btb-temperature-standards.sql", schemaDirectory), "utf8"));
   }
   catch (error) { await db.close(); throw error; }
   return db;

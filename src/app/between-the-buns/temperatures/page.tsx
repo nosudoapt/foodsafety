@@ -21,6 +21,7 @@ import {
   temperatureInRange,
   TEMPERATURE_TYPES,
   type BtbTemperatureRecord,
+  type TemperatureStandard,
   type TemperatureSheetSlot,
 } from "@/lib/btb-temperatures";
 
@@ -38,7 +39,7 @@ function lastDays(today: string, count = 90): string[] {
 }
 
 function TemperatureLog({ readOnly }: { readOnly: boolean }) {
-  const { data, loading, error, reload, update } = useBtbData<{ records: BtbTemperatureRecord[]; today: string }>("/api/btb/temperatures");
+  const { data, loading, error, reload, update } = useBtbData<{ records: BtbTemperatureRecord[]; standards: TemperatureStandard[]; today: string }>("/api/btb/temperatures");
   const [tab, setTab] = useState<"sheet" | "history">("sheet");
   const [editing, setEditing] = useState(false);
   const [notice, setNotice] = useState("");
@@ -177,7 +178,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
       })}
     </section>}
     <details className="temperature-legacy"><summary>Looking for earlier Pholo records?</summary><p>Readings created under a Pholo account are available in that account’s Temperature Monitoring page.</p><Link href="/temperatures" className="ops-text-link">Open Pholo temperature records</Link><p className="ops-meta">Use the Pholo login that originally recorded them.</p></details>
-    {editing && <ReadingForm onClose={() => setEditing(false)} onSaved={(record) => {
+    {editing && <ReadingForm standards={data?.standards ?? []} onClose={() => setEditing(false)} onSaved={(record) => {
       update((current) => ({ ...current, records: [record, ...current.records.filter((item) => item.id !== record.id)] }));
       setEditing(false); setNotice("Temperature reading saved.");
     }} />}
@@ -242,11 +243,12 @@ function SheetTable({ date, onDateChange, maxDate, static: isStatic, cells, onDr
   </div>;
 }
 
-function ReadingForm({ onClose, onSaved }: { onClose: () => void; onSaved: (record: BtbTemperatureRecord) => void }) {
+function ReadingForm({ standards, onClose, onSaved }: { standards: TemperatureStandard[]; onClose: () => void; onSaved: (record: BtbTemperatureRecord) => void }) {
   const { identity } = useBtbWorkspace();
   const [form, setForm] = useState(() => ({ id: crypto.randomUUID(), record_type: "cold_storage", equipment_name: "", food_item: "", temperature: "", min_safe_temp: "", max_safe_temp: "", notes: "" }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const choices = standards.filter((standard) => standard.record_type === form.record_type);
   const parsed = parseTemperature(form);
   const within = parsed.value && temperatureInRange(parsed.value.temperature, parsed.value.min_safe_temp, parsed.value.max_safe_temp);
   const submit = async (event: React.FormEvent) => {
@@ -261,14 +263,18 @@ function ReadingForm({ onClose, onSaved }: { onClose: () => void; onSaved: (reco
   return <Modal open title="Add temperature reading" description="Record a measured temperature outside the daily sheet — probes, deliveries, calibrations." busy={saving} onClose={onClose}><form onSubmit={submit}>
     {error && <p className="ui-notice ui-notice--error" role="alert">{error}</p>}
     <fieldset className="ui-form-stack" disabled={saving}>
-      <label>Record type<select className="ui-input" value={form.record_type} onChange={(event) => setForm({ ...form, record_type: event.target.value })}>{TEMPERATURE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
-      <label>Equipment<Input required data-modal-autofocus maxLength={150} placeholder="e.g. Walk-in fridge" value={form.equipment_name} onChange={(event) => setForm({ ...form, equipment_name: event.target.value })} /></label>
+      <label>Record type<select className="ui-input" value={form.record_type} onChange={(event) => setForm({ ...form, record_type: event.target.value, equipment_name: "", min_safe_temp: "", max_safe_temp: "" })}>{TEMPERATURE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
+      <label>Equipment<select required data-modal-autofocus className="ui-input" value={form.equipment_name} onChange={(event) => {
+        const standard = choices.find((choice) => choice.equipment_name === event.target.value);
+        setForm({ ...form, equipment_name: event.target.value, min_safe_temp: standard ? String(standard.min_safe_temp) : "", max_safe_temp: standard ? String(standard.max_safe_temp) : "" });
+      }}><option value="">Choose approved equipment</option>{choices.map((standard) => <option key={standard.equipment_name} value={standard.equipment_name}>{standard.equipment_name}</option>)}</select></label>
+      {!choices.length && <p className="ui-notice ui-notice--warning" role="status">No approved standard for this record type. Ask your manager to configure it before recording an off-form reading.</p>}
       <label>Food or storage item<Input required maxLength={150} placeholder="e.g. Dairy, freezer stock, cooked chicken" value={form.food_item} onChange={(event) => setForm({ ...form, food_item: event.target.value })} /></label>
       <label>Temperature (°C)<Input required type="number" step="0.01" min={-273.15} max={999.99} value={form.temperature} onChange={(event) => setForm({ ...form, temperature: event.target.value })} /></label>
-      <div className="ops-form-grid"><label>Target minimum (°C)<Input required type="number" step="0.01" min={-273.15} max={999.99} value={form.min_safe_temp} onChange={(event) => setForm({ ...form, min_safe_temp: event.target.value })} /></label><label>Target maximum (°C)<Input required type="number" step="0.01" min={-273.15} max={999.99} value={form.max_safe_temp} onChange={(event) => setForm({ ...form, max_safe_temp: event.target.value })} /></label></div>
+      <div className="ops-form-grid"><label>Approved minimum (°C)<Input readOnly value={form.min_safe_temp} /></label><label>Approved maximum (°C)<Input readOnly value={form.max_safe_temp} /></label></div>
       {parsed.value && <p className={`ui-notice ${within ? "ui-notice--success" : "ui-notice--warning"}`} role="status">{within ? "Within the recorded target range." : "Outside the recorded target range. Record the corrective action below."}</p>}
       <label>Notes / corrective action <span>optional</span><textarea className="ui-input" rows={3} maxLength={2000} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
       <p className="ops-meta">Recorded by: {identity ? attributionName(identity) : "your signed-in account"}. The saved time is added automatically.</p>
-    </fieldset><div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? "Saving…" : "Save reading"}</Button></div>
+    </fieldset><div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving || !choices.length}>{saving ? "Saving…" : "Save reading"}</Button></div>
   </form></Modal>;
 }

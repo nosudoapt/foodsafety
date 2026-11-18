@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseTemperature, parseTemperatureSheet, temperatureAlert, temperatureInRange } from "../src/lib/btb-temperatures";
+import { matchesTemperatureStandard, parseTemperature, parseTemperatureSheet, temperatureAlert, temperatureInRange } from "../src/lib/btb-temperatures";
 
 const input = { id: "91000000-0000-4000-8000-000000000001", record_type: "cold_storage", equipment_name: "Walk-in fridge", food_item: "Dairy", temperature: "3.25", min_safe_temp: "0", max_safe_temp: "4", notes: "" };
 
@@ -8,6 +8,15 @@ test("HTTP-11: explicit non-Celsius units are refused, never silently relabelled
   for (const unit of ["F", "PPM", "c", "", null, 0, {}]) assert.ok(parseTemperature({ ...input, unit }).error);
   assert.equal(parseTemperature({ ...input, unit: "C" }).value?.temperature, 3.25);
   assert.equal(parseTemperature(input).value?.temperature, 3.25);
+});
+
+test("HTTP-12: submitted thresholds must match the trusted equipment/type standard exactly", () => {
+  const reading = parseTemperature(input).value!;
+  const standard = { record_type: reading.record_type, equipment_name: reading.equipment_name, min_safe_temp: 0, max_safe_temp: 4 };
+  assert.equal(matchesTemperatureStandard(reading, standard), true);
+  for (const patch of [{ min_safe_temp: -273.15 }, { max_safe_temp: 100 }, { max_safe_temp: 3 }, { equipment_name: "Other" }, { record_type: "cooking" as const }]) {
+    assert.equal(matchesTemperatureStandard({ ...reading, ...patch }, standard), false);
+  }
 });
 
 test("DATE-01: daily sheets reject impossible dates, timestamps and future days before persistence", () => {

@@ -41,6 +41,11 @@ function seed() {
   const opening = [{ id: "o1", text: "Open Sign: Turn on the open sign at opening time", completed: true, section: "Front" }, { id: "o2", text: "Check the opening equipment", completed: true, section: "Kitchen" }];
   return {
     profiles: [...roles.map((role) => ({ id: userId(role), role, full_name: `Alex ${role.replaceAll("_", " ")}`, restaurant_name: "The Test Kitchen", email: `${role}@workspace.test`, location_id: east, trial_ends_at: null })), { id: btbUploader, role: "manager", full_name: "BTB archive uploader", restaurant_name: "Between the Buns", email: "archive@workspace.test", location_id: null }, { id: btbRecorder, role: "staff", full_name: "BTB workspace uploader", restaurant_name: "Between the Buns", email: "btb-uploader@foodsafe.invalid", location_id: null, btb_uploader: true, banned_until: "2126-01-01T00:00:00Z" }],
+    // Synthetic operator-approved standards, never production policy seeds.
+    // Literal names support the injection/Unicode HTTP persistence checks.
+    btb_temperature_standards: ["Walk-in fridge", "QA cooler", "食材 😀", "درجة الحرارة", "<img src=x onerror=alert(1)>", "'; DROP TABLE temperature_records; --"].map((equipment_name, index) => ({
+      id: `94000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`, restaurant_name: "Between the Buns", record_type: "cold_storage", equipment_name, min_safe_temp: 0, max_safe_temp: 4, approved_by: "Synthetic QA operator",
+    })),
     locations: [{ id: east, name: "Harbour Kitchen", address: "14 Harbour Road", created_at: "2026-01-01" }, { id: west, name: "Market Street", address: "22 Market Street", created_at: "2026-01-02" }],
     location_members: roles.flatMap((role) => (role === "owner" ? [east, west] : [east]).map((location_id) => ({ user_id: userId(role), location_id }))),
     daily_checks: roles.filter((role) => role !== "designer").map((role) => ({ ...personal, id: `check-${role}`, user_id: userId(role), check_type: "opening", completed: true, completed_at: time, notes: "Opening checks completed.", checklist_items: opening })),

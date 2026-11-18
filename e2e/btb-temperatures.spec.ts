@@ -7,6 +7,18 @@ const id = "91000000-0000-4000-8000-000000000001";
 const input = { id, record_type: "cold_storage", equipment_name: "Walk-in fridge", food_item: "Dairy", temperature: 8, min_safe_temp: 0, max_safe_temp: 4, notes: "Moved stock to working fridge." };
 const row = { ...input, user_id: owner, restaurant_name: "Between the Buns", location_id: null, unit: "C", is_safe: false, recorded_at: new Date().toISOString() };
 
+test("HTTP-12 off-form readings show operator-approved read-only targets and block unconfigured types", async ({ page }) => {
+  await signInBtb(page, "staff", "/between-the-buns/temperatures");
+  await page.getByRole("button", { name: "Add off-form reading" }).click();
+  await page.getByRole("combobox", { name: "Equipment", exact: true }).selectOption("Walk-in fridge");
+  await expect(page.getByLabel("Approved minimum (°C)")).toHaveValue("0");
+  await expect(page.getByLabel("Approved maximum (°C)")).toHaveValue("4");
+  await expect(page.getByLabel("Approved maximum (°C)")).toHaveAttribute("readonly", "");
+  await page.getByRole("combobox", { name: "Record type", exact: true }).selectOption("cooking");
+  await expect(page.getByText("No approved standard for this record type.", { exact: false })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save reading", exact: true })).toBeDisabled();
+});
+
 test("BTB temperature saves retain failures, survive reload and keep independent FoodSafe sessions", async ({ page, fixture }, info) => {
   // Long end-to-end journey: two independent sign-ins, a failing then
   // succeeding save, reload, history and the legacy-records navigation.
