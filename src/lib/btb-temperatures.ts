@@ -45,12 +45,12 @@ export function parseTemperature(input: Record<string, unknown>): { value: Tempe
   if (!isUuid(input.id)) return { error: "Start a new temperature reading and try again." };
   if (!TEMPERATURE_TYPES.some((type) => type.value === input.record_type)) return { error: "Choose a record type." };
   for (const [key, label] of [["equipment_name", "equipment"], ["food_item", "a food or storage item"]] as const) {
-    if (typeof input[key] !== "string" || !input[key].trim() || input[key].length > 150) return { error: `Enter ${label} (up to 150 characters).` };
+    if (typeof input[key] !== "string" || !input[key].trim() || input[key].length > 150 || input[key].includes("\u0000")) return { error: `Enter ${label} (up to 150 characters, without null bytes).` };
   }
   const temperature = celsius(input.temperature), min = celsius(input.min_safe_temp), max = celsius(input.max_safe_temp);
   if (temperature === null) return { error: "Enter a temperature between −273.15 and 999.99°C, with at most two decimal places." };
   if (min === null || max === null || min > max) return { error: "Enter a valid target range. The minimum must not exceed the maximum." };
-  if (typeof input.notes !== "string" || input.notes.length > 2000) return { error: "Keep notes under 2,000 characters." };
+  if (typeof input.notes !== "string" || input.notes.length > 2000 || input.notes.includes("\u0000")) return { error: "Keep notes under 2,000 characters, without null bytes." };
   return { value: {
     id: input.id.toLowerCase(), record_type: input.record_type as TemperatureType,
     equipment_name: (input.equipment_name as string).trim(), food_item: (input.food_item as string).trim(),

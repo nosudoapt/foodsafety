@@ -20,6 +20,15 @@ test("DATE-01: daily sheets reject impossible dates, timestamps and future days 
   }
 });
 
+test("STR-null-byte: reject NUL in every persisted temperature text field while preserving Unicode and literal content", () => {
+  for (const key of ["equipment_name", "food_item", "notes"]) {
+    assert.ok(parseTemperature({ ...input, [key]: "cold\u0000room" }).error, key);
+    for (const text of ["食材 😀", "درجة الحرارة", "'; DROP TABLE equipment; --", "<script>alert(1)</script>"]) {
+      assert.equal(parseTemperature({ ...input, [key]: text }).value?.[key as "equipment_name" | "food_item" | "notes"], text);
+    }
+  }
+});
+
 test("readings require finite Celsius values and ordered targets; blanks never become zero", () => {
   assert.equal(parseTemperature(input).value?.temperature, 3.25);
   assert.equal(parseTemperature({ ...input, temperature: "0" }).value?.temperature, 0);
