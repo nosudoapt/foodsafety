@@ -11,6 +11,7 @@ import {
 } from "@/lib/btb-prep-list";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import PrintButton from "@/components/PrintButton";
+import OfflineQueueNotice from "@/components/OfflineQueueNotice";
 import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import {
@@ -18,7 +19,7 @@ import {
   drain,
   enqueue,
   newOp,
-  pendingCount,
+  retryDeadLetters,
   shouldQueue,
   type OfflineOp,
   type PrepSavePayload,
@@ -127,7 +128,9 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pullMissing, setPullMissing] = useState(false);
-  const [offlinePending, setOfflinePending] = useState(0);
+  const [offlineOps, setOfflineOps] = useState<OfflineOp[]>([]);
+  const offlinePending = offlineOps.length;
+  const [syncing, setSyncing] = useState(false);
 
   // Offline outbox — one store per mount so IndexedDB survives a reload and
   // SSR (no indexedDB) falls back to a harmless in-memory queue.
@@ -135,7 +138,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   const PREP_KINDS = ["prep_save"] as const;
 
   const refreshPending = async () => {
-    setOfflinePending(await pendingCount(queue, PREP_KINDS));
+    setOfflineOps((await queue.read()).filter((op) => PREP_KINDS.includes(op.kind as "prep_save")));
   };
 
   const sendQueuedSave = async (op: OfflineOp) => {
@@ -153,10 +156,20 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   // Replay anything the tablet saved while it was offline — on load and
   // whenever the browser reports the connection is back.
   const syncOffline = async () => {
-    const res = await drain(queue, sendQueuedSave, PREP_KINDS);
-    if (res.sent) { setError(null); setHistoryRevision((value) => value + 1); }
-    await refreshPending();
-    return res;
+    setSyncing(true);
+    try {
+      await refreshPending(); // Recovery/export must not wait for a slow drain.
+      const res = await drain(queue, sendQueuedSave, PREP_KINDS);
+      if (res.sent) { setError(null); setHistoryRevision((value) => value + 1); }
+      await refreshPending();
+      return res;
+    } catch {
+      setError("This device’s retained records could not be read or updated. Keep your form open and retry before leaving.");
+    } finally { setSyncing(false); }
+  };
+  const retryOffline = async () => {
+    try { await retryDeadLetters(queue, PREP_KINDS); await syncOffline(); }
+    catch { setError("Retained records could not be retried. Keep this device’s data and try again."); }
   };
 
   useEffect(() => {
@@ -311,15 +324,15 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
       // replay it on the next load / 'online' event. A missing table or
       // column is a migration the owner runs by hand — queueing won't fix it.
       if (shouldQueue(fail.message)) {
-        await enqueue(
-          queue,
-          newOp("prep_save", `Prep sheet · ${date}`, {
-            date,
-            scope,
-            rows,
-          } satisfies PrepSavePayload),
-        );
-        await refreshPending();
+        try {
+          await enqueue(
+            queue,
+            newOp("prep_save", `Prep sheet · ${date}`, { date, scope, rows } satisfies PrepSavePayload),
+          );
+          await refreshPending();
+        } catch {
+          setError("This device could not retain your save. Keep this form open and retry, or copy the quantities before leaving.");
+        }
         setSavedAt(null);
         setSaving(false);
         return;
@@ -430,12 +443,8 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         )}
         {sheetError && <div className="ui-notice ui-notice--error"><p role="alert">{sheetError}</p><button className="ui-button ui-button--ghost" disabled={loading} onClick={() => { setLoading(true); setSheetRevision((value) => value + 1); }}>Retry saved sheet</button></div>}
 
-        {offlinePending > 0 && (
-          <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
-            {offlinePending} save{offlinePending === 1 ? "" : "s"} stored on this device — they&apos;ll sync to
-            the database the next time the connection comes back.
-          </div>
-        )}
+        {/* Records are stored on this device, not falsely reported as database saves. */}
+        {offlinePending > 0 && <OfflineQueueNotice ops={offlineOps} syncing={syncing} onRetry={() => { void retryOffline(); }} />}
 
         {pullMissing && !error && (
           <div className="mb-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">

@@ -12,8 +12,11 @@ export interface OfflineOp {
   kind: OfflineKind;
   /** ISO timestamp — replay is oldest-first. */
   created_at: string;
-  /** Failed attempts so far; an op that keeps failing is dropped, not parked forever. */
+  /** Failed attempts so far; exhausted operations remain as recoverable evidence. */
   attempts: number;
+  /** Missing on legacy captures, which are treated as pending. */
+  state?: "pending" | "dead_letter";
+  failure_reason?: "queue_overflow" | "send_failed";
   /** Human label for the sync banner ("Prep sheet · 2026-10-04"). */
   label: string;
   payload: unknown;
@@ -27,6 +30,7 @@ export interface QueueStore {
 export interface DrainResult {
   sent: number;
   failed: number;
+  /** Compatibility counter: captured evidence is never automatically dropped. */
   dropped: number;
   remaining: number;
 }
@@ -65,6 +69,7 @@ export interface TempRecordPayload {
   recorded_at: string;
 }
 
+/** Automatic-work threshold, not a destructive storage cap. */
 export const QUEUE_LIMIT = 50;
 export const MAX_ATTEMPTS = 5;
 
@@ -94,10 +99,12 @@ export function newOp(kind: OfflineKind, label: string, payload: unknown, now = 
   };
 }
 
-/** Park an op at the front of the queue, trimming the oldest beyond the cap. */
+/** Preserve every capture. Overflow is retained visibly for manual retry/export. */
 export async function enqueue(store: QueueStore, op: OfflineOp): Promise<OfflineOp[]> {
   const ops = await store.read();
-  const next = [op, ...ops].slice(0, QUEUE_LIMIT);
+  const overflow = ops.filter((item) => item.state !== "dead_letter").length >= QUEUE_LIMIT;
+  const next = [{ ...op, state: overflow ? "dead_letter" as const : "pending" as const,
+    ...(overflow ? { failure_reason: "queue_overflow" as const } : {}) }, ...ops];
   await store.write(next);
   return next;
 }
@@ -105,7 +112,8 @@ export async function enqueue(store: QueueStore, op: OfflineOp): Promise<Offline
 /**
  * Replay queued ops oldest-first. `kinds` limits a page to its own ops (the
  * prep sheet must not consume temperature records). A failing send keeps the
- * op for the next drain unless it has burned through MAX_ATTEMPTS.
+ * op for the next drain. Exhausted operations stop automatic retries but remain
+ * visible and exportable until the user explicitly retries them.
  */
 export async function drain(
   store: QueueStore,
@@ -113,7 +121,7 @@ export async function drain(
   kinds?: readonly OfflineKind[],
 ): Promise<DrainResult> {
   const ops = await store.read();
-  const targeted = (kinds ? ops.filter((o) => kinds.includes(o.kind)) : ops)
+  const targeted = ops.filter((o) => o.state !== "dead_letter" && (!kinds || kinds.includes(o.kind)))
     .slice()
     .sort((a, b) => a.created_at.localeCompare(b.created_at));
   const targetIds = new Set(targeted.map((o) => o.id));
@@ -121,18 +129,15 @@ export async function drain(
   const kept: OfflineOp[] = [];
   let sent = 0;
   let failed = 0;
-  let dropped = 0;
   for (const op of targeted) {
     try {
       await send(op);
       sent += 1;
     } catch {
       const attempts = op.attempts + 1;
-      if (attempts >= MAX_ATTEMPTS) dropped += 1;
-      else {
-        kept.push({ ...op, attempts });
-        failed += 1;
-      }
+      kept.push({ ...op, attempts, ...(attempts >= MAX_ATTEMPTS
+        ? { state: "dead_letter" as const, failure_reason: "send_failed" as const } : {}) });
+      failed += 1;
     }
   }
 
@@ -140,7 +145,17 @@ export async function drain(
     a.created_at.localeCompare(b.created_at),
   );
   await store.write(next);
-  return { sent, failed, dropped, remaining: next.length };
+  return { sent, failed, dropped: 0, remaining: next.length };
+}
+
+/** A user recovery action; neither payload nor stable operation ID is changed. */
+export async function retryDeadLetters(store: QueueStore, kinds?: readonly OfflineKind[]): Promise<void> {
+  const ops = await store.read();
+  await store.write(ops.map((op) => {
+    if (op.state !== "dead_letter" || (kinds && !kinds.includes(op.kind))) return op;
+    const { failure_reason: _reason, ...retained } = op;
+    return { ...retained, state: "pending", attempts: 0 };
+  }));
 }
 
 export async function pendingCount(store: QueueStore, kinds?: readonly OfflineKind[]): Promise<number> {

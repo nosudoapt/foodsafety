@@ -10,6 +10,7 @@ import {
   memoryStore,
   newOp,
   pendingCount,
+  retryDeadLetters,
   shouldQueue,
   type OfflineOp,
 } from "../src/lib/offline-queue";
@@ -35,15 +36,17 @@ test("connectivity failures (and blank errors) are queued", () => {
   assert.equal(shouldQueue("Some unfamiliar timeout"), true);
 });
 
-test("enqueue parks newest-first and trims past the cap", async () => {
+test("OFF-01: enqueue retains every overflow capture as recoverable evidence", async () => {
   const store = memoryStore();
   for (let i = 0; i < QUEUE_LIMIT + 5; i++) {
     await enqueue(store, newOp("prep_save", `op ${i}`, { i }));
   }
   const ops = await store.read();
-  assert.equal(ops.length, QUEUE_LIMIT, `queue must cap at ${QUEUE_LIMIT}`);
+  assert.equal(ops.length, QUEUE_LIMIT + 5, "no unsynced record may be discarded");
   assert.equal(ops[0].label, `op ${QUEUE_LIMIT + 4}`, "newest op is at the front");
-  assert.equal(ops[ops.length - 1].label, "op 5", "the oldest extras were trimmed");
+  assert.equal(ops[ops.length - 1].label, "op 0", "the original capture remains");
+  assert.equal(ops.filter((op) => op.state === "dead_letter").length, 5);
+  assert.equal(ops[0].failure_reason, "queue_overflow");
 });
 
 test("drain replays oldest-first and clears what succeeded", async () => {
@@ -79,7 +82,7 @@ test("a failing send keeps the op for the next drain", async () => {
   assert.equal((await store.read()).length, 0, "a recovered send clears the op");
 });
 
-test("an op that never succeeds is dropped, not parked forever", async () => {
+test("OFF-02: exhausted failures remain exportable and retry only after explicit recovery", async () => {
   const store = memoryStore();
   await enqueue(store, newOp("temp_record", "doomed", {}));
 
@@ -89,8 +92,19 @@ test("an op that never succeeds is dropped, not parked forever", async () => {
       throw new Error("boom");
     });
   }
-  assert.equal(last.dropped, 1);
-  assert.equal(last.remaining, 0, `ops drop after ${MAX_ATTEMPTS} attempts`);
+  assert.equal(last.dropped, 0);
+  assert.equal(last.remaining, 1);
+  const retained = (await store.read())[0];
+  assert.equal(retained.state, "dead_letter");
+  assert.equal(retained.failure_reason, "send_failed");
+  let automatic = 0;
+  await drain(store, async () => { automatic++; });
+  assert.equal(automatic, 0, "a dead letter does not spin automatic retries");
+  await retryDeadLetters(store, ["temp_record"]);
+  assert.deepEqual((await store.read())[0].payload, retained.payload);
+  assert.equal((await store.read())[0].id, retained.id);
+  assert.equal((await drain(store, async () => { automatic++; })).sent, 1);
+  assert.equal(automatic, 1);
 });
 
 test("kinds filter so a page only replays its own ops", async () => {

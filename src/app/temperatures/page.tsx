@@ -9,12 +9,13 @@ import {
   drain,
   enqueue,
   newOp,
-  pendingCount,
+  retryDeadLetters,
   shouldQueue,
   type OfflineOp,
   type TempRecordPayload,
 } from "@/lib/offline-queue";
 import { PageHeader, Card, Button, Input } from "@/components/ui";
+import OfflineQueueNotice from "@/components/OfflineQueueNotice";
 
 interface TempRecord {
   id: string;
@@ -50,7 +51,9 @@ export default function TemperaturesPage() {
   const [showForm, setShowForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [offlinePending, setOfflinePending] = useState(0);
+  const [offlineOps, setOfflineOps] = useState<OfflineOp[]>([]);
+  const offlinePending = offlineOps.length;
+  const [syncing, setSyncing] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [queue] = useState(() => defaultStore());
   const TEMP_KINDS = ["temp_record"] as const;
@@ -68,11 +71,24 @@ export default function TemperaturesPage() {
   };
 
   // Replay readings the tablet captured with no signal — on load and on 'online'.
+  const refreshPending = async () => {
+    setOfflineOps((await queue.read()).filter((op) => op.kind === "temp_record"));
+  };
   const syncOffline = async () => {
-    const res = await drain(queue, sendQueuedRecord, TEMP_KINDS);
-    setOfflinePending(await pendingCount(queue, TEMP_KINDS));
-    if (res.sent) setRefreshKey((k) => k + 1);
-    return res;
+    setSyncing(true);
+    try {
+      await refreshPending(); // Recovery/export must not wait for a slow drain.
+      const res = await drain(queue, sendQueuedRecord, TEMP_KINDS);
+      await refreshPending();
+      if (res.sent) setRefreshKey((k) => k + 1);
+      return res;
+    } catch {
+      setSaveError("This device’s retained records could not be read or updated. Keep your form open and retry before leaving.");
+    } finally { setSyncing(false); }
+  };
+  const retryOffline = async () => {
+    try { await retryDeadLetters(queue, TEMP_KINDS); await syncOffline(); }
+    catch { setSaveError("Retained records could not be retried. Keep this device’s data and try again."); }
   };
 
   useEffect(() => {
@@ -149,8 +165,13 @@ export default function TemperaturesPage() {
       // Offline: park the reading (recorded_at frozen to now) and replay it
       // on the next load / 'online'. A schema error still surfaces below.
       if (shouldQueue(error.message)) {
-        await enqueue(queue, newOp("temp_record", `${formData.food_item} · ${temp}°C`, payload));
-        setOfflinePending(await pendingCount(queue, TEMP_KINDS));
+        try {
+          await enqueue(queue, newOp("temp_record", `${formData.food_item} · ${temp}°C`, payload));
+          await refreshPending();
+        } catch {
+          setSaveError("This device could not retain your reading. Keep this form open and retry, or copy the reading before leaving.");
+          return;
+        }
         setShowForm(false);
         setFormData({ record_type: "cold_storage", equipment_name: "", food_item: "", temperature: "", notes: "" });
         return;
@@ -195,12 +216,8 @@ export default function TemperaturesPage() {
         </div>
       )}
 
-      {offlinePending > 0 && (
-        <div className="mb-4 rounded-xl bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-800">
-          {offlinePending} reading{offlinePending === 1 ? "" : "s"} stored on this device — they&apos;ll sync to
-          the database the next time the connection comes back.
-        </div>
-      )}
+      {/* Records are stored on this device, not falsely reported as database saves. */}
+      {offlinePending > 0 && <OfflineQueueNotice ops={offlineOps} syncing={syncing} onRetry={() => { void retryOffline(); }} />}
 
       {/* Add Record Form */}
       {showForm && (
