@@ -4,6 +4,12 @@ import { parseTemperature, parseTemperatureSheet, temperatureAlert, temperatureI
 
 const input = { id: "91000000-0000-4000-8000-000000000001", record_type: "cold_storage", equipment_name: "Walk-in fridge", food_item: "Dairy", temperature: "3.25", min_safe_temp: "0", max_safe_temp: "4", notes: "" };
 
+test("HTTP-11: explicit non-Celsius units are refused, never silently relabelled", () => {
+  for (const unit of ["F", "PPM", "c", "", null, 0, {}]) assert.ok(parseTemperature({ ...input, unit }).error);
+  assert.equal(parseTemperature({ ...input, unit: "C" }).value?.temperature, 3.25);
+  assert.equal(parseTemperature(input).value?.temperature, 3.25);
+});
+
 test("readings require finite Celsius values and ordered targets; blanks never become zero", () => {
   assert.equal(parseTemperature(input).value?.temperature, 3.25);
   assert.equal(parseTemperature({ ...input, temperature: "0" }).value?.temperature, 0);

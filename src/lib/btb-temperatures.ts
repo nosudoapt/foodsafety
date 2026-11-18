@@ -41,6 +41,7 @@ function celsius(value: unknown): number | null {
 }
 
 export function parseTemperature(input: Record<string, unknown>): { value: TemperatureInput; error?: never } | { error: string; value?: never } {
+  if ("unit" in input && input.unit !== "C") return { error: "Enter the measured temperature in Celsius (°C). Other units are not accepted on this form." };
   if (!isUuid(input.id)) return { error: "Start a new temperature reading and try again." };
   if (!TEMPERATURE_TYPES.some((type) => type.value === input.record_type)) return { error: "Choose a record type." };
   for (const [key, label] of [["equipment_name", "equipment"], ["food_item", "a food or storage item"]] as const) {
