@@ -1,0 +1,35 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createPlatformDatabase, seedPlatform, IDS, call } from "./helpers/btb-platform-database.mjs";
+
+const migration = readFileSync(new URL("../supabase/fix-btb-closed-site-jobs.sql", import.meta.url), "utf8");
+test("DB-18: historical closed-site job remains deliverable; claim and prepare now retain cancelled evidence without provider eligibility", async (t) => {
+  const db = await createPlatformDatabase("api"); t.after(() => db.close()); await seedPlatform(db);
+  const claim = async () => (await db.query("SELECT * FROM btb_claim_email_jobs(20)")).rows;
+  const prepare = (job, attachment = null) => call(db, "btb_prepare_email_job", { p_id: job.id, p_lease: job.lease_token, p_from: "qa@test.invalid", p_attachment: attachment });
+  const active = enabled => db.query("UPDATE btb_location_settings SET active=$2 WHERE location_id=$1", [IDS.a, enabled]);
+  const insert = async (key, kind = "notification", status = "pending", location = IDS.a) => (await db.query("INSERT INTO btb_email_jobs(dedupe_key,location_id,kind,recipient,subject,body,status,payload) VALUES($1,$2,$3,'qa@test.invalid','QA subject','Retained QA body',$4,'{}') RETURNING *", [key, location, kind, status])).rows[0];
+  await insert("historical"); await active(false);
+  const historical = (await claim())[0]; assert.ok(await prepare(historical), "Historical closure defect reproduced");
+  await db.exec(migration); await db.exec(migration);
+  assert.equal(await prepare(historical), null);
+  const cancelled = (await db.query("SELECT * FROM btb_email_jobs WHERE id=$1", [historical.id])).rows[0];
+  assert.equal(cancelled.status, "cancelled"); assert.equal(cancelled.body, "Retained QA body"); assert.equal(cancelled.frozen_from, "qa@test.invalid");
+  await active(true);
+  await insert("daily", "daily"); await insert("notification");
+  const leased = await claim(); assert.equal(leased.length, 2);
+  await active(false);
+  for (const job of leased) assert.equal(await prepare(job, "Synthetic PDF bytes"), null, "Closure after claim is rechecked");
+  await insert("pending-closed"); await insert("failed-closed", "notification", "failed");
+  const expired = await insert("expired-closed", "notification", "sending");
+  await db.query("UPDATE btb_email_jobs SET lease_until=now()-interval '1 minute',lease_token=gen_random_uuid(),uncertain=true,first_attempt_at=now() WHERE id=$1", [expired.id]);
+  const legacy = await insert("legacy-no-location", "notification", "pending", null);
+  const remaining = await claim(); assert.deepEqual(remaining.map(j => j.id), [legacy.id]);
+  assert.ok(await prepare(remaining[0]), "Legacy jobs without a location are unaffected");
+  assert.equal((await db.query("SELECT count(*)::int n FROM btb_email_jobs WHERE location_id=$1 AND status<>'cancelled'", [IDS.a])).rows[0].n, 0);
+  await db.query("INSERT INTO btb_email_jobs(dedupe_key,location_id,kind,recipient,subject,body,status,provider_id,accepted_at) VALUES('already-accepted',$1,'notification','qa@test.invalid','QA','Preserved provider evidence','accepted','synthetic-provider-id',now())", [IDS.a]);
+  await claim();
+  assert.equal((await db.query("SELECT status FROM btb_email_jobs WHERE dedupe_key='already-accepted'")).rows[0].status, "accepted");
+  await active(true); assert.equal((await claim()).length, 0, "Reopening does not silently resend cancelled jobs");
+});
