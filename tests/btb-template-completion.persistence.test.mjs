@@ -1,0 +1,33 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createPlatformDatabase, seedPlatform, IDS, call } from "./helpers/btb-platform-database.mjs";
+
+const migration = readFileSync(new URL("../supabase/fix-btb-template-completion.sql", import.meta.url), "utf8");
+test("DB-23: historical precompletion reproduces; templates/read models cannot provide fabricated runtime evidence for a new instance", async (t) => {
+  const db = await createPlatformDatabase("api"); t.after(() => db.close()); await seedPlatform(db);
+  const ctx = { p_actor: IDS.manager, p_session: 1, p_location: IDS.a };
+  const forged = { id: "a", text: "Inspect now", completed: true, completed_at: "2000-01-01", completed_by: IDS.owner, completed_by_name: "Forged", evidence_id: IDS.owner, notes: "Forged notes", value: "Forged value" };
+  const configure = tasks => call(db, "btb_platform_configure_operations", { ...ctx, p_profile: IDS.uploader, p_data: { effective_from: "2020-01-01", kind: "opening", tasks } });
+  await configure([forged, { id: "b", text: "Other duty" }]);
+  const check = { ...ctx, p_actor: IDS.staff, p_date: "2020-01-02", p_kind: "opening", p_version: 0, p_changes: [{ id: "b", completed: true }], p_notes: "" };
+  const historical = await call(db, "btb_platform_save_check", check); assert.equal(historical.completed, true);
+  const oldTemplate = (await db.query("SELECT tasks FROM btb_operation_templates")).rows[0].tasks;
+  await db.exec(migration); await db.exec(migration);
+  assert.deepEqual((await db.query("SELECT tasks FROM btb_operation_templates")).rows[0].tasks, oldTemplate, "No rewrite of historical approval");
+  assert.deepEqual((await db.query("SELECT items FROM btb_shift_checks WHERE id=$1", [historical.id])).rows[0].items, historical.items, "No rewrite of saved evidence");
+  const saved = await call(db, "btb_platform_save_check", { ...check, p_date: "2020-01-03" });
+  assert.equal(saved.completed, false); assert.equal(saved.done_count, 1);
+  assert.equal(saved.items[0].completed, false);
+  for (const key of ["completed_at", "completed_by", "completed_by_name", "evidence_id", "notes", "value"]) assert.equal(key in saved.items[0], false, key);
+  assert.equal(saved.items[1].completed_by, IDS.staff); assert.ok(saved.items[1].completed_at);
+  const model = await call(db, "btb_platform_read", { ...ctx, p_module: "operations", p_date: "2020-01-04", p_month: "2020-01" });
+  assert.equal(model.templates[0].tasks[0].completed, false); assert.equal("completed_by" in model.templates[0].tasks[0], false);
+  await configure([{ ...forged, requires_photo: true, requires_value: true, assigned_to: IDS.staff }]);
+  const newest = (await db.query("SELECT tasks FROM btb_operation_templates ORDER BY version DESC LIMIT 1")).rows[0].tasks[0];
+  assert.equal(newest.completed, false); assert.equal(newest.requires_photo, true); assert.equal(newest.requires_value, true); assert.equal(newest.assigned_to, IDS.staff);
+  await assert.rejects(call(db, "btb_platform_save_check", { ...check, p_date: "2020-01-05", p_changes: [{ id: "a", completed: true }] }), /Photo evidence required/);
+  const replay = await call(db, "btb_platform_save_check", { ...check, p_date: "2020-01-03", p_version: 1, p_changes: [{ id: "a", completed: true }] });
+  assert.equal(replay.completed, true, "An existing instance retains its original task rules/snapshot");
+  assert.equal(replay.items[0].completed_by, IDS.staff);
+});
