@@ -10,6 +10,16 @@ test("HTTP-11: explicit non-Celsius units are refused, never silently relabelled
   assert.equal(parseTemperature(input).value?.temperature, 3.25);
 });
 
+test("DATE-01: daily sheets reject impossible dates, timestamps and future days before persistence", () => {
+  const sheet = { date: "2024-02-29", cells: [{ label: "COOLER-1", slot: "11:00", value: 2 }] };
+  for (const date of ["2026-02-29", "2026-02-30", "2026-04-31", "2026-13-01", "2026-00-01", "2026-11-00", "2026-11-01T00:00:00Z", "2099-01-01", "2026-2-01"]) {
+    assert.ok(parseTemperatureSheet({ ...sheet, date }, "2026-11-18").error, date);
+  }
+  for (const date of ["2024-02-29", "2026-03-08", "2026-11-01", "2026-11-18"]) {
+    assert.equal(parseTemperatureSheet({ ...sheet, date }, "2026-11-18").value?.date, date);
+  }
+});
+
 test("readings require finite Celsius values and ordered targets; blanks never become zero", () => {
   assert.equal(parseTemperature(input).value?.temperature, 3.25);
   assert.equal(parseTemperature({ ...input, temperature: "0" }).value?.temperature, 0);

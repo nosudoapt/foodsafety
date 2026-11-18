@@ -1,4 +1,4 @@
-import { isUuid } from "./btb-team";
+import { isIsoDate, isUuid } from "./btb-team";
 
 export const TEMPERATURE_TYPES = [
   { value: "cold_storage", label: "Cold storage" },
@@ -148,7 +148,7 @@ function sheetValue(value: unknown, floor: number): number | null {
  * cells, which arrive as label + slot + reading. Empty boxes are simply
  * absent — a blank on the paper form is never stored as a zero. */
 export function parseTemperatureSheet(input: Record<string, unknown>, today: string): { value: TemperatureSheetEntry; error?: never } | { error: string; value?: never } {
-  if (typeof input.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(input.date)) return { error: "Choose the date on the sheet." };
+  if (!isIsoDate(input.date)) return { error: "Choose a real calendar date on the sheet." };
   if (input.date > today) return { error: "The sheet can’t be dated in the future." };
   if (!Array.isArray(input.cells) || !input.cells.length) return { error: "Write at least one reading on the sheet before saving." };
   if (input.cells.length > 42) return { error: "A sheet holds 42 readings (14 rows × 3 times). Save the page and start a new sheet." };
