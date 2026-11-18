@@ -51,9 +51,9 @@ function seed() {
     daily_checks: roles.filter((role) => role !== "designer").map((role) => ({ ...personal, id: `check-${role}`, user_id: userId(role), check_type: "opening", completed: true, completed_at: time, notes: "Opening checks completed.", checklist_items: opening })),
     cleaning_records: [{ ...scope, id: "clean1", user_id: userId("staff"), completed: true, completed_at: time }],
     temperature_records: [
-      { ...scope, ...temperature, id: "temp1", user_id: userId("staff"), equipment_name: "Display fridge", food_item: "Cold display", temperature: 9, unit: "C", is_safe: false, recorded_at: time },
-      { ...scope, ...temperature, id: "temp2", equipment_name: "Walk-in fridge", food_item: "Cheese", temperature: 42, unit: "F", is_safe: false, recorded_at: time },
-      { ...scope, ...temperature, id: "temp3", location_id: west, equipment_name: "Market freezer", food_item: "Freezer stock", temperature: -12, unit: "C", min_safe_temp: -25, max_safe_temp: -18, is_safe: false, recorded_at: time },
+      { ...scope, ...temperature, id: "95000000-0000-4000-8000-000000000001", user_id: userId("staff"), equipment_name: "Display fridge", food_item: "Cold display", temperature: 9, unit: "C", is_safe: false, recorded_at: time },
+      { ...scope, ...temperature, id: "95000000-0000-4000-8000-000000000002", equipment_name: "Walk-in fridge", food_item: "Cheese", temperature: 42, unit: "F", is_safe: false, recorded_at: time },
+      { ...scope, ...temperature, id: "95000000-0000-4000-8000-000000000003", location_id: west, equipment_name: "Market freezer", food_item: "Freezer stock", temperature: -12, unit: "C", min_safe_temp: -25, max_safe_temp: -18, is_safe: false, recorded_at: time },
     ],
     corrective_actions: [{ ...scope, id: "action1", issue_description: "Check the fridge seal", resolved: false }, { ...scope, id: "action2", location_id: west, issue_description: "Replace freezer gasket", resolved: false }],
     training_records: [{ ...scope, id: "training1", user_id: userId("staff"), expiry_date: today(), training_type: "Food safety" }],

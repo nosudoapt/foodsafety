@@ -39,7 +39,7 @@ export async function databaseRows(db, table) {
   return result.rows.map((entry) => entry.row);
 }
 
-export async function createBtbDatabase(legacy = {}) {
+export async function createBtbDatabase(legacy = {}, options = {}) {
   const db = new PGlite();
   await db.exec(`
     CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
@@ -76,6 +76,17 @@ export async function createBtbDatabase(legacy = {}) {
     await db.exec("ALTER TABLE btb_shift_checks ADD COLUMN location_id uuid; ALTER TABLE social_media_calendar ADD COLUMN location_id uuid;");
     await db.exec(readFileSync(new URL("fix-platform-bootstrap-security.sql", schemaDirectory), "utf8"));
     await db.exec(readFileSync(new URL("fix-btb-temperature-standards.sql", schemaDirectory), "utf8"));
+    if (options.temperatureStore) {
+      await db.exec(declaration("schema.sql", "equipment"));
+      await db.exec(declaration("schema.sql", "temperature_records"));
+      await db.exec("ALTER TABLE temperature_records ADD COLUMN location_id uuid REFERENCES locations(id); ALTER TABLE temperature_records ADD COLUMN equipment_id uuid REFERENCES equipment(id); ALTER TABLE temperature_records ADD COLUMN recorded_by uuid REFERENCES btb_employees(id);");
+      const core = readFileSync(new URL("schema.sql", schemaDirectory), "utf8");
+      for (const policy of core.matchAll(/^CREATE POLICY .* ON temperature_records .*;$/gm)) await db.exec(policy[0]);
+      await db.exec("ALTER TABLE temperature_records ENABLE ROW LEVEL SECURITY; GRANT SELECT,INSERT,UPDATE,DELETE ON temperature_records TO authenticated,service_role;");
+      for (const file of ["fix-temperature-audit.sql", "fix-temperature-server-time.sql", "fix-temperature-owner-retention.sql", "fix-temperature-verdict.sql", "fix-temperature-sheet-atomic.sql"]) {
+        await db.exec(readFileSync(new URL(file, schemaDirectory), "utf8"));
+      }
+    }
   }
   catch (error) { await db.close(); throw error; }
   return db;
@@ -85,7 +96,7 @@ export async function rpc(db, name, parameters) {
   const keys = Object.keys(parameters);
   const args = keys.map((key, index) => `${identifier(key)} => $${index + 1}`).join(",");
   // PGlite encodes JS arrays as postgres arrays; JSONB parameters must be JSON.
-  const values = Object.entries(parameters).map(([key, value]) => ["p_items", "p_lines", "p_sections"].includes(key) && Array.isArray(value) && (key !== "p_sections" || name === "btb_save_training_topic") ? JSON.stringify(value) : value);
+  const values = Object.entries(parameters).map(([key, value]) => ["p_items", "p_lines", "p_sections", "p_cells"].includes(key) && Array.isArray(value) && (key !== "p_sections" || name === "btb_save_training_topic") ? JSON.stringify(value) : value);
   const result = await db.query(`SELECT to_jsonb(value) AS row FROM public.${identifier(name)}(${args}) value`, values);
   return result.rows.map((entry) => entry.row);
 }

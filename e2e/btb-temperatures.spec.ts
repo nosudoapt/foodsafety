@@ -25,14 +25,14 @@ test("BTB temperature saves retain failures, survive reload and keep independent
   test.slow();
   await signInFoodSafe(page, "manager");
   await signInBtb(page, "manager");
-  await page.getByRole("searchbox", { name: "Search BTB tools" }).fill("temperature sheet");
+  await page.locator("#btb-tools").getByRole("searchbox", { name: "Search BTB tools" }).fill("temperature sheet");
   await page.locator('#btb-tools a[href="/between-the-buns/temperatures"]').click();
   const cell = page.getByLabel(/^COOLER-1 11:00 AM (°C|PPM)$/);
   await expect(cell).toBeVisible();
-  await fixture.configure({ failures: [{ table: "temperature_records", method: "POST", times: 1 }] });
+  await fixture.configure({ failures: [{ table: "btb_save_temperature_sheet", method: "POST", times: 1 }] });
   await cell.fill("8");
   await page.getByRole("button", { name: "Save sheet" }).click();
-  await expect(page.locator(".ui-notice--error")).toContainText("COOLER-1 (11:00) wasn’t saved");
+  await expect(page.locator(".ui-notice--error")).toContainText("The sheet wasn’t saved");
   await expect(page.getByLabel(/^COOLER-1 11:00 AM (°C|PPM)$/)).toHaveValue("8");
   await page.setViewportSize({ width: 375, height: 812 });
   await capture(page, info, "temperature-mobile-retained-draft");
@@ -47,7 +47,8 @@ test("BTB temperature saves retain failures, survive reload and keep independent
   await capture(page, info, "temperature-mobile-history");
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("tab", { name: "History (90 days)" }).click();
-  await expect(page.getByText("8 °C").first()).toBeVisible();
+  await page.locator("#temperature-panel-history summary").filter({ hasText: "Today" }).click();
+  await expect(page.locator("#temperature-panel-history details[open]").getByText("8 °C", { exact: true })).toBeVisible();
   await capture(page, info, "temperature-desktop-history");
   await page.getByText("Looking for earlier Pholo records?", { exact: true }).click();
   await page.getByRole("link", { name: "Open Pholo temperature records" }).click();
@@ -58,10 +59,10 @@ test("BTB temperature saves retain failures, survive reload and keep independent
 test("temperature history excludes other owners, restaurants, sites and older rows; all pages load", async ({ request, fixture }) => {
   const records = Array.from({ length: 1001 }, (_, index) => ({ ...row, id: `91000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}` }));
   await fixture.configure({ tables: { temperature_records: [...records,
-    { ...row, id: "other-restaurant", restaurant_name: "Another restaurant" },
-    { ...row, id: "other-owner", user_id: "10000000-0000-4000-8000-000000000002" },
-    { ...row, id: "other-site", location_id: east },
-    { ...row, id: "older", recorded_at: new Date(Date.now() - 91 * 86_400_000).toISOString() },
+    { ...row, id: "96000000-0000-4000-8000-000000000001", restaurant_name: "Another restaurant" },
+    { ...row, id: "96000000-0000-4000-8000-000000000002", user_id: "10000000-0000-4000-8000-000000000002" },
+    { ...row, id: "96000000-0000-4000-8000-000000000003", location_id: east },
+    { ...row, id: "96000000-0000-4000-8000-000000000004", recorded_at: new Date(Date.now() - 91 * 86_400_000).toISOString() },
   ] } });
   await apiSignIn(request);
   const response = await request.get("/api/btb/temperatures");

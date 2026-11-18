@@ -1,14 +1,14 @@
 import { btbDatabaseTables, btbUploadTables, createBtbDatabase, databaseRows, identifier, insertRows, rpc } from "../tests/helpers/btb-database.mjs";
 
-const db = await createBtbDatabase();
-const databaseTables = [...btbDatabaseTables, ...btbUploadTables];
+const db = await createBtbDatabase({}, { temperatureStore: true });
+const databaseTables = [...btbDatabaseTables, ...btbUploadTables, "temperature_records"];
 const names = new Set(databaseTables);
 const primaryKey = (table) => ({ btb_employee_credentials: "employee_id", btb_notification_settings: "restaurant_name", btb_franchise_tasks: "task_key", btb_login_limits: "key" })[table] ?? "id";
 
 export function isBtbDatabaseTable(table) { return names.has(table); }
 
 export async function resetBtbDatabase(tables) {
-  await db.exec(`TRUNCATE ${databaseTables.map(identifier).join(",")}, compliance_documents, locations, profiles CASCADE`);
+  await db.exec(`TRUNCATE ${databaseTables.map(identifier).join(",")}, temperature_record_events, compliance_documents, locations, profiles CASCADE`);
   await db.exec("INSERT INTO btb_notification_settings(restaurant_name) VALUES ('Between the Buns')");
   await configureBtbDatabase(tables);
 }
@@ -21,9 +21,12 @@ export async function configureBtbDatabase(tables) {
       for (const profile of tables.profiles) await tx.query("INSERT INTO profiles(id,restaurant_name,role) VALUES ($1,$2,$3) ON CONFLICT (id) DO UPDATE SET restaurant_name=excluded.restaurant_name,role=excluded.role", [profile.id, profile.restaurant_name, profile.role]);
     }
     for (const table of databaseTables.filter((table) => table in tables)) {
+      // Existing synthetic evidence must retain its fixture timestamp; actual
+      // PostgREST writes below always run with the real timestamp/audit triggers.
+      if (table === "temperature_records") await tx.exec("SET LOCAL session_replication_role='replica'");
       const rows = tables[table];
       const key = primaryKey(table);
-      if (!rows.length) { await tx.exec(`DELETE FROM ${identifier(table)}`); continue; }
+      if (!rows.length) { await tx.exec(`DELETE FROM ${identifier(table)}`); if (table === "temperature_records") await tx.exec("SET LOCAL session_replication_role='origin'"); continue; }
       // Replace omitted rows before inserting: a different primary key may reuse
       // a unique date/email from the previous fixture. Keep retained IDs intact.
       await tx.query(`DELETE FROM ${identifier(table)} WHERE ${identifier(key)}::text NOT IN (SELECT jsonb_array_elements_text($1::jsonb))`, [JSON.stringify(rows.map((row) => row[key]))]);
@@ -33,6 +36,7 @@ export async function configureBtbDatabase(tables) {
         await tx.query(`INSERT INTO ${identifier(table)} (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::${identifier(table)}, $1::jsonb)
           ON CONFLICT (${identifier(key)}) DO ${updates.length ? `UPDATE SET ${updates}` : "NOTHING"}`, [JSON.stringify(row)]);
       }
+      if (table === "temperature_records") await tx.exec("SET LOCAL session_replication_role='origin'");
     }
     if (tables.compliance_documents) {
       await tx.exec("DELETE FROM compliance_documents");
@@ -43,7 +47,7 @@ export async function configureBtbDatabase(tables) {
 
 export async function btbDatabaseState() {
   const pairs = await Promise.all(databaseTables.map(async (table) => [table, await databaseRows(db, table)]));
-  return Object.fromEntries(pairs);
+  return { ...Object.fromEntries(pairs), temperature_record_events: await databaseRows(db, "temperature_record_events") };
 }
 
 function where(params, values) {
@@ -77,7 +81,7 @@ function where(params, values) {
 export async function btbPostgrest(table, method, params, body, headers, isRpc) {
   try {
     const server = headers.apikey === "browser-test-service-key";
-    if (!server && !btbUploadTables.includes(table)) return { status: 403, body: { code: "42501", message: "Permission denied" } };
+    if (!server && !btbUploadTables.includes(table) && table !== "temperature_records") return { status: 403, body: { code: "42501", message: "Permission denied" } };
     if (isRpc) {
       const rows = await rpc(db, table, body);
       return { status: 200, body: table === "btb_consume_login_attempt" ? rows[0] : rows };
