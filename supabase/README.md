@@ -87,6 +87,8 @@ are idempotent (safe to re-run).
 | 29 | `schema-november-13-updates.sql` | 13 Nov 2026 updates — branding: `qty` + `items` columns for combo requests; shifts: duty CHECK accepts `prep` and `none` (duties optional); compliance: `notify` reminder toggle column. |
 | 30 | `schema-platform-admin.sql` | Platform admin — `app_activity` page-visit tracking (recently/most used links, owner heatmap) and `platform_plans` client billing rows. |
 | 31 | `schema-compliance-second-attachment.sql` | Compliance renewals — second attachment slot (`other_file_name` / `other_file_url`) beside the renewal certificate. |
+| 32 | `schema-btb-superadmin.sql` | Separate BTB super-admin credentials and managed locations, 50 MiB storage cap, location page allow-lists. Requires the existing BTB team and location platform releases. |
+| 33 | `schema-btb-invitations.sql` | One-time person invitations, existing employee credential activation, request-time multi-location page grants. |
 
 ## Role set — single source of truth
 

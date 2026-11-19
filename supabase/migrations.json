@@ -149,6 +149,16 @@
       "step": 31,
       "file": "schema-compliance-second-attachment.sql",
       "description": "Compliance renewals — second attachment slot (other_file_name / other_file_url) beside the renewal certificate."
+    },
+    {
+      "step": 32,
+      "file": "schema-btb-superadmin.sql",
+      "description": "Separate BTB console credentials, limiter, managed locations and location page allow-lists. Requires the existing BTB location releases."
+    },
+    {
+      "step": 33,
+      "file": "schema-btb-invitations.sql",
+      "description": "Transactional person invitations, one-time password setup, existing employee credentials and unioned location page grants."
     }
   ]
 }
