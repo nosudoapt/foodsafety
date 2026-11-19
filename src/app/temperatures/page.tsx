@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import {
   defaultStore,
+  deriveReplayKey,
   drain,
   enqueue,
   newOp,
@@ -66,7 +67,10 @@ export default function TemperaturesPage() {
   });
 
   const sendQueuedRecord = async (op: OfflineOp) => {
-    const { error } = await supabase.from("temperature_records").insert(op.payload as TempRecordPayload);
+    const { error } = await supabase.rpc("btb_insert_temp_record", {
+      p_data: op.payload as TempRecordPayload,
+      p_replay_key: op.replayKey,
+    });
     if (error) throw error;
   };
 
@@ -159,7 +163,10 @@ export default function TemperaturesPage() {
       recorded_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from("temperature_records").insert(payload);
+    const { error } = await supabase.rpc("btb_insert_temp_record", {
+      p_data: payload,
+      p_replay_key: deriveReplayKey("temp_record", payload),
+    });
 
     if (error) {
       // Offline: park the reading (recorded_at frozen to now) and replay it

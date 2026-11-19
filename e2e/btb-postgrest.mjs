@@ -81,10 +81,24 @@ function where(params, values) {
 export async function btbPostgrest(table, method, params, body, headers, isRpc) {
   try {
     const server = headers.apikey === "browser-test-service-key";
-    if (!server && !btbUploadTables.includes(table) && table !== "temperature_records") return { status: 403, body: { code: "42501", message: "Permission denied" } };
+    // Browser RPC calls are authorized inside the SECURITY DEFINER functions
+    // themselves (tenant scoping, actor binding), so they bypass the table gate.
+    if (!server && !isRpc && !btbUploadTables.includes(table) && table !== "temperature_records") return { status: 403, body: { code: "42501", message: "Permission denied" } };
     if (isRpc) {
-      const rows = await rpc(db, table, body);
-      return { status: 200, body: table === "btb_consume_login_attempt" ? rows[0] : rows };
+      return await db.transaction(async (tx) => {
+        // Mirror the table path: server API key runs as service_role, a browser
+        // session runs as authenticated with its claim, everything else is anon.
+        const subject = (!server && headers.authorization?.endsWith(".fixture-signature"))
+          ? (() => { try { return JSON.parse(Buffer.from(headers.authorization.split(".")[1], "base64url").toString()).sub ?? ""; } catch { return ""; } })()
+          : "";
+        await tx.exec(`SET LOCAL ROLE ${server ? "service_role" : subject ? "authenticated" : "anon"}`);
+        if (subject) await tx.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [subject]);
+        const rows = await rpc(tx, table, body);
+        const shape = await tx.query("SELECT proretset FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=$1", [table]);
+        // Scalar JSONB/boolean RPCs are not SETOF rows. Keep legacy SETOF RPCs
+        // as arrays, including the existing temperature sheet persistence RPC.
+        return { status: 200, body: shape.rows[0]?.proretset ? rows : rows[0] ?? null };
+      });
     }
     if (!names.has(table)) return { status: 404, body: { code: "42P01", message: "Unknown fixture table" } };
     let subject = "";

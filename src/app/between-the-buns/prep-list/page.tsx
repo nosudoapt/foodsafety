@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import {
   defaultStore,
+  deriveReplayKey,
   drain,
   enqueue,
   newOp,
@@ -143,14 +144,13 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
 
   const sendQueuedSave = async (op: OfflineOp) => {
     const payload = op.payload as PrepSavePayload;
-    let del = supabase.from("prep_counts").delete().eq("restaurant_name", BTB_RESTAURANT).eq("count_date", payload.date);
-    if (payload.scope) del = del.or(payload.scope);
-    const { error: delErr } = await del;
-    if (delErr) throw delErr;
-    if (payload.rows.length) {
-      const { error: insErr } = await supabase.from("prep_counts").insert(payload.rows.map((row) => ({ ...row, restaurant_name: BTB_RESTAURANT })));
-      if (insErr) throw insErr;
-    }
+    const { error } = await supabase.rpc("btb_replay_prep_save", {
+      p_date: payload.date,
+      p_scope: payload.scope,
+      p_rows: payload.rows,
+      p_replay_key: op.replayKey,
+    });
+    if (error) throw error;
   };
 
   // Replay anything the tablet saved while it was offline — on load and
@@ -311,19 +311,18 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
       }));
 
     const scope = locationScope();
-    let del = supabase.from("prep_counts").delete().eq("restaurant_name", BTB_RESTAURANT).eq("count_date", date);
-    if (scope) del = del.or(scope);
-    const { error: delErr } = await del;
-    let insErr = delErr;
-    if (!delErr && rows.length) {
-      insErr = (await supabase.from("prep_counts").insert(rows)).error;
-    }
-    const fail = delErr ?? insErr;
-    if (fail) {
+    const payload: PrepSavePayload = { date, scope, rows };
+    const { error } = await supabase.rpc("btb_replay_prep_save", {
+      p_date: date,
+      p_scope: scope,
+      p_rows: rows,
+      p_replay_key: deriveReplayKey("prep_save", payload),
+    });
+    if (error) {
       // Offline (or any non-schema failure): park the save in IndexedDB and
       // replay it on the next load / 'online' event. A missing table or
       // column is a migration the owner runs by hand — queueing won't fix it.
-      if (shouldQueue(fail.message)) {
+      if (shouldQueue(error.message)) {
         try {
           await enqueue(
             queue,

@@ -10,7 +10,7 @@ export const btbDatabaseTables = [
   "btb_order_sheets", "btb_order_revisions", "training_topics", "training_sections", "btb_training_records", "btb_training_reviews",
   "btb_franchise_tasks", "btb_staff_licences", "btb_notification_settings", "btb_licence_email_log",
   "platform_auth",
-  "btb_temperature_standards",
+  "btb_temperature_standards", "btb_offline_receipts",
 ];
 
 export function identifier(value) {
@@ -56,6 +56,10 @@ export async function createBtbDatabase(legacy = {}, options = {}) {
     ${declaration("schema-checklists.sql", "btb_checklists")}
     ${declaration("schema-features.sql", "order_sheets")}
     ALTER TABLE order_sheets ADD COLUMN location_id uuid;
+    ${declaration("schema-features.sql", "prep_counts")}
+    ALTER TABLE prep_counts ADD COLUMN location_id uuid;
+    ALTER TABLE prep_counts ADD COLUMN pull numeric NOT NULL DEFAULT 0;
+    ALTER TABLE prep_counts ADD COLUMN urgent boolean NOT NULL DEFAULT false;
     ${declaration("schema-training.sql", "training_topics")}
     ${declaration("schema-training.sql", "training_sections")}
     ${declaration("schema-compliance.sql", "new_restaurant_tasks")}
@@ -83,7 +87,7 @@ export async function createBtbDatabase(legacy = {}, options = {}) {
       const core = readFileSync(new URL("schema.sql", schemaDirectory), "utf8");
       for (const policy of core.matchAll(/^CREATE POLICY .* ON temperature_records .*;$/gm)) await db.exec(policy[0]);
       await db.exec("ALTER TABLE temperature_records ENABLE ROW LEVEL SECURITY; GRANT SELECT,INSERT,UPDATE,DELETE ON temperature_records TO authenticated,service_role;");
-      for (const file of ["fix-temperature-audit.sql", "fix-temperature-server-time.sql", "fix-temperature-owner-retention.sql", "fix-temperature-verdict.sql", "fix-temperature-sheet-atomic.sql"]) {
+      for (const file of ["fix-temperature-audit.sql", "fix-temperature-server-time.sql", "fix-temperature-owner-retention.sql", "fix-temperature-verdict.sql", "fix-temperature-sheet-atomic.sql", "fix-offline-replay-keys.sql"]) {
         await db.exec(readFileSync(new URL(file, schemaDirectory), "utf8"));
       }
     }
@@ -95,8 +99,10 @@ export async function createBtbDatabase(legacy = {}, options = {}) {
 export async function rpc(db, name, parameters) {
   const keys = Object.keys(parameters);
   const args = keys.map((key, index) => `${identifier(key)} => $${index + 1}`).join(",");
-  // PGlite encodes JS arrays as postgres arrays; JSONB parameters must be JSON.
-  const values = Object.entries(parameters).map(([key, value]) => ["p_items", "p_lines", "p_sections", "p_cells"].includes(key) && Array.isArray(value) && (key !== "p_sections" || name === "btb_save_training_topic") ? JSON.stringify(value) : value);
+  // Keep uuid[] training progress as a PostgreSQL array, but serialize JSONB
+  // command objects and arrays exactly as PostgREST does.
+  const jsonKeys = ["p_items", "p_lines", "p_sections", "p_cells", "p_data", "p_rows"];
+  const values = Object.entries(parameters).map(([key, value]) => jsonKeys.includes(key) && value !== null && typeof value === "object" && (key !== "p_sections" || name === "btb_save_training_topic") ? JSON.stringify(value) : value);
   const result = await db.query(`SELECT to_jsonb(value) AS row FROM public.${identifier(name)}(${args}) value`, values);
   return result.rows.map((entry) => entry.row);
 }

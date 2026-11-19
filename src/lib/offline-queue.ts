@@ -14,6 +14,8 @@ export interface OfflineOp {
   created_at: string;
   /** Durable logical capture sequence; legacy captures are normalized on open. */
   sequence?: number;
+  /** Stable key for idempotent replay; generated before the first send. */
+  replayKey?: string;
   /** Failed attempts so far; exhausted operations remain as recoverable evidence. */
   attempts: number;
   /** Missing on legacy captures, which are treated as pending. */
@@ -94,8 +96,29 @@ export function shouldQueue(message?: string | null): boolean {
 const newId = (): string =>
   `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
+/**
+ * Stable replay key derived from the capture BEFORE the first send. The key is
+ * stored on the device and sent with every attempt, so a lost HTTP response can
+ * be replayed without duplicating the row or inventing a new identity.
+ * Deterministic cyrb53 with independent salts — 64 hex chars, no crypto needed.
+ */
+export function deriveReplayKey(kind: OfflineKind, payload: unknown): string {
+  const input = kind + ":" + JSON.stringify(payload);
+  const salt = (seed: number) => {
+    let h1 = seed >>> 0, h2 = 1597334677 >>> 0;
+    for (let i = 0, ch; (ch = input.charCodeAt(i)); i++) {
+      h1 = Math.imul(h1 ^ ch, 597399067);
+      h2 = Math.imul(h2 ^ ch, 2869860233);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+  };
+  return [salt(1), salt(2654435761), salt(1597334677), salt(2246822507)].join("");
+}
+
 export function newOp(kind: OfflineKind, label: string, payload: unknown, now = new Date()): OfflineOp {
-  return {
+  const op: OfflineOp = {
     id: newId(),
     kind,
     created_at: now.toISOString(),
@@ -103,7 +126,16 @@ export function newOp(kind: OfflineKind, label: string, payload: unknown, now = 
     label,
     payload,
   };
+  op.replayKey = deriveReplayKey(kind, payload);
+  return op;
 }
+
+/**
+ * Legacy captures predate replay keys. The capture id is unique per capture,
+ * so hashing it yields a stable key that cannot collide between distinct
+ * captures and is persisted before the first replay send.
+ */
+const legacyReplayKey = (op: OfflineOp): string => deriveReplayKey(op.kind, { legacy: op.id });
 
 const locks = new WeakMap<QueueStore, Map<string, Promise<unknown>>>();
 const watermarks = new WeakMap<QueueStore, number>();
@@ -160,8 +192,16 @@ export async function drain(
     let sent = 0, failed = 0;
     for (const op of targeted) {
       if (op.state === "dead_letter") break; // Resolve older evidence before later writes.
+      let sendOp = op;
+      if (!sendOp.replayKey) {
+        const replayKey = legacyReplayKey(op);
+        // Persist a stable key for legacy captures so the server can acknowledge
+        // a retry of this exact capture instead of writing it twice.
+        await mutate(store, ops => ops.map(item => (item.id === op.id && !item.replayKey ? { ...item, replayKey } : item)));
+        sendOp = { ...op, replayKey };
+      }
       let accepted = false;
-      try { await send(op); accepted = true; } catch { /* Retain the exact capture. */ }
+      try { await send(sendOp); accepted = true; } catch { /* Retain the exact capture. */ }
       // Persist each acknowledgement separately. Never replace a stale full
       // snapshot: captures enqueued while the HTTP request was in flight survive.
       await mutate(store, (ops) => accepted ? ops.filter((item) => item.id !== op.id) : ops.map((item) => {

@@ -87,9 +87,9 @@ function seed() {
 // Match the checked-in operational schemas closely enough to catch missing
 // uploader IDs, invalid fields and incorrect browser queries during UX tests.
 const schemas = {
-  prep_counts: { columns: "id,restaurant_name,item_name,par,on_hand,pull,urgent,count_date,created_at,location_id", required: "restaurant_name,item_name,par,on_hand,count_date" },
+  prep_counts: { columns: "id,restaurant_name,item_name,par,on_hand,pull,urgent,count_date,created_at,location_id,replay_key", required: "restaurant_name,item_name,par,on_hand,count_date" },
   cleaning_logs: { columns: "id,restaurant_name,task_name,done_by,before_photo,after_photo,done_date,created_at,done_time,week_start,location_id", required: "restaurant_name,task_name,done_date" },
-  temperature_records: { columns: "id,user_id,restaurant_name,equipment_name,record_type,food_item,temperature,unit,min_safe_temp,max_safe_temp,is_safe,notes,recorded_at,created_at,location_id,business_date,slot,recorded_by,recorded_by_name,equipment_id", required: "user_id,restaurant_name,equipment_name,record_type,food_item,temperature,min_safe_temp,max_safe_temp,is_safe" },
+  temperature_records: { columns: "id,user_id,restaurant_name,equipment_name,record_type,food_item,temperature,unit,min_safe_temp,max_safe_temp,is_safe,notes,recorded_at,created_at,location_id,business_date,slot,recorded_by,recorded_by_name,equipment_id,replay_key", required: "user_id,restaurant_name,equipment_name,record_type,food_item,temperature,min_safe_temp,max_safe_temp,is_safe" },
   business_documents: { columns: "id,user_id,restaurant_name,doc_type,name,file_name,file_url,file_size,uploaded_by,expiry_date,notes,created_at,updated_at", required: "user_id,restaurant_name,doc_type,file_name,file_url,uploaded_by" },
   marketing_promotions: { columns: "id,user_id,restaurant_name,title,description,file_name,file_url,file_size,month,year,status,category,size,person_name,location_id,created_at,updated_at", required: "user_id,restaurant_name,title,month,year" },
   social_media_calendar: { columns: "id,user_id,restaurant_name,day,channel,caption,post_date,created_at", required: "user_id,restaurant_name,day,channel,caption" },
@@ -235,10 +235,11 @@ async function handleRequest(req, res) {
   const fail = failures.find((item) => item.table === table && (!item.method || item.method === req.method) && item.times !== 0 && Object.entries(item.match ?? {}).every(([key, value]) => url.searchParams.get(key) === value));
   if (fail) {
     if (fail.times > 0) fail.times--;
-    return send(res, fail.status ?? 400, { message: fail.message ?? "Fixture source unavailable", code: "FIXTURE_ERROR" });
+    if (!fail.afterCommit) return send(res, fail.status ?? 400, { message: fail.message ?? "Fixture source unavailable", code: "FIXTURE_ERROR" });
   }
   if (isBtbDatabaseTable(table) || url.pathname.startsWith("/rest/v1/rpc/btb_")) {
     const result = await btbPostgrest(table, req.method, url.searchParams, body, req.headers, url.pathname.includes("/rpc/"));
+    if (fail?.afterCommit && result.status < 400) return send(res, fail.status ?? 500, { message: "Saved, but the response was lost (test fixture)", code: "FIXTURE_ERROR" });
     return send(res, result.status, result.body, result.headers);
   }
   tables[table] ??= [];

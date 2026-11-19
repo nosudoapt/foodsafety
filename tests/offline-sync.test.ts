@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   MAX_ATTEMPTS,
   QUEUE_LIMIT,
+  deriveReplayKey,
   drain,
   enqueue,
   memoryStore,
@@ -125,6 +126,40 @@ test("kinds filter so a page only replays its own ops", async () => {
   assert.equal(left[0].kind, "prep_save");
 });
 
+test("OFF-06: a capture carries a stable 64-hex replay key derived from its payload", () => {
+  const a = newOp("prep_save", "one", { date: "2026-10-04", rows: [{ item_name: "Patties", par: 40 }] });
+  const b = newOp("prep_save", "two", { date: "2026-10-04", rows: [{ item_name: "Patties", par: 40 }] });
+  const c = newOp("prep_save", "three", { date: "2026-10-04", rows: [{ item_name: "Patties", par: 12 }] });
+  assert.equal(a.replayKey, b.replayKey, "identical captures replay under one key");
+  assert.notEqual(a.replayKey, c.replayKey, "a different capture must not share a key");
+  assert.match(a.replayKey!, /^[0-9a-f]{64}$/);
+  assert.equal(deriveReplayKey("temp_record", { temperature: 3 }), deriveReplayKey("temp_record", { temperature: 3 }));
+  assert.notEqual(deriveReplayKey("temp_record", { temperature: 3 }), deriveReplayKey("prep_save", { temperature: 3 }));
+});
+
+test("OFF-06: a legacy capture without a key gets one persisted before its first replay send and keeps it on retry", async () => {
+  const legacy: OfflineOp = {
+    id: "legacy-capture-1",
+    kind: "temp_record",
+    created_at: "2026-10-01T00:00:00.000Z",
+    attempts: 0,
+    label: "Legacy reading",
+    payload: { equipment_name: "Fridge 1", temperature: 2 },
+  };
+  const store = memoryStore([legacy]);
+  const keys: (string | undefined)[] = [];
+  const failing = await drain(store, async (op) => {
+    keys.push(op.replayKey);
+    throw new Error("still offline");
+  });
+  assert.equal(failing.failed, 1);
+  const retained = (await store.read())[0];
+  assert.ok(retained.replayKey && /^[0-9a-f]{64}$/.test(retained.replayKey), "a stable key is persisted before send");
+  const ok = await drain(store, async (op) => { keys.push(op.replayKey); });
+  assert.equal(ok.sent, 1);
+  assert.equal(keys[0], keys[1], "a retry of the lost response replays the exact same key");
+});
+
 test("OFF-03: simultaneous enqueue serializes every read-modify-write", async () => {
   const store = memoryStore();
   await Promise.all(Array.from({ length: 100 }, (_, index) => enqueue(store, newOp("temp_record", `Capture ${index}`, { index }))));
@@ -210,7 +245,7 @@ const tempSource = readFileSync(join(ROOT, "src/app/temperatures/page.tsx"), "ut
 
 test("the prep sheet parks failed saves and replays them", () => {
   assert.ok(prepSource.includes('from "@/lib/offline-queue"'));
-  assert.ok(prepSource.includes("shouldQueue(fail.message)"), "connectivity failures must queue");
+  assert.ok(prepSource.includes("shouldQueue(error.message)"), "connectivity failures must queue");
   assert.ok(prepSource.includes('newOp("prep_save"'));
   assert.ok(prepSource.includes('drain(queue, sendQueuedSave, PREP_KINDS)'));
   assert.ok(

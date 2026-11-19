@@ -30,7 +30,7 @@ async function retained(page: Page) {
       request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
     });
     try {
-      return await new Promise<{ id: string; attempts: number; sequence?: number; state?: string; label: string; payload: Record<string, unknown> }[]>((resolve, reject) => {
+      return await new Promise<{ id: string; attempts: number; sequence?: number; replayKey?: string; state?: string; label: string; payload: Record<string, unknown> }[]>((resolve, reject) => {
         const request = db.transaction("ops").objectStore("ops").getAll();
         request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
       });
@@ -40,7 +40,7 @@ async function retained(page: Page) {
 
 test("OFF-02: a real temperature form retains exhausted gateway failures across page close and offers export/retry", async ({ page, context, fixture }) => {
   await signInFoodSafe(page, "manager", "/temperatures");
-  await fixture.configure({ failures: [{ table: "temperature_records", method: "POST", status: 503, times: -1 }] });
+  await fixture.configure({ failures: [{ table: "btb_insert_temp_record", method: "POST", status: 503, times: -1 }] });
   await page.getByRole("button", { name: "Add Record" }).click();
   await page.getByPlaceholder("e.g. Fridge 1, Oven, Hot holding unit").fill("OFF-02 retained cooler");
   await page.locator("form select").nth(1).selectOption("Fridge - Dairy");
@@ -68,7 +68,7 @@ test("OFF-02: a real temperature form retains exhausted gateway failures across 
 
 test("OFF-01: real IndexedDB overflow remains visible and every captured payload is exportable", async ({ page, fixture }) => {
   await signInFoodSafe(page, "manager", "/temperatures");
-  await fixture.configure({ failures: [{ table: "temperature_records", method: "POST", status: 503, times: -1 }] });
+  await fixture.configure({ failures: [{ table: "btb_insert_temp_record", method: "POST", status: 503, times: -1 }] });
   const code = readFileSync(join(process.cwd(), ".test-dist/src/lib/offline-queue.js"), "utf8");
   await page.evaluate(async (source) => {
     const exports: Record<string, Function> = {}; new Function("exports", source)(exports);
@@ -113,6 +113,32 @@ test("OFF-03 / OFF-04 / OFF-05: distinct Chromium tabs serialize mutations and d
   await tab.evaluate(async () => { const q = window.offlineTest; await q.enqueue(q.idbStore(), { ...q.newOp("temp_record", "Captured during send", {}), id: "during-send" }); });
   await page.evaluate(async () => { window.releaseOfflineSend(); await window.offlineDrain; });
   expect((await retained(tab)).map(op => op.id)).toEqual(["during-send"]);
+});
+
+test("OFF-06: a lost acknowledgement after commit replays the same key without duplicating the reading", async ({ page, fixture }) => {
+  await signInFoodSafe(page, "manager", "/temperatures");
+  // The write commits on the server, but the acknowledgement never reaches the
+  // tablet — the exact moment a naive queue would double-write the reading.
+  await fixture.configure({ failures: [{ table: "btb_insert_temp_record", method: "POST", times: 1, afterCommit: true, status: 500, message: "Saved, but the response was lost (test fixture)" }] });
+  await page.getByRole("button", { name: "Add Record" }).click();
+  await page.getByPlaceholder("e.g. Fridge 1, Oven, Hot holding unit").fill("OFF-06 captured cooler");
+  await page.locator("form select").nth(1).selectOption("Fridge - Dairy");
+  await page.getByPlaceholder("e.g. 4.5").fill("2");
+  await page.getByRole("button", { name: "Save Record", exact: true }).click();
+  await expect.poll(async () => (await fixture.state()).tables.temperature_records.filter((row) => row.equipment_name === "OFF-06 captured cooler").length).toBe(1);
+  await expect(page.getByRole("region", { name: "Offline records" })).toContainText("1 record stored on this device");
+  const pending = await retained(page);
+  expect(String(pending[0].replayKey)).toMatch(/^[0-9a-f]{64}$/);
+
+  // Reload: the drain retries the exact same key. The receipt acknowledges the
+  // original commit, so no second reading is written and none is duplicated.
+  await page.reload();
+  await expect.poll(async () => (await retained(page)).length).toBe(0);
+  await expect(page.getByRole("region", { name: "Offline records" })).toHaveCount(0);
+  const tables = (await fixture.state()).tables;
+  expect(tables.temperature_records.filter((row) => row.equipment_name === "OFF-06 captured cooler")).toHaveLength(1);
+  expect(tables.btb_offline_receipts).toHaveLength(1);
+  expect(String(tables.btb_offline_receipts[0].kind)).toBe("temp_record");
 });
 
 test("OFF-08: IndexedDB upgrade retains legacy payloads and the logical counter survives empty-queue reload and clock rollback", async ({ page }) => {
