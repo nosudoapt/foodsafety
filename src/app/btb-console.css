@@ -1,0 +1,44 @@
+/* Console-only styles: the existing workspace and FoodSafe selectors are unchanged. */
+.btb-console, .btb-console-auth {
+  --brand: var(--danger); --brand-2: #872820; --brand-soft: var(--danger-soft);
+  --console-nav-width: 220px;
+}
+.btb-console-auth .ax__aside::before { background: var(--brand); }
+@media (max-width: 960px) {
+  .btb-console-auth .ax__aside { display: none; }
+  .btb-console-auth .ax__main { min-height: 100svh; }
+}
+.btb-console__header { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 20px 32px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.btb-console__brand { display: grid; gap: 4px; color: var(--ink); text-decoration: none; }
+.btb-console__brand > span { font-size: .75rem; color: var(--muted); }
+.btb-console__identity { display: grid; gap: 4px; font-size: .875rem; }
+.btb-console__identity .ui-badge { width: fit-content; }
+.btb-console__body { display: grid; grid-template-columns: var(--console-nav-width) minmax(0,1fr); min-height: calc(100svh - 155px); }
+.btb-console__sidebar { display: flex; flex-direction: column; gap: 16px; padding: 28px 20px; border-right: 1px solid var(--line); }
+.btb-console__eyebrow { font: 600 .6875rem/1.6 var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.btb-console__sidebar nav { display: grid; gap: 8px; }
+.btb-console__sidebar nav a { display: flex; align-items: center; gap: 10px; padding: 12px; min-height: 44px; border-radius: var(--r-sm); font-size: .875rem; color: var(--muted-2); text-decoration: none; transition: color var(--t-fast),background var(--t-fast); }
+.btb-console__sidebar nav a:hover { background: var(--paper-2); color: var(--ink); }
+.btb-console__sidebar nav a[aria-current="page"] { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+.btb-console__separation { margin-top: auto; border-top: 1px solid var(--line); padding-top: 20px; color: var(--muted); font-size: .8125rem; line-height: 1.6; }
+.btb-console__separation a { display: inline-flex; gap: 6px; align-items: center; color: var(--ink); min-height: 44px; }
+.btb-console__main { width: 100%; max-width: 1480px; padding: 32px; min-width: 0; margin-inline: auto; }
+.btb-console__main > .ui-notice { margin-bottom: 20px; }
+.btb-console__panel { padding: 28px; display: grid; gap: 12px; }
+.btb-console__panel h2 { font: 400 1.8rem/1.2 var(--font-display); }
+.btb-console__panel p { font-size: .9375rem; max-width: 62ch; color: var(--muted-2); line-height: 1.7; }
+.btb-console__footer { padding: 20px 32px; border-top: 1px solid var(--line); color: var(--muted); font-size: .75rem; }
+@media (max-width: 900px) {
+  .btb-console__body { grid-template-columns: 1fr; }
+  .btb-console__sidebar { padding: 12px 20px; border-right: 0; border-bottom: 1px solid var(--line); gap: 0; }
+  .btb-console__sidebar > .btb-console__eyebrow, .btb-console__separation { display: none; }
+  .btb-console__sidebar nav { display: flex; flex-wrap: wrap; }
+  .btb-console__main { padding: 24px 20px; }
+}
+@media (max-width: 540px) {
+  .btb-console__header { padding: 16px 20px; flex-wrap: wrap; gap: 16px; }
+  .btb-console__header > .ui-actions { width: 100%; justify-content: space-between; gap: 8px; }
+  .btb-console__identity { font-size: .8125rem; }
+  .btb-console__header .ui-button { padding: 10px 12px; font-size: .8125rem; }
+  .btb-console__panel { padding: 20px; }
+}

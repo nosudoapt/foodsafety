@@ -58,13 +58,17 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
     const src = read(f);
     assert.ok(
       src.includes("btbRoute(") || src.includes("btbIdentityFromSession(") || src.includes("verifiedBtbRole as roleFromSession") || src.includes("legacyBtbRole as roleFromSession")
-        || src.includes("platformRoute(") || src.includes("requireBtbAccess("),
+        || src.includes("platformRoute(") || src.includes("requireBtbAccess(")
+        || src.includes("btbAdminRoute(") || src.includes("btbAdminIdentityFromSession("),
       `${f} must verify individual account state, not just decode a cookie role`,
     );
     // platformRoute() resolves the personal employee session server-side (and
     // re-verifies the credential version in SQL), so it also reads the cookie.
-    if (!src.includes("btbRoute(") && !src.includes("platformRoute(") && !src.includes("requireBtbAccess(")) {
-      assert.ok(src.includes("BTB_COOKIE"), `${f} must read the BTB cookie`);
+    if (!src.includes("btbRoute(") && !src.includes("platformRoute(") && !src.includes("requireBtbAccess(") && !src.includes("btbAdminRoute(")) {
+      assert.ok(src.includes("btbAdminIdentityFromSession(") ? src.includes("BTB_ADMIN_COOKIE") : src.includes("BTB_COOKIE"), `${f} must read its own BTB cookie`);
+    }
+    if (src.includes("btbAdminRoute(")) {
+      assert.ok(src.includes('from "@/lib/btb-admin-api"'), `${f} must use the separate console session guard`);
     }
     if (src.includes("platformRoute(")) {
       assert.ok(
@@ -129,6 +133,7 @@ test("no client component directly accesses a protected inventory/access table",
     "btb_invoices", "btb_stock_balances", "btb_stock_movements", "btb_supplier_prices",
     "btb_bank_accounts", "btb_bank_statements", "btb_bank_transactions", "btb_bank_allocations",
     "btb_gst_periods", "btb_finance_commands", "btb_time_entries", "btb_time_commands",
+    "btb_super_admins", "btb_admin_login_limits", "btb_superadmin_locations", "btb_location_page_access", "btb_invitations",
   ];
   for (const file of srcFiles) {
     const source = read(file);

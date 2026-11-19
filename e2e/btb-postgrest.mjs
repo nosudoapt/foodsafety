@@ -1,8 +1,10 @@
 import { btbDatabaseTables, btbUploadTables, createBtbDatabase, databaseRows, identifier, insertRows, rpc } from "../tests/helpers/btb-database.mjs";
 import { initializePlatformDatabase } from "../tests/helpers/btb-platform-database.mjs";
+import { initializeAdminDatabase } from "../tests/helpers/btb-admin-database.mjs";
 
 const db = await createBtbDatabase({}, { temperatureStore: true });
 await initializePlatformDatabase(db);
+await initializeAdminDatabase(db);
 const platformTables = [
   "btb_location_settings", "btb_location_access", "btb_events", "btb_file_objects", "btb_notifications", "btb_email_jobs",
   "btb_operation_templates", "btb_sanitizer_settings", "btb_sanitizer_logs", "btb_document_imports",
@@ -17,6 +19,7 @@ const databaseTables = [
   ...[...btbDatabaseTables, ...btbUploadTables, "equipment", "temperature_records", ...platformTables]
     .filter((table) => !["btb_location_settings", "btb_location_access", "btb_shifts"].includes(table)),
   "btb_location_settings", "btb_location_access", "btb_shifts",
+  "btb_super_admins", "btb_admin_login_limits", "btb_superadmin_locations", "btb_location_page_access", "btb_invitations",
 ];
 // Legacy inventory remains JavaScript-backed. Use explicit aliases for the
 // location-platform SQL fixtures so synthetic legacy IDs never enter UUID FKs.
@@ -26,6 +29,7 @@ const names = new Set(databaseTables);
 const primaryKeys = (table) => ({
   btb_employee_credentials: ["employee_id"], btb_notification_settings: ["restaurant_name"], btb_franchise_tasks: ["task_key"], btb_login_limits: ["key"],
   btb_location_settings: ["location_id"], btb_location_access: ["location_id", "employee_id"], btb_sanitizer_settings: ["location_id"],
+  btb_admin_login_limits: ["key"], btb_superadmin_locations: ["location_id"], btb_location_page_access: ["location_id", "page"],
   btb_social_platforms: ["name"], btb_ai_settings: ["location_id"], btb_ai_usage: ["location_id", "day"], btb_stock_balances: ["item_id"],
   inventory_month_snapshots: ["count_month", "scope_key"],
 })[table] ?? ["id"];

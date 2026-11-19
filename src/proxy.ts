@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { DEFAULT_ROLE } from "@/lib/roles";
 import { isProtectedPath, requiredRolesFor } from "@/lib/route-guards";
 import { BTB_COOKIE, tokenValid } from "@/lib/btb-auth";
+import { BTB_ADMIN_COOKIE, btbAdminClaimsFromSession } from "@/lib/btb-admin-auth";
 import { btbOriginAllowed } from "@/lib/btb-origin";
 
 export async function proxy(request: NextRequest) {
@@ -21,6 +22,15 @@ export async function proxy(request: NextRequest) {
   // green demo's Supabase auth. Its own /login and the /api/btb/* routes stay open.
   if (pathname === "/btb/login" || pathname.startsWith("/btb/login/") || pathname.startsWith("/api/btb/")) {
     return NextResponse.next();
+  }
+  if (pathname === "/btb/admin/login") return NextResponse.next();
+  if (pathname === "/btb/admin" || pathname.startsWith("/btb/admin/")) {
+    if (btbAdminClaimsFromSession(request.cookies.get(BTB_ADMIN_COOKIE)?.value)) return NextResponse.next();
+    const url = request.nextUrl.clone();
+    url.pathname = "/btb/admin/login";
+    url.search = "";
+    url.searchParams.set("next", pathname + request.nextUrl.search);
+    return NextResponse.redirect(url);
   }
   if (pathname === "/btb/demo" || pathname.startsWith("/btb/demo/")) {
     if (tokenValid(request.cookies.get(BTB_COOKIE)?.value)) {
