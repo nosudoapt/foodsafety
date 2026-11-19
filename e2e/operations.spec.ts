@@ -182,7 +182,7 @@ test("marketing filters campaigns and persists drafts, status changes and dated 
 test("BTB compliance tabs use company scope even alongside an active FoodSafe session", async ({ page, fixture }, info) => {
   await signInFoodSafe(page, "owner");
   await expect(page.getByRole("heading", { name: "Your business, at a glance." })).toBeVisible();
-  await signInBtb(page, "manager", "/between-the-buns/compliance");
+  await signInBtb(page, "manager", "/btb/demo/compliance");
   await expect(page.getByRole("listitem").filter({ hasText: "BTB food premises licence" })).toBeVisible();
   await expect(page.getByText("Food premises licence", { exact: true })).toHaveCount(0);
   await page.getByRole("tab", { name: "Add documents", exact: true }).click();
@@ -212,7 +212,7 @@ test("BTB compliance tabs use company scope even alongside an active FoodSafe se
   await page.getByRole("tab", { name: "Business documents", exact: true }).click();
   await page.setViewportSize({ width: 375, height: 812 });
   await capture(page, info, "mobile-btb-compliance-documents");
-  await page.goto("/between-the-buns/marketing");
+  await page.goto("/btb/demo/marketing");
   await expect(page.getByRole("article", { name: "Burger special" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Promotion", exact: true })).toBeEnabled();
   await expect(page.getByLabel("Caption", { exact: true })).toBeEnabled();
@@ -224,7 +224,7 @@ test("BTB compliance tabs use company scope even alongside an active FoodSafe se
 
 test("saved BTB restrictions apply inside the combined compliance hub", async ({ page, fixture }) => {
   await fixture.configure({ tables: { role_page_access: [{ role: "supervisor", page: "documents", allowed: false }, { role: "supervisor", page: "tax-dates", allowed: false }] } });
-  await signInBtb(page, "supervisor", "/between-the-buns/compliance");
+  await signInBtb(page, "supervisor", "/btb/demo/compliance");
   await expect(page.getByRole("listitem").filter({ hasText: "BTB food premises licence" })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Tax & filing dates" })).toHaveCount(0);
   await expect(page.getByRole("tab", { name: "Business documents" })).toHaveCount(0);
@@ -233,7 +233,7 @@ test("saved BTB restrictions apply inside the combined compliance hub", async ({
 });
 
 test("filing templates prepare a draft and failed saves keep the chosen date", async ({ page, fixture }, info) => {
-  await signInBtb(page, "manager", "/between-the-buns/tax-dates");
+  await signInBtb(page, "manager", "/btb/demo/tax-dates");
   await expect(page.getByRole("article", { name: "GST Return" })).toBeVisible();
   await page.getByRole("button", { name: "Add deadline", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add deadline", exact: true });

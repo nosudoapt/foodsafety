@@ -22,9 +22,9 @@ const groups: AdminNavGroup[] = [
   { label: "Daily operations", items: operations },
   ...ADMIN_NAV.map((group) => ({
     label: group.label === "This shift" ? "Team reference" : group.label,
-    items: group.items.filter((item) => item.href !== "/admin" && !item.href.startsWith("/between-the-buns")),
+    items: group.items.filter((item) => item.href !== "/admin" && !(item.href === "/btb" || item.href.startsWith("/btb/"))),
   })),
-  { label: "Connected workspace", items: [{ label: "Between the Buns", href: "/between-the-buns", icon: "burger", roles: OPERATIONAL_ROLES, keywords: "btb inventory stock prep cash out order sheet roster" }] },
+  { label: "Connected workspace", items: [{ label: "Between the Buns", href: "/btb/demo", icon: "burger", roles: OPERATIONAL_ROLES, keywords: "btb inventory stock prep cash out order sheet roster" }] },
 ];
 
 export function workspaceNavForRole(role: string | null | undefined): AdminNavGroup[] {

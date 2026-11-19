@@ -199,7 +199,7 @@ const UNGATED_ROUTES = new Set([
 ]);
 
 test("every BTB route is either gated by its feature or explicitly ungated", () => {
-  const root = join(__dirname, "..", "..", "src", "app", "between-the-buns");
+  const root = join(__dirname, "..", "..", "src", "app", "btb/demo");
   const slugs = readdirSync(root, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
@@ -209,7 +209,7 @@ test("every BTB route is either gated by its feature or explicitly ungated", () 
     if (!feature) {
       assert.ok(
         UNGATED_ROUTES.has(slug),
-        `route "/between-the-buns/${slug}" maps to no feature — add it to ROUTE_FEATURE (with a btb-access row) or to UNGATED_ROUTES`,
+        `route "/btb/demo/${slug}" maps to no feature — add it to ROUTE_FEATURE (with a btb-access row) or to UNGATED_ROUTES`,
       );
       continue;
     }

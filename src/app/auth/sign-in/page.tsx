@@ -134,7 +134,7 @@ export default function SignIn() {
       <div className="divider">or</div>
       <p className="foot" style={{ marginTop: 0 }}>
         Signing in for{" "}
-        <Link href="/between-the-buns/login" style={{ color: "var(--muted-2)" }}>
+        <Link href="/btb/login" style={{ color: "var(--muted-2)" }}>
           Between the Buns
         </Link>
         ?

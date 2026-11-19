@@ -26,7 +26,7 @@ export function btbPublicFetch(base: string, anonKey: string): typeof fetch {
   return async (input, init) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     const table = url.pathname.match(/^\/rest\/v1\/([^/]+)$/)?.[1];
-    if (typeof window !== "undefined" && window.location.pathname.startsWith("/between-the-buns")
+    if (typeof window !== "undefined" && (window.location.pathname === "/btb/demo" || window.location.pathname.startsWith("/btb/demo/"))
         && url.origin === new URL(base).origin && table && tables.has(table)) {
       const request = new Request(input, init);
       request.headers.set("x-btb-public-token", await publicToken());

@@ -14,9 +14,10 @@ import { BTB_ROLE_LABELS } from "@/lib/btb-roles";
 import { fetchJson } from "@/lib/fetch-json";
 import "@/app/btb-operations.css";
 
+// The sign-in and set-password screens live at /btb/login, outside this
+// layout, so they render their own full-page shell. Everything under
+// /btb/demo gets the workspace chrome.
 export default function BetweenTheBunsLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  if (pathname === "/between-the-buns/login") return <>{children}</>;
   return <BtbWorkspaceProvider><ActivityTracker /><BtbShell>{children}</BtbShell></BtbWorkspaceProvider>;
 }
 
@@ -37,7 +38,7 @@ function BtbShell({ children }: { children: React.ReactNode }) {
     setError("");
     try {
       await fetchJson("/api/btb/logout", { method: "POST" });
-      router.replace("/between-the-buns/login");
+      router.replace("/btb/login");
       router.refresh();
     } catch {
       setError("Could not sign out. Please try again.");
@@ -48,14 +49,14 @@ function BtbShell({ children }: { children: React.ReactNode }) {
     <a href="#btb-main" className="workspace-skip">Skip to content</a>
     <header className="btb-header">
       <div className="btb-header__inner">
-        <Link href="/between-the-buns" className="btb-header__brand" aria-label="Between the Buns overview"><BtbWordmark className="text-lg sm:text-xl" /><span>Team workspace · powered by Pholo</span></Link>
+        <Link href="/btb/demo" className="btb-header__brand" aria-label="Between the Buns overview"><BtbWordmark className="text-lg sm:text-xl" /><span>Team workspace · powered by Pholo</span></Link>
         <div className="btb-header__actions">
-          {identity && <Link href="/between-the-buns/account" className="btb-identity" aria-label={`My account: ${identity.name}`}><span>{identity.name}</span><span className="ui-badge ui-tone--purple">{BTB_ROLE_LABELS[identity.role]}</span></Link>}
+          {identity && <Link href="/btb/demo/account" className="btb-identity" aria-label={`My account: ${identity.name}`}><span>{identity.name}</span><span className="ui-badge ui-tone--purple">{BTB_ROLE_LABELS[identity.role]}</span></Link>}
           <button className="btb-header__signout" onClick={signOut} disabled={signingOut} aria-label={signingOut ? "Signing out" : "Sign out"}><LogOut size={17} aria-hidden="true" /><span>{signingOut ? "Signing out…" : "Sign out"}</span></button>
         </div>
       </div>
       <nav className="btb-subnav" aria-label="BTB workspace">
-        <Link href="/between-the-buns" aria-current={pathname === "/between-the-buns" ? "page" : undefined}>{current || pathname.endsWith("/account") ? <ArrowLeft size={15} aria-hidden="true" /> : <span className="btb-subnav__dot" aria-hidden="true" />}Overview</Link>
+        <Link href="/btb/demo" aria-current={pathname === "/btb/demo" ? "page" : undefined}>{current || pathname.endsWith("/account") ? <ArrowLeft size={15} aria-hidden="true" /> : <span className="btb-subnav__dot" aria-hidden="true" />}Overview</Link>
         {pathname.endsWith("/account") && <span className="btb-subnav__current">My account</span>}
         {current && <span className="btb-subnav__current">{current.title}</span>}
         <div className="btb-search">
@@ -93,6 +94,6 @@ function BtbShell({ children }: { children: React.ReactNode }) {
     </header>
     {error && <div className="ui-notice ui-notice--error" role="alert">{error}</div>}
     <main id="btb-main" className="btb-content" tabIndex={-1}><BtbPageBoundary>{children}</BtbPageBoundary></main>
-    <footer className="workspace-footer"><span>Between the Buns · A little clarity, every day.</span><Link href="/between-the-buns">Workspace overview <ArrowUpRight size={12} aria-hidden="true" /></Link></footer>
+    <footer className="workspace-footer"><span>Between the Buns · A little clarity, every day.</span><Link href="/btb/demo">Workspace overview <ArrowUpRight size={12} aria-hidden="true" /></Link></footer>
   </div>;
 }

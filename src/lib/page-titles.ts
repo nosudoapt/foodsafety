@@ -32,12 +32,14 @@ const NICE: Record<string, string> = {
   "admin": "Admin",
 };
 
-/** "between-the-buns/cleaning-schedule" → "Between the Buns · Cleaning schedule".
- * Anything unrecognised still gets a readable label from the segments. */
+/** "btb/demo/cleaning-schedule" → "Between the Buns · Cleaning schedule".
+ * Anything unrecognised still gets a readable label from the segments.
+ * The BTB workspace nests its pages one level deeper than before
+ * (/btb/demo/<page>), so the "demo" segment is stripped alongside "page". */
 export function friendlyPathTitle(path: string): string {
   const segments = path.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
-  const product = segments[0] === "between-the-buns" ? "Between the Buns" : segments[0] === "admin" ? "FoodSafe admin" : "";
-  const rest = product ? segments.slice(1) : segments;
+  const product = segments[0] === "btb" ? "Between the Buns" : segments[0] === "admin" ? "FoodSafe admin" : "";
+  const rest = segments[0] === "btb" && segments[1] === "demo" ? segments.slice(2) : product ? segments.slice(1) : segments;
   const parts = rest
     .filter((segment) => segment !== "page" && !/^[0-9a-f-]{36}$/i.test(segment))
     .map((segment) => NICE[segment] ?? segment.replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));

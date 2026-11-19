@@ -61,7 +61,7 @@ test("finance approves an invoice, baselines stock, verifies GST and reconciles 
   await seedFinanceLocation(fixture, people);
   await stageInvoice(request, people.manager.email!);
 
-  await signInEmployee(page, people.manager.email!, "/between-the-buns/platform");
+  await signInEmployee(page, people.manager.email!, "/btb/demo/platform");
   await page.getByRole("button", { name: "Inventory & food cost", exact: true }).click();
 
   await expect(page.getByRole("heading", { name: /Document review queue/ })).toBeVisible();
@@ -207,7 +207,7 @@ test("finance approves an invoice, baselines stock, verifies GST and reconciles 
 test("staff cannot open finance or write a finance command", async ({ page, request, fixture }) => {
   const people = await personalAccounts(request);
   await seedFinanceLocation(fixture, people);
-  await signInEmployee(page, people.staff.email!, "/between-the-buns/platform");
+  await signInEmployee(page, people.staff.email!, "/btb/demo/platform");
   await expect(page.getByRole("button", { name: "Daily operations", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Finance & stock", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Inventory & food cost", exact: true })).toHaveCount(0);

@@ -79,7 +79,7 @@ BEGIN
       END LOOP;
       IF EXISTS(SELECT 1 FROM jsonb_array_elements(payload->'checklists') c WHERE (c->>'completed')::boolean=false) OR jsonb_array_length(payload->'checklists')<3
         OR jsonb_array_length(payload->'temperatures') < jsonb_array_length(payload->'equipment')*3 OR jsonb_array_length(payload->'sanitizer')<3 THEN
-        PERFORM btb_notify(settings.location_id,ARRAY['manager','corporate'],'daily-incomplete:'||settings.location_id||':'||report_date,'Daily operations incomplete',report_date||': review missing tasks or food safety readings.','/between-the-buns/platform?module=operations&date='||report_date,NULL,false);
+        PERFORM btb_notify(settings.location_id,ARRAY['manager','corporate'],'daily-incomplete:'||settings.location_id||':'||report_date,'Daily operations incomplete',report_date||': review missing tasks or food safety readings.','/btb/demo/platform?module=operations&date='||report_date,NULL,false);
       END IF;
     END IF;
     IF settings.reminders_enabled THEN
@@ -95,7 +95,7 @@ BEGIN
             jsonb_build_object('document_id',doc.id,'version',doc.version,'expiry',doc.expiry_date,'lead_days',chosen,'days_remaining',remaining)) ON CONFLICT DO NOTHING;
           GET DIAGNOSTICS affected=ROW_COUNT; inserted:=inserted+affected;
         END LOOP;
-        PERFORM btb_notify(settings.location_id,ARRAY['manager','corporate'],'expiry:'||doc.id||':'||doc.version||':'||chosen,'Certificate approaching expiry',doc.name||' expires '||doc.expiry_date,'/between-the-buns/platform?module=compliance',NULL,false);
+        PERFORM btb_notify(settings.location_id,ARRAY['manager','corporate'],'expiry:'||doc.id||':'||doc.version||':'||chosen,'Certificate approaching expiry',doc.name||' expires '||doc.expiry_date,'/btb/demo/platform?module=compliance',NULL,false);
       END LOOP;
     END IF;
   END LOOP;

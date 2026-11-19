@@ -15,10 +15,10 @@ import { ROLES, OWNER_TIER_ROLES, MGMT_ROLES, MARKETING_ROLES, OPERATIONAL_ROLES
 // BTB is gated by its own cookie (see proxy.ts / btb-auth.ts), never by the
 // demo's Supabase session — so these stay out of PROTECTED_PREFIXES.
 test("BTB pages are outside the demo's Supabase gate", () => {
-  assert.equal(isProtectedPath("/between-the-buns"), false);
-  assert.equal(isProtectedPath("/between-the-buns/prep-list"), false);
-  assert.equal(isProtectedPath("/between-the-buns/menu"), false);
-  assert.equal(PROTECTED_PREFIXES.includes("/between-the-buns"), false);
+  assert.equal(isProtectedPath("/btb/demo"), false);
+  assert.equal(isProtectedPath("/btb/demo/prep-list"), false);
+  assert.equal(isProtectedPath("/btb/demo/menu"), false);
+  assert.equal(PROTECTED_PREFIXES.includes("/btb/demo"), false);
   assert.equal(isProtectedPath("/auth/sign-in"), false);
   assert.equal(isProtectedPath("/"), false);
   assert.equal(isProtectedPath("/app"), false);
@@ -112,7 +112,7 @@ test("management tier reaches the compliance screens", () => {
 });
 
 test("public paths are open to every role", () => {
-  assert.equal(canAccess("/between-the-buns/cleaning-schedule", "staff"), true);
+  assert.equal(canAccess("/btb/demo/cleaning-schedule", "staff"), true);
   assert.equal(canAccess("/", "staff"), true);
 });
 
@@ -175,8 +175,8 @@ test("proxy matcher stays in sync with PROTECTED_PREFIXES", () => {
   }
   const prefixes = entries.map((e) => e.replace(/\/:path\*$/, ""));
 
-  assert.ok(prefixes.includes("/between-the-buns"), "BTB must be matched so its cookie gate runs");
+  assert.ok(prefixes.includes("/btb"), "Both BTB surfaces must be matched for their own cookie gates");
   assert.ok(prefixes.includes("/api/btb"), "BTB APIs must be matched so the extra CSRF gate runs");
-  const supabaseGated = prefixes.filter((p) => p !== "/between-the-buns" && p !== "/api/btb");
+  const supabaseGated = prefixes.filter((p) => p !== "/btb" && p !== "/api/btb");
   assert.deepEqual([...supabaseGated].sort(), [...PROTECTED_PREFIXES].sort());
 });

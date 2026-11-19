@@ -1,6 +1,6 @@
 import { test, expect, capture, bun, monthAt, signInBtb } from "./fixtures";
 
-const path = "/between-the-buns/month-end-inventory";
+const path = "/btb/demo/month-end-inventory";
 
 for (const source of [
   { name: "item catalogue", table: "inventory_items" },

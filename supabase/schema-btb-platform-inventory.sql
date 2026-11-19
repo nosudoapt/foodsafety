@@ -69,7 +69,7 @@ BEGIN
   INSERT INTO btb_document_imports(location_id,file_id,kind,sha256,accounting_month,raw_text,extracted_data,extractor,extraction_error,created_by)
   VALUES(p_location,p_file,p_kind,file.sha256,p_month,p_text,p_extracted,p_extractor,p_error,p_actor) RETURNING * INTO saved;
   PERFORM btb_event(p_location,'import',saved.id,'extract',p_actor,NULL,to_jsonb(saved)-'raw_text');
-  PERFORM btb_notify(p_location,ARRAY['manager'],'review:'||saved.id,'Purchase or sales document needs review','Review extracted values before confirming the ledger.','/between-the-buns/platform?module=inventory',NULL,false);
+  PERFORM btb_notify(p_location,ARRAY['manager'],'review:'||saved.id,'Purchase or sales document needs review','Review extracted values before confirming the ledger.','/btb/demo/platform?module=inventory',NULL,false);
   RETURN to_jsonb(saved);
 END $$;
 

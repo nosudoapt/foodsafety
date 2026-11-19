@@ -165,7 +165,7 @@ export default function AdminShell({ profile, children }: { profile: AdminProfil
               {group.items.map((item) => (
                 <Link key={item.href} href={item.href} className="raillink" aria-current={current?.href === item.href ? "page" : undefined} onClick={() => setRailOpen(false)}>
                   <NavIcon name={item.icon} size={18} /><span>{item.label}</span>
-                  {item.href === "/between-the-buns" && <ArrowUpRight size={13} className="rail__external" aria-hidden="true" />}
+                  {item.href === "/btb/demo" && <ArrowUpRight size={13} className="rail__external" aria-hidden="true" />}
                 </Link>
               ))}
             </div>

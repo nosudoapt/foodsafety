@@ -76,7 +76,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       },
       {
         label: "Between the Buns",
-        href: "/between-the-buns",
+        href: "/btb/demo",
         icon: "burger",
         roles: OPS,
         keywords: "hub prep order sheet btb",
@@ -150,21 +150,21 @@ export const ADMIN_NAV: AdminNavGroup[] = [
     items: [
       {
         label: "Cash Out",
-        href: "/between-the-buns/cash-out",
+        href: "/btb/demo/cash-out",
         icon: "cash",
         roles: MGMT,
         keywords: "till close reconciliation money",
       },
       {
         label: "Month-End Inventory",
-        href: "/between-the-buns/month-end-inventory",
+        href: "/btb/demo/month-end-inventory",
         icon: "inventory",
         roles: MGMT,
         keywords: "stock count variance",
       },
       {
         label: "Training Guide",
-        href: "/between-the-buns/training-guide",
+        href: "/btb/demo/training-guide",
         icon: "training",
         roles: MGMT,
         keywords: "onboarding teach",
@@ -178,7 +178,7 @@ export const ADMIN_NAV: AdminNavGroup[] = [
       },
       {
         label: "Branding Requests",
-        href: "/between-the-buns/branding-requests",
+        href: "/btb/demo/branding-requests",
         icon: "branding",
         roles: MGMT,
         keywords: "design request artwork",
@@ -255,7 +255,7 @@ export function activeHref(pathname: string, role?: string | null): string | nul
   let best: string | null = null;
   for (const item of items) {
     const exact = pathname === item.href;
-    const prefix = item.href !== "/admin" && pathname.startsWith(item.href + "/");
+    const prefix = !["/admin", "/btb", "/btb/demo"].includes(item.href) && pathname.startsWith(item.href + "/");
     if ((exact || prefix) && (!best || item.href.length > best.length)) {
       best = item.href;
     }

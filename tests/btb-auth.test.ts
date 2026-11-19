@@ -196,7 +196,7 @@ test("every role sees most of the hub, and all cards belong to BTB", () => {
       assert.ok(cards.length >= 6, `${role} should see a full-looking hub`);
     }
     for (const card of cards) {
-      assert.ok(card.href.startsWith("/between-the-buns/"), `${card.href} is a BTB route`);
+      assert.ok(card.href.startsWith("/btb/demo/"), `${card.href} is a BTB route`);
     }
   }
   assert.equal(new Set(BTB_CARDS.map((c) => c.href)).size, BTB_CARDS.length, "no duplicate cards");
@@ -243,16 +243,16 @@ test("the anonymous account list never exposes a password", () => {
 
 test("proxy cookie-gates BTB and leaves its login open", () => {
   const source = read("src/proxy.ts");
-  assert.ok(source.includes('pathname === "/between-the-buns/login"'));
+  assert.ok(source.includes('pathname === "/btb/login"'));
   assert.ok(source.includes("tokenValid(request.cookies.get(BTB_COOKIE)"));
-  assert.ok(source.includes('url.pathname = "/between-the-buns/login"'));
+  assert.ok(source.includes('url.pathname = "/btb/login"'));
   assert.ok(source.includes('url.searchParams.set("next", pathname)'));
 });
 
 // --- 6. BTB stays decoupled from the green demo -----------------------------
 
 test("BTB navigation and authentication stay independent, with an explicit legacy temperature-history link", () => {
-  const root = join(ROOT, "src/app/between-the-buns");
+  const root = join(ROOT, "src/app/btb/demo");
   const files = readdirSync(root, { recursive: true, encoding: "utf8" })
     .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"))
     .map((f) => join(root, f));
@@ -264,7 +264,7 @@ test("BTB navigation and authentication stay independent, with an explicit legac
     for (const href of hrefs) {
       const legacyHistory = file === join(root, "temperatures/page.tsx") && href === "/temperatures";
       assert.ok(
-        href.startsWith("/between-the-buns") || href.startsWith("#") || legacyHistory,
+        href === "/btb/demo" || href.startsWith("/btb/demo/") || href.startsWith("#") || legacyHistory,
         `${file} must not link out to ${href}`
       );
     }
@@ -278,5 +278,5 @@ test("BTB navigation and authentication stay independent, with an explicit legac
   }
 
   const sidebar = readFileSync(join(ROOT, "src/components/Sidebar.tsx"), "utf8");
-  assert.ok(!sidebar.includes("between-the-buns"));
+  assert.ok(!sidebar.includes("btb/demo"));
 });

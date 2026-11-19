@@ -91,7 +91,7 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
         subtitle="Daily operations, staff schedules and approved hours, invoice stock receipts, supplier prices, GST and bank reconciliation."
         action={location && <Badge accent="purple">{location.name}</Badge>}
       />
-      {!personal && <IndividualLoginNotice next="/between-the-buns/platform" />}
+      {!personal && <IndividualLoginNotice next="/btb/demo/platform" />}
       <section className="ops-shell" aria-label="Location controls">
         <div className="ops-toolbar">
           <div className="ops-toolbar-left">

@@ -37,7 +37,7 @@ export function BtbWorkspaceProvider({ children }: { children: React.ReactNode }
     ]).then(([me, permissions]) => {
       if (cancelled) return;
       if (me.status === "fulfilled" && !me.value.authenticated) {
-        router.replace(`/between-the-buns/login?next=${encodeURIComponent(pathname)}`);
+        router.replace(`/btb/login?next=${encodeURIComponent(pathname)}`);
         return;
       }
       const identity = me.status === "fulfilled" && isBtbRole(me.value.role)

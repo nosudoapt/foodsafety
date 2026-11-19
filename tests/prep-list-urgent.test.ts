@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const page = readFileSync(
-  join(__dirname, "../../src/app/between-the-buns/prep-list/page.tsx"),
+  join(__dirname, "../../src/app/btb/demo/prep-list/page.tsx"),
   "utf8"
 );
 const schema = readFileSync(join(__dirname, "../../supabase/schema-locations.sql"), "utf8");

@@ -69,16 +69,16 @@ export async function signInFoodSafe(page: Page, role: FoodSafeRole, next = "/da
   await expect(page).toHaveURL(new RegExp(`${next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 }
 
-export async function signInBtb(page: Page, role: BtbRole, next = "/between-the-buns") {
-  await page.goto(`/between-the-buns/login?next=${encodeURIComponent(next)}`);
+export async function signInBtb(page: Page, role: BtbRole, next = "/btb/demo") {
+  await page.goto(`/btb/login?next=${encodeURIComponent(next)}`);
   await page.getByLabel("Team email").fill(`${role}@btb.demo`);
   await page.getByLabel("Workspace password", { exact: true }).fill(workspacePassword);
   await page.getByRole("button", { name: "Open my workspace" }).click();
   await expect(page).toHaveURL(new RegExp(`${next}$`));
 }
 
-export async function signInEmployee(page: Page, email: string, next = "/between-the-buns", employeePassword = password) {
-  await page.goto(`/between-the-buns/login?next=${encodeURIComponent(next)}`);
+export async function signInEmployee(page: Page, email: string, next = "/btb/demo", employeePassword = password) {
+  await page.goto(`/btb/login?next=${encodeURIComponent(next)}`);
   await page.getByLabel("Team email").fill(email);
   await page.getByLabel("Workspace password", { exact: true }).fill(employeePassword);
   await page.getByRole("button", { name: "Open my workspace" }).click();

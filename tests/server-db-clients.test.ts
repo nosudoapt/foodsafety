@@ -89,7 +89,7 @@ test("the privileged server client is imported ONLY by route files", () => {
 });
 
 test("the month-end inventory page no longer touches Supabase directly", () => {
-  const page = read(join(ROOT, "src", "app", "between-the-buns", "month-end-inventory", "page.tsx"));
+  const page = read(join(ROOT, "src", "app", "btb/demo", "month-end-inventory", "page.tsx"));
   assert.ok(!page.includes('from "@/lib/supabase"'), "page must fetch via API routes, not the anon client");
   assert.ok(!page.includes("supabase.from("), "no direct table access from the browser");
 });

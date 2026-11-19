@@ -110,7 +110,7 @@ BEGIN
     IF coalesce(trim(p_data->>'body'),'')='' THEN RAISE EXCEPTION 'Comment required'; END IF;
     INSERT INTO btb_promotion_comments(promotion_id,author_id,author_name,body) VALUES(current.id,p_actor,actor.name,p_data->>'body');
     ev:=btb_event(p_location,'promotion',current.id,'comment',p_actor,NULL,jsonb_build_object('body',p_data->>'body'));
-    PERFORM btb_notify(p_location,ARRAY['manager','corporate','designer'],'comment:'||ev,'New promotion feedback',p_data->>'body','/between-the-buns/platform?module=marketing&record='||current.id,ev);
+    PERFORM btb_notify(p_location,ARRAY['manager','corporate','designer'],'comment:'||ev,'New promotion feedback',p_data->>'body','/btb/demo/platform?module=marketing&record='||current.id,ev);
     RETURN jsonb_build_object('ok',true);
   ELSIF p_action='upload' THEN
     PERFORM btb_platform_assert(p_actor,p_session,p_location,'marketing.design');
@@ -163,7 +163,7 @@ BEGIN
     WHERE id=current.id RETURNING * INTO saved;
   ev:=btb_event(p_location,'promotion',saved.id,next_status,p_actor,to_jsonb(current),to_jsonb(saved),reason);
   PERFORM btb_notify(p_location,CASE WHEN next_status='pending_approval' THEN ARRAY['corporate','owner'] WHEN next_status='rejected' THEN ARRAY['manager'] ELSE ARRAY['manager','corporate','designer'] END,
-    'promotion:'||ev,saved.title||' · '||replace(next_status,'_',' '),coalesce(nullif(reason,''),'Open the request to review its current status and artwork.'),'/between-the-buns/platform?module=marketing&record='||saved.id,ev);
+    'promotion:'||ev,saved.title||' · '||replace(next_status,'_',' '),coalesce(nullif(reason,''),'Open the request to review its current status and artwork.'),'/btb/demo/platform?module=marketing&record='||saved.id,ev);
   RETURN to_jsonb(saved);
 END $$;
 

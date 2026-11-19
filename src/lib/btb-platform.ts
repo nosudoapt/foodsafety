@@ -32,7 +32,7 @@ export function platformCan(role: BtbRole, module: PlatformModule): boolean {
 }
 
 export const PLATFORM_SLUG = "platform";
-export const PLATFORM_PATH = "/between-the-buns/platform";
+export const PLATFORM_PATH = "/btb/demo/platform";
 
 /** Read models exposed by btb_platform_read (release 11). Finance and time use their own scoped endpoints. */
 export const PLATFORM_READ_MODULES = ["operations", "inventory", "marketing", "compliance", "reports", "settings", "notifications"] as const;

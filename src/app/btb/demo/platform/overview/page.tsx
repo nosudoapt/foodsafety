@@ -112,7 +112,7 @@ function Overview({ readOnly }: { readOnly: boolean }) {
         <div className="ops-toolbar">
           <div><h2 className="ops-section-title">Location settings</h2>
             <p className="ops-meta">Timezones, report time, recipients, equipment, sanitizer standard and compliance types.</p></div>
-          {!readOnly && rows && <Link className="ui-button ui-button--soft" href="/between-the-buns/platform/settings"><MapPin size={16} aria-hidden="true" />Open location settings</Link>}
+          {!readOnly && rows && <Link className="ui-button ui-button--soft" href="/btb/demo/platform/settings"><MapPin size={16} aria-hidden="true" />Open location settings</Link>}
         </div>
       </div></Card>
     </div>

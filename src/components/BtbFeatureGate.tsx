@@ -14,7 +14,7 @@ export function BtbPageBoundary({ children }: { children: React.ReactNode }) {
   const card = btbCardForPath(usePathname());
   if (loading) return <div className="workspace-loading btb-loading" role="status"><span className="ui-loader" aria-hidden="true" /><p>Opening your workspace…</p></div>;
   if (error || (!rows && identity?.role !== "admin")) return <div className="ui-empty btb-loading"><CircleAlert size={30} /><h1>Let’s reconnect your workspace.</h1><p role="alert">{error || accessError}</p><button className="ui-button" onClick={reload}>Try again</button></div>;
-  if (!identity || (card && !btbPageAllowed(card, identity.role, rows))) return <div className="ui-empty btb-loading"><LockKeyhole size={30} /><h1>This page isn’t in your workspace.</h1><p>Your overview shows the tools available to your role.</p><Link className="ui-button ui-button--ghost" href="/between-the-buns">Back to overview</Link></div>;
+  if (!identity || (card && !btbPageAllowed(card, identity.role, rows))) return <div className="ui-empty btb-loading"><LockKeyhole size={30} /><h1>This page isn’t in your workspace.</h1><p>Your overview shows the tools available to your role.</p><Link className="ui-button ui-button--ghost" href="/btb/demo">Back to overview</Link></div>;
   return <>{children}</>;
 }
 

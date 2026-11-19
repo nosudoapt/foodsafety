@@ -7,7 +7,7 @@
 // by ./btb-auth. Relative import only (no "@/") so tests can compile it.
 import type { BtbRole } from "./btb-roles";
 
-// Every BTB surface a role can reach. Slugs match /between-the-buns/<slug>
+// Every BTB surface a role can reach. Slugs match /btb/demo/<slug>
 // routes (the four reference pages share one "reference" bucket — all-view).
 export const BTB_FEATURES = [
   "admin_dashboard",

@@ -240,7 +240,7 @@ test("queued payloads carry everything the replay needs", async () => {
 // --- page wiring -----------------------------------------------------------
 
 const ROOT = join(__dirname, "../..");
-const prepSource = readFileSync(join(ROOT, "src/app/between-the-buns/prep-list/page.tsx"), "utf8");
+const prepSource = readFileSync(join(ROOT, "src/app/btb/demo/prep-list/page.tsx"), "utf8");
 const tempSource = readFileSync(join(ROOT, "src/app/temperatures/page.tsx"), "utf8");
 
 test("the prep sheet parks failed saves and replays them", () => {

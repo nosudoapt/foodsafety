@@ -66,7 +66,7 @@ BEGIN
     SELECT coalesce(max(version),0)+1 INTO v FROM btb_operation_templates WHERE location_id=p_location AND kind=v_kind;
     INSERT INTO btb_operation_templates(location_id,kind,version,effective_from,tasks,created_by)
       VALUES(p_location,v_kind,v,effective,p_data->'tasks',p_actor);
-    PERFORM btb_notify(p_location,ARRAY['staff','supervisor'],'tasks:'||p_location||':'||v_kind||':'||v,'Updated '||v_kind||' duties','Review your assigned location duties.','/between-the-buns/platform?module=operations',NULL,false);
+    PERFORM btb_notify(p_location,ARRAY['staff','supervisor'],'tasks:'||p_location||':'||v_kind||':'||v,'Updated '||v_kind||' duties','Review your assigned location duties.','/btb/demo/platform?module=operations',NULL,false);
   END IF;
   IF p_data ? 'equipment' THEN
     FOR item IN SELECT * FROM jsonb_array_elements(p_data->'equipment') LOOP

@@ -3,7 +3,7 @@
 // Print / PDF export (Patch 7). Sends the page to the browser's print dialog —
 // "Save as PDF" lives there. Pages pair this with a `hidden print:block`
 // #print-section holding the full, unfiltered content; chrome is marked
-// print:hidden (see src/app/between-the-buns/layout.tsx for the shared header).
+// print:hidden (see src/app/btb/demo/layout.tsx for the shared header).
 export default function PrintButton({
   label = "Print / Save PDF",
   className = "",

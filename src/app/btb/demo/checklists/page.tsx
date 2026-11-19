@@ -32,7 +32,7 @@ function CheckDay({ date, readOnly }: { date: string; readOnly: boolean }) {
   const { identity } = useBtbWorkspace();
   const { data, loading, error, reload, update } = useBtbData<ChecksData>(`/api/btb/checklists?date=${date}`);
   return <>
-    <div className="btb-screen ops-workspace">{!identity?.employeeId && !readOnly && <IndividualLoginNotice next="/between-the-buns/checklists" />}
+    <div className="btb-screen ops-workspace">{!identity?.employeeId && !readOnly && <IndividualLoginNotice next="/btb/demo/checklists" />}
       <div className="ops-toolbar"><p className="ops-meta">{date} · Completed duties show the employee who saved them.</p><PrintSheetButton disabled={!data} label="Print opening + closing" /></div>
       <LoadState loading={loading} error={error} onRetry={reload} />
       {data && <div className="btb-check-grid">{(["opening", "closing"] as const).map((type) => <CheckCard key={type} date={date} type={type} saved={data.checks.find((check) => check.check_type === type)} readOnly={readOnly || !identity?.employeeId} onReload={reload} onSaved={(check) => update((current) => ({ ...current, checks: [...current.checks.filter((item) => item.check_type !== type), check] }))} />)}</div>}

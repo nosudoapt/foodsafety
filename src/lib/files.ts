@@ -1,6 +1,6 @@
 // Shared file helpers. Previously each admin upload screen carried its own
 // copy of formatFileSize; data-URL encoding matches the pattern already used
-// by the BTB cleaning schedule (src/app/between-the-buns/cleaning-schedule).
+// by the BTB cleaning schedule (src/app/btb/demo/cleaning-schedule).
 
 // Media Storage buckets (supabase/schema-storage-buckets.sql). Cleaning and
 // inspection photos still live in the original ops-photos bucket so existing

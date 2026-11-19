@@ -22,7 +22,7 @@ test("prep history reloads saved dates and quantities; same-date loading and sav
   ] } });
   await signInFoodSafe(page, "manager");
   await page.waitForFunction(({ key, id }) => localStorage.getItem(key) === id, { key: ACTIVE_LOCATION_KEY, id: east });
-  await signInBtb(page, "manager", "/between-the-buns/prep-list");
+  await signInBtb(page, "manager", "/btb/demo/prep-list");
   await expect(page.getByLabel(`Par: ${item}`, { exact: true })).toHaveValue("12.5");
   await expect(page.getByLabel(`Urgent: ${item}`, { exact: true })).toBeChecked();
   await page.getByRole("button", { name: "History (2/7)", exact: true }).click();
@@ -65,7 +65,7 @@ test("the seventh saved prep sheet is complete across database pages, including 
     { ...prep("duplicate-old", seventh, "Archived item 0000"), par: 1, created_at: `${seventh}T15:00:00Z` },
     prep("eighth", dateAt(-49), "Outside the latest seven"),
   ] } });
-  await signInBtb(page, "manager", "/between-the-buns/prep-list");
+  await signInBtb(page, "manager", "/btb/demo/prep-list");
   await page.getByRole("button", { name: "History (7/7)", exact: true }).click();
   await expect(page.getByRole("article")).toHaveCount(7);
   const sheet = page.getByRole("article", { name: `Prep sheet ${seventh}`, exact: true });
@@ -89,7 +89,7 @@ test("failed prep history and sheet reads offer retry and block saving an incomp
     { table: "prep_counts", method: "GET", times: 1, match: { select: "*", count_date: null } },
     { table: "prep_counts", method: "GET", times: 1, match: { select: "*", count_date: `eq.${today}` } },
   ] });
-  await signInBtb(page, "manager", "/between-the-buns/prep-list");
+  await signInBtb(page, "manager", "/btb/demo/prep-list");
   await expect(page.getByRole("main").getByRole("alert")).toContainText("This day’s saved prep sheet couldn’t be loaded");
   await expect(page.getByRole("button", { name: "Save Prep Sheet", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: /^History \(/ }).click();
@@ -107,7 +107,7 @@ test("cleaning history reopens saved names, dates and photos; new entries surviv
   const older = dateAt(-14);
   const photo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR1cAAAAASUVORK5CYII=";
   await fixture.configure({ tables: { cleaning_logs: [{ id: "earlier-cleaning", restaurant_name: "Between the Buns", location_id: null, task_name: cleaningTasks[0], done_by: "Taylor", done_date: older, done_time: "09:30", week_start: older, before_photo: JSON.stringify([photo]), after_photo: JSON.stringify([photo]), created_at: `${older}T16:00:00Z` }] } });
-  await signInBtb(page, "manager", "/between-the-buns/cleaning-schedule");
+  await signInBtb(page, "manager", "/btb/demo/cleaning-schedule");
   await page.getByRole("button", { name: "History (1)", exact: true }).click();
   await expect(page.getByText("1/11 tasks · 2 photos", { exact: true })).toBeVisible();
   await capture(page, info, "cleaning-saved-history-desktop");
@@ -135,18 +135,18 @@ test("cleaning history reopens saved names, dates and photos; new entries surviv
 
 test("corporate can review saved prep and cleaning while operational roles keep prep access", async ({ page, fixture }) => {
   await fixture.configure({ tables: { prep_counts: [prep("today")], cleaning_logs: [] } });
-  await signInBtb(page, "corporate", "/between-the-buns/prep-list");
+  await signInBtb(page, "corporate", "/btb/demo/prep-list");
   await expect(page.getByLabel(`Par: ${item}`, { exact: true })).toHaveValue("12.5");
   await expect(page.getByLabel(`On hand: ${item}`, { exact: true })).toHaveAttribute("readonly", "");
   await expect(page.getByRole("button", { name: "Save Prep Sheet", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "History (1/7)", exact: true }).click();
   await page.getByRole("button", { name: "Load", exact: true }).click();
   await expect(page.getByLabel(`On hand: ${item}`, { exact: true })).toHaveValue("2.5");
-  await page.goto("/between-the-buns/cleaning-schedule");
+  await page.goto("/btb/demo/cleaning-schedule");
   await expect(page.getByLabel("Cleaned by", { exact: true }).first()).toBeDisabled();
   await expect(page.getByRole("button", { name: "Clear Week", exact: true })).toHaveCount(0);
   for (const role of ["staff", "supervisor"] as const) {
-    await signInBtb(page, role, "/between-the-buns/prep-list");
+    await signInBtb(page, role, "/btb/demo/prep-list");
     await expect(page.getByRole("button", { name: "Save Prep Sheet", exact: true })).toBeEnabled();
     await expect(page.getByLabel(`Par: ${item}`, { exact: true })).toHaveAttribute("readonly", "");
     await expect(page.getByLabel(`On hand: ${item}`, { exact: true })).not.toHaveAttribute("readonly", "");

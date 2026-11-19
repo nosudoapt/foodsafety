@@ -33,7 +33,7 @@ test("reminder settings retain failed edits and send each due licence to manager
       { ...due, id: "70000000-0000-4000-8000-000000000006", name: "Other restaurant licence", restaurant_name: "Other Restaurant" }],
     btb_staff_licences: [{ id: certificateId, staff_name: "Alexandra Employee", license_type: "food_handler", expiry_date: btbToday() }],
   } });
-  await signInBtb(page, "manager", "/between-the-buns/licence-reminders");
+  await signInBtb(page, "manager", "/btb/demo/licence-reminders");
   await page.getByLabel("Enable licence-expiry emails").check();
   await page.getByRole("button", { name: "Save reminder settings" }).click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("at least one manager address and one corporate address");
@@ -179,7 +179,7 @@ test("staff certificates link to an employee, retain failed uploads, download in
   await apiSignIn(request);
   const manager = await createEmployee(request, { name: "Morgan Manager", email: "morgan@team.test", role: "manager" });
   const employee = await createEmployee(request);
-  await signInEmployee(page, manager.email!, "/between-the-buns/staff-licenses");
+  await signInEmployee(page, manager.email!, "/btb/demo/staff-licenses");
   await page.getByRole("button", { name: "Add certificate", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add staff certificate" });
   await dialog.getByLabel("Link an employee").selectOption(employee.id);
@@ -218,7 +218,7 @@ test("staff certificates link to an employee, retain failed uploads, download in
   await expect(page.getByText("Updated on another device.", { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 375, height: 812 });
   await capture(page, info, "staff-certificates-mobile");
-  await signInBtb(page, "supervisor", "/between-the-buns/staff-licenses");
+  await signInBtb(page, "supervisor", "/btb/demo/staff-licenses");
   await expect(page.getByRole("button", { name: "Add certificate", exact: true })).toHaveCount(0);
   expect((await page.request.post("/api/btb/staff-licences", { data: { ...licence, notes: "forged" } })).status()).toBe(403);
   expect((await page.request.delete("/api/btb/staff-licences", { data: { id: licence.id, version: 2 } })).status()).toBe(403);

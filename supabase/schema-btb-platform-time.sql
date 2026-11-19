@@ -95,7 +95,7 @@ BEGIN
   END IF;
   PERFORM btb_event(p_location,'time_entry',saved.id,p_action,p_actor,to_jsonb(current),to_jsonb(saved),p_data->>'reason');
   IF saved.status='pending' THEN
-    PERFORM btb_notify(p_location,ARRAY['manager'],'hours:'||saved.id||':'||saved.version,'Worked hours need review',actor.name||' submitted an hours record.','/between-the-buns/staff-schedule',NULL,false);
+    PERFORM btb_notify(p_location,ARRAY['manager'],'hours:'||saved.id||':'||saved.version,'Worked hours need review',actor.name||' submitted an hours record.','/btb/demo/staff-schedule',NULL,false);
   END IF;
   INSERT INTO btb_time_commands(id,actor_id,location_id,action,data,result) VALUES(p_request,p_actor,p_location,p_action,p_data,to_jsonb(saved));
   RETURN to_jsonb(saved);

@@ -38,7 +38,7 @@ for (const application of ["btb", "foodsafe"] as const) {
     page.on("request", (request) => {
       if (/\/rest\/v1\/training_(topics|sections)/.test(request.url())) browserTrainingReads.push(request.url());
     });
-    if (application === "btb") await signInBtb(page, "manager", "/between-the-buns/manuals");
+    if (application === "btb") await signInBtb(page, "manager", "/btb/demo/manuals");
     else await signInFoodSafe(page, "manager", "/admin/manuals");
     const print = page.getByRole("button", { name: /Print \/ Save PDF/ });
     await print.click();
@@ -64,7 +64,7 @@ for (const application of ["btb", "foodsafe"] as const) {
 test("manuals endpoints keep FoodSafe and BTB sessions independent, including simultaneous sign-ins", async ({ page, request, fixture }) => {
   await fixture.configure({ tables: library() });
   for (const endpoint of [btbEndpoint, foodSafeEndpoint]) expect((await request.get(endpoint)).status()).toBe(401);
-  await signInBtb(page, "staff", "/between-the-buns/manuals");
+  await signInBtb(page, "staff", "/btb/demo/manuals");
   expect((await page.request.get(foodSafeEndpoint)).status()).toBe(401);
   await signInFoodSafe(page, "manager", "/admin/manuals");
   const btb = await page.request.get(btbEndpoint);
@@ -139,7 +139,7 @@ test("training manuals include every ordered section beyond the old thousand-row
 test("a failed stored PDF read blocks incomplete manuals printing and reports the file", async ({ page, fixture }) => {
   await fixture.configure({ tables: { ...library(), print_manuals: [{ id: "manual1", title: "Operations handbook", file_name: "operations.pdf", file_size: 1200, category: "operations", created_at: "2026-01-01", file_url: "data:application/pdf;base64," }] } });
   await page.addInitScript(() => { window.print = () => { document.documentElement.dataset.printed = "true"; }; });
-  await signInBtb(page, "manager", "/between-the-buns/manuals");
+  await signInBtb(page, "manager", "/btb/demo/manuals");
   await expect(page.getByRole("heading", { name: "Operations handbook" })).toBeVisible();
   await fixture.configure({ failures: [{ table: "print_manuals", method: "GET", match: { select: "file_url" }, times: 1 }] });
   await page.getByRole("button", { name: /Print \/ Save PDF/ }).click();

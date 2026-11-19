@@ -107,7 +107,7 @@ try {
       ON CONFLICT (employee_id) DO UPDATE SET password_hash = excluded.password_hash, session_version = btb_employee_credentials.session_version + 1, updated_at = now()`;
     if (location) await tx`INSERT INTO btb_location_access (location_id, employee_id) VALUES (${location}, ${saved.id}) ON CONFLICT DO NOTHING`;
   });
-  console.log(`\nDone: ${email} may sign in at /between-the-buns/login with ${role} access.`);
+  console.log(`\nDone: ${email} may sign in at /btb/login with ${role} access.`);
 } finally {
   rl.close();
   await sql.end();

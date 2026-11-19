@@ -5,7 +5,7 @@ import { addDays, weekStart } from "../src/lib/staff-schedule";
 import { BROOKS_ORDER_GUIDE } from "../src/lib/brooks-order-guide";
 
 test("a manager creates a personal login, failed saves retain the form, and password changes invalidate older sessions", async ({ page, request, fixture }, info) => {
-  await signInBtb(page, "manager", "/between-the-buns/employees");
+  await signInBtb(page, "manager", "/btb/demo/employees");
   await page.getByRole("button", { name: "Add employee", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add employee" });
   await expect(dialog.getByLabel("Name", { exact: true })).toBeFocused();
@@ -27,7 +27,7 @@ test("a manager creates a personal login, failed saves retain the form, and pass
   await capture(page, info, "employee-directory-desktop");
 
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await signInEmployee(page, "alexandra@team.test", "/between-the-buns/account");
+  await signInEmployee(page, "alexandra@team.test", "/btb/demo/account");
   await expect(page.getByRole("link", { name: "My account: Alexandra Morgan-Singh", exact: true })).toBeVisible();
   const old = (await page.context().cookies()).find((cookie) => cookie.name === "btb_session")!;
   expect(old).toMatchObject({ httpOnly: true, sameSite: "Lax", secure: true });
@@ -43,19 +43,19 @@ test("a manager creates a personal login, failed saves retain the form, and pass
   }
   expect((await page.request.get("/api/btb/checklists")).status()).toBe(200);
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(page).toHaveURL(/\/between-the-buns\/login$/);
+  await expect(page).toHaveURL(/\/btb\/login$/);
   await page.getByLabel("Team email").fill("alexandra@team.test");
   await page.getByLabel("Workspace password", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Open my workspace" }).click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("email and password don’t match");
-  await signInEmployee(page, "alexandra@team.test", "/between-the-buns", "ChangedPersonal!456");
+  await signInEmployee(page, "alexandra@team.test", "/btb/demo", "ChangedPersonal!456");
   await expect(page.getByRole("heading", { name: "Ready for a good shift." })).toBeVisible();
 });
 
 test("role changes and deactivation end existing employee access; cross-site writes are rejected", async ({ page, request }) => {
   await apiSignIn(request);
   let person = await createEmployee(request, { role: "supervisor" });
-  await signInEmployee(page, person.email!, "/between-the-buns/employees");
+  await signInEmployee(page, person.email!, "/btb/demo/employees");
   const cookie = (await page.context().cookies()).find((item) => item.name === "btb_session")!.value;
   const foreign = await page.request.post("/api/btb/employees", { headers: { Origin: "https://outside.example" }, data: {} });
   expect(foreign.status()).toBe(403);
@@ -67,7 +67,7 @@ test("role changes and deactivation end existing employee access; cross-site wri
   expect((await page.request.get("/api/btb/employees")).status()).toBe(401);
   expect((await page.request.get("/api/btb/overview")).status()).toBe(401);
   await page.reload();
-  await expect(page).toHaveURL(/\/between-the-buns\/login/);
+  await expect(page).toHaveURL(/\/btb\/login/);
   await signInEmployee(page, person.email!);
   expect((await page.request.get("/api/btb/employees")).status()).toBe(403);
   const disabled = await request.post("/api/btb/employees", { data: { ...person, active: false, password: "" } });
@@ -76,8 +76,8 @@ test("role changes and deactivation end existing employee access; cross-site wri
   expect((await page.request.get("/api/btb/checklists")).status()).toBe(401);
   await expect(await request.post("/api/btb/employees", { data: { ...person, active: true, role: "supervisor", password: "" } })).toBeOK();
   expect((await request.get("/api/btb/employees", { headers: { Cookie: `btb_session=${cookie}` } })).status()).toBe(401);
-  await page.goto("/between-the-buns/checklists");
-  await expect(page).toHaveURL(/\/between-the-buns\/login/);
+  await page.goto("/btb/demo/checklists");
+  await expect(page).toHaveURL(/\/btb\/login/);
 });
 
 test("supervisors maintain staff contacts and named opening/closing schedules without managing leadership or training approvals", async ({ page, request, fixture }, info) => {
@@ -85,7 +85,7 @@ test("supervisors maintain staff contacts and named opening/closing schedules wi
   const supervisor = await createEmployee(request, { name: "Sam Supervisor", email: "sam@team.test", role: "supervisor" });
   const manager = await createEmployee(request, { name: "Morgan Manager", email: "morgan@team.test", role: "manager" });
   const employee = await createEmployee(request);
-  await signInEmployee(page, supervisor.email!, "/between-the-buns/employees");
+  await signInEmployee(page, supervisor.email!, "/btb/demo/employees");
   await expect(page.getByRole("button", { name: `Edit ${manager.name}`, exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: `Edit ${employee.name}`, exact: true }).click();
   await page.getByRole("dialog").getByLabel("Phone", { exact: true }).fill("306-555-0199");
@@ -122,7 +122,7 @@ test("supervisors maintain staff contacts and named opening/closing schedules wi
   const overlap = await page.request.post("/api/btb/staff-schedule", { data: { id: null, version: 0, employee_id: supervisor.id, shift_date: addDays(start, 1), start_time: "01:00", end_time: "06:00", ends_next_day: false, duty: "opening" } });
   expect(overlap.status()).toBe(409);
   await capture(page, info, "supervisor-weekly-coverage");
-  await signInEmployee(page, manager.email!, "/between-the-buns/staff-schedule");
+  await signInEmployee(page, manager.email!, "/btb/demo/staff-schedule");
   await expect(page.locator(".schedule-day").first().locator(".schedule-coverage")).toContainText(supervisor.name);
   await page.setViewportSize({ width: 375, height: 812 });
   await capture(page, info, "manager-schedule-mobile");
@@ -132,10 +132,10 @@ test("checks keep opening and closing drafts separately, preserve failed work an
   await apiSignIn(request);
   const employee = await createEmployee(request);
   const teammate = await createEmployee(request, { name: "Taylor Closing", email: "taylor@team.test" });
-  await signInBtb(page, "staff", "/between-the-buns/checklists");
+  await signInBtb(page, "staff", "/btb/demo/checklists");
   await expect(page.getByRole("checkbox").first()).toBeDisabled();
   expect((await page.request.post("/api/btb/checklists", { data: { employeeId: employee.id } })).status()).toBe(403);
-  await signInEmployee(page, employee.email!, "/between-the-buns/checklists");
+  await signInEmployee(page, employee.email!, "/btb/demo/checklists");
   const opening = page.getByRole("region", { name: "Opening checklist", exact: true });
   const closing = page.getByRole("region", { name: "Closing checklist", exact: true });
   await opening.getByRole("checkbox").first().check();
@@ -178,7 +178,7 @@ test("a stale checklist save keeps the employee draft until it is explicitly app
   await apiSignIn(request);
   const employee = await createEmployee(request);
   const teammate = await createEmployee(request, { name: "Taylor Closing", email: "taylor@team.test" });
-  await signInEmployee(page, employee.email!, "/between-the-buns/checklists");
+  await signInEmployee(page, employee.email!, "/btb/demo/checklists");
   const opening = page.getByRole("region", { name: "Opening checklist", exact: true });
   await opening.getByRole("checkbox").first().check();
   await apiSignIn(request, teammate.email!);
@@ -206,7 +206,7 @@ test("orders show older quantities, preserve saved revisions and retain a confli
   const date = btbToday();
   const previous = addDays(date, -140);
   await expect(await request.post("/api/btb/orders", { data: { date: previous, version: 0, lines: [{ item_name: item, par: 20, on_hand: 3 }] } })).toBeOK();
-  await signInEmployee(page, supervisor.email!, "/between-the-buns/order-sheet");
+  await signInEmployee(page, supervisor.email!, "/btb/demo/order-sheet");
   await page.getByRole("searchbox", { name: "Search order items" }).fill(item);
   await expect(page.locator(".order-previous")).toHaveText("17");
   await expect(page.getByLabel(`PAR for ${item}`, { exact: true })).toHaveAttribute("placeholder", "20");
@@ -253,7 +253,7 @@ test("training moves through personal progress, manager feedback and approval, w
   await apiSignIn(request);
   const employee = await createEmployee(request);
   const manager = await createEmployee(request, { name: "Morgan Manager", email: "morgan@team.test", role: "manager" });
-  await signInEmployee(page, manager.email!, "/between-the-buns/training-guide");
+  await signInEmployee(page, manager.email!, "/btb/demo/training-guide");
   await page.getByRole("button", { name: "New module" }).click();
   const editor = page.getByRole("dialog", { name: "Create training module" });
   await editor.getByLabel("Module title").fill("A safe opening");
@@ -268,7 +268,7 @@ test("training moves through personal progress, manager feedback and approval, w
   await expect(editor).toHaveCount(0);
   await expect(page.getByRole("status")).toContainText("saved and published");
 
-  await signInEmployee(page, employee.email!, "/between-the-buns/training-guide");
+  await signInEmployee(page, employee.email!, "/btb/demo/training-guide");
   await expect(page.getByRole("button", { name: "Submit for manager approval" })).toBeDisabled();
   await page.getByRole("checkbox", { name: "I completed “Wash hands”", exact: true }).check();
   await fixture.configure({ failures: [{ table: "btb_save_training_record", method: "POST", times: 1 }] });
@@ -285,7 +285,7 @@ test("training moves through personal progress, manager feedback and approval, w
   await expect(page.getByRole("status")).toContainText("before it counts as completed");
   await expect(page.getByRole("checkbox", { name: /^I have reviewed all/ })).toBeDisabled();
 
-  await signInEmployee(page, manager.email!, "/between-the-buns/training-guide");
+  await signInEmployee(page, manager.email!, "/btb/demo/training-guide");
   await page.getByRole("tab", { name: "Team progress", exact: true }).click();
   const progressRow = page.getByRole("row").filter({ has: page.getByRole("button", { name: employee.name, exact: true }) });
   await expect(progressRow).toContainText("0/1 · 0%");
@@ -296,12 +296,12 @@ test("training moves through personal progress, manager feedback and approval, w
   await page.getByRole("dialog").getByRole("button", { name: "Send feedback" }).click();
   await expect(page.getByRole("status").filter({ hasText: "Feedback sent" })).toBeVisible();
 
-  await signInEmployee(page, employee.email!, "/between-the-buns/training-guide");
+  await signInEmployee(page, employee.email!, "/btb/demo/training-guide");
   await expect(page.locator(".training-feedback")).toContainText("Please demonstrate the sanitizer check.");
   await page.getByLabel("Notes for your manager").fill("Sanitizer check demonstrated.");
   await page.getByRole("button", { name: "Submit for manager approval" }).click();
   await expect(page.getByRole("status")).toContainText("Submitted");
-  await signInEmployee(page, manager.email!, "/between-the-buns/training-guide");
+  await signInEmployee(page, manager.email!, "/btb/demo/training-guide");
   await page.getByRole("tab", { name: "Team progress", exact: true }).click();
   await page.getByRole("button", { name: "Review training", exact: true }).click();
   const review = page.getByRole("dialog", { name: "Review employee training" });
@@ -320,7 +320,7 @@ test("training moves through personal progress, manager feedback and approval, w
     await expect(row).toContainText("1/1 · 100%");
     if (role === "supervisor") await capture(page, info, "supervisor-training-dashboard");
   }
-  await signInEmployee(page, employee.email!, "/between-the-buns/training-guide");
+  await signInEmployee(page, employee.email!, "/btb/demo/training-guide");
   await expect(page.getByText(new RegExp(`Approved by ${manager.name}`))).toBeVisible();
   await capture(page, info, "employee-training-desktop");
   await page.setViewportSize({ width: 375, height: 812 });
@@ -332,7 +332,7 @@ test("managers cannot approve their own training, and editing an approved module
   const manager = await createEmployee(request, { role: "manager" });
   const other = await createEmployee(request, { name: "Other Employee", email: "other@team.test" });
   const { topic, sections } = await createTrainingModule(request);
-  await signInEmployee(page, manager.email!, "/between-the-buns/training-guide");
+  await signInEmployee(page, manager.email!, "/btb/demo/training-guide");
   const submitted = await page.request.post("/api/btb/training", { data: { employee_id: other.id, topic_id: topic.id, topic_revision: topic.revision, version: 0, completed_sections: sections.map((section) => section.id), reviewed: true, notes: "Ready", status: "pending" } });
   await expect(submitted).toBeOK();
   const record = (await submitted.json()).record;

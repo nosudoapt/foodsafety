@@ -7,7 +7,7 @@ test("the corporate opening checklist preserves all sixteen sections and importe
   const endpoint = "/api/btb/franchise-checklist";
   await fixture.configure({ tables: { btb_franchise_tasks: [{ task_key: "legacy-launch-task", phase: "Legacy launch phase", task: "Confirm the original opening-day delivery", custom: true }] } });
   await signInBtb(page, "corporate");
-  const card = page.locator('#btb-tools a[href="/between-the-buns/new-restaurant"]');
+  const card = page.locator('#btb-tools a[href="/btb/demo/new-restaurant"]');
   await expect(card).toHaveCount(1);
   await expect(card).toContainText("Franchise Opening Checklist");
   await card.click();
@@ -80,7 +80,7 @@ test("the corporate opening checklist preserves all sixteen sections and importe
 
 test("the loyalty card contains the complete employee and customer guides with keyboard-accessible tabs", async ({ page }, info) => {
   await signInBtb(page, "staff");
-  const card = page.locator('#btb-tools a[href="/between-the-buns/loyalty-rewards"]');
+  const card = page.locator('#btb-tools a[href="/btb/demo/loyalty-rewards"]');
   await expect(card).toHaveCount(1);
   await card.click();
   const employee = page.getByRole("tabpanel", { name: "Employee guide" });
@@ -125,7 +125,7 @@ test("the loyalty card contains the complete employee and customer guides with k
 for (const role of ["supervisor", "manager"] as const) {
   test(`${role} has one loyalty card with access to both guides`, async ({ page }) => {
     await signInBtb(page, role);
-    const card = page.locator('#btb-tools a[href="/between-the-buns/loyalty-rewards"]');
+    const card = page.locator('#btb-tools a[href="/btb/demo/loyalty-rewards"]');
     await expect(card).toHaveCount(1);
     await card.click();
     await expect(page.getByRole("tabpanel", { name: "Employee guide" })).toBeVisible();

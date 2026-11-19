@@ -29,7 +29,7 @@ interface Doc {
 const COLUMNS = "id, doc_type, name, file_name, file_url, other_file_name, other_file_url, expiry_date, notes, notify, notify_days";
 
 /** Insurance certificates, licences and PDFs — the same ceiling staff
- * certificates use (src/app/between-the-buns/staff-licenses). */
+ * certificates use (src/app/btb/demo/staff-licenses). */
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
 export default function ComplianceRegister({ readOnly = false, restaurant: fixedRestaurant, showHeader = true, embedded = false }: {

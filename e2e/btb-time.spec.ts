@@ -32,7 +32,7 @@ test("staff clock in and out, fix a punch, another manager approves and approved
   const people = await setupTimeTeam(request);
   await seedTimeLocation(fixture, people);
 
-  await signInEmployee(page, people.staff.email!, "/between-the-buns/platform");
+  await signInEmployee(page, people.staff.email!, "/btb/demo/platform");
   await page.getByRole("button", { name: "Schedule & hours", exact: true }).click();
   await expect(page.getByRole("heading", { name: "My time clock" })).toBeVisible();
   await expect(page.getByRole("region", { name: "Worked hours and approvals" })).toContainText("Scheduled shifts are not worked hours");
@@ -57,7 +57,7 @@ test("staff clock in and out, fix a punch, another manager approves and approved
   const managerContext = await browser.newContext();
   const managerPage = await managerContext.newPage();
   try {
-    await signInEmployee(managerPage, people.manager.email!, "/between-the-buns/platform");
+    await signInEmployee(managerPage, people.manager.email!, "/btb/demo/platform");
     await managerPage.getByRole("button", { name: "Schedule & hours", exact: true }).click();
     await expect(managerPage.getByRole("region", { name: "Worked hours and approvals" })).toContainText("Casey Counter");
 

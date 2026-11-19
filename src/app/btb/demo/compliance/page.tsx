@@ -9,8 +9,8 @@ import BtbFeatureGate from "@/components/BtbFeatureGate";
 import ComplianceRegister from "@/components/ComplianceRegister";
 import DocumentVault from "@/components/DocumentVault";
 import TaxDatesPanel from "@/components/TaxDatesPanel";
-import StaffLicencesPage from "@/app/between-the-buns/staff-licenses/page";
-import LicenceRemindersPage from "@/app/between-the-buns/licence-reminders/page";
+import StaffLicencesPage from "@/app/btb/demo/staff-licenses/page";
+import LicenceRemindersPage from "@/app/btb/demo/licence-reminders/page";
 import { Badge, Button, Card, PageHeader } from "@/components/ui";
 import Modal from "@/components/Modal";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,7 +55,7 @@ function ComplianceHub({ readOnly }: { readOnly: boolean }) {
   const { identity, rows } = useBtbWorkspace();
   if (!identity) return null;
   const allowed = accessibleBtbCards(identity.role, rows);
-  const sectionTabs = SECTIONS.filter((section) => allowed.some((card) => card.href === `/between-the-buns/${section.page}`));
+  const sectionTabs = SECTIONS.filter((section) => allowed.some((card) => card.href === `/btb/demo/${section.page}`));
   const tabs: { id: Tab; label: string }[] = [
     { id: "home", label: "Home" },
     ...(btbCanEdit("compliance", identity.role) && !readOnly ? [{ id: "upload" as Tab, label: "Add documents" }] : []),

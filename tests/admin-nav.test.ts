@@ -14,8 +14,8 @@ import { isProtectedPath, requiredRolesFor } from "../src/lib/route-guards";
 test("every nav item points at a real, guarded admin or BTB route", () => {
   for (const item of ALL_ADMIN_NAV) {
     assert.ok(
-      item.href.startsWith("/admin") || item.href.startsWith("/between-the-buns"),
-      `${item.href} should live under /admin or /between-the-buns`
+      item.href.startsWith("/admin") || item.href.startsWith("/btb/demo"),
+      `${item.href} should live under /admin or /btb/demo`
     );
   }
 });
@@ -152,7 +152,7 @@ test("searchNav: keyword search finds pages the label doesn't mention", () => {
   assert.ok(vault.some((r) => r.href === "/admin/vault"));
 
   const cash = searchNav("till", "manager");
-  assert.ok(cash.some((r) => r.href === "/between-the-buns/cash-out"));
+  assert.ok(cash.some((r) => r.href === "/btb/demo/cash-out"));
 });
 
 test("searchNav never leaks pages the role cannot open", () => {

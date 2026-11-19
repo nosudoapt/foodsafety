@@ -87,7 +87,7 @@ test("BTB backend login recovers old cookies and loads account shortcuts without
   expect(JSON.stringify(info)).not.toContain(workspacePassword);
   await signInBtb(page, "manager");
   await expect(page.getByRole("heading", { name: "Your restaurant, in focus." })).toBeVisible();
-  await expect(page.locator('a[href="/between-the-buns/cleaning-schedule"]').first()).toBeVisible();
+  await expect(page.locator('a[href="/btb/demo/cleaning-schedule"]').first()).toBeVisible();
   const me = await page.request.get("/api/btb/me");
   await expect(me).toBeOK();
   expect(await me.json()).toMatchObject({ authenticated: true, role: "manager" });
@@ -96,19 +96,19 @@ test("BTB backend login recovers old cookies and loads account shortcuts without
 test("BTB sign-in keeps its return path local and its sign-out preserves the FoodSafe session", async ({ page }) => {
   await signInFoodSafe(page, "owner");
   await expect(page.getByRole("heading", { name: "Your business, at a glance." })).toBeVisible();
-  await page.goto("/between-the-buns/login?next=%2Fdashboard");
+  await page.goto("/btb/login?next=%2Fdashboard");
   await page.getByLabel("Team email").fill("manager@btb.demo");
   await page.getByLabel("Workspace password", { exact: true }).fill("wrong-password");
   await page.getByRole("button", { name: "Open my workspace" }).click();
   await expect(page.getByRole("main").getByRole("alert")).toContainText("email and password don’t match");
   await page.getByLabel("Workspace password", { exact: true }).fill(workspacePassword);
   await page.getByRole("button", { name: "Open my workspace" }).click();
-  await expect(page).toHaveURL(/\/between-the-buns$/);
+  await expect(page).toHaveURL(/\/btb\/demo$/);
   await expect(page.getByRole("heading", { name: "Your restaurant, in focus." })).toBeVisible();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(page).toHaveURL(/\/between-the-buns\/login$/);
+  await expect(page).toHaveURL(/\/btb\/login$/);
   await page.goto("/dashboard");
   await expect(page.getByRole("heading", { name: "Your business, at a glance." })).toBeVisible();
-  await signInBtb(page, "staff", "/between-the-buns/checklists");
+  await signInBtb(page, "staff", "/btb/demo/checklists");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Opening & closing checks");
 });

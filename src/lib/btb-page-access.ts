@@ -6,7 +6,7 @@ export const BTB_MANAGED_ROLES = ["staff", "supervisor", "manager", "corporate"]
 export interface BtbPageAccess { role: BtbRole; page: string; allowed: boolean }
 
 export function pageSlug(card: BtbCard): string {
-  return card.href.slice("/between-the-buns/".length);
+  return card.href.slice("/btb/demo/".length);
 }
 
 export function btbCardForPath(path: string): BtbCard | undefined {

@@ -19,15 +19,15 @@ export async function proxy(request: NextRequest) {
 
   // Between the Buns is a separate, cookie-gated surface — independent of the
   // green demo's Supabase auth. Its own /login and the /api/btb/* routes stay open.
-  if (pathname === "/between-the-buns/login" || pathname.startsWith("/api/btb/")) {
+  if (pathname === "/btb/login" || pathname.startsWith("/btb/login/") || pathname.startsWith("/api/btb/")) {
     return NextResponse.next();
   }
-  if (pathname === "/between-the-buns" || pathname.startsWith("/between-the-buns/")) {
+  if (pathname === "/btb/demo" || pathname.startsWith("/btb/demo/")) {
     if (tokenValid(request.cookies.get(BTB_COOKIE)?.value)) {
       return NextResponse.next();
     }
     const url = request.nextUrl.clone();
-    url.pathname = "/between-the-buns/login";
+    url.pathname = "/btb/login";
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
@@ -113,6 +113,6 @@ export const config = {
     "/training/:path*",
     "/reports/:path*",
     "/settings/:path*",
-    "/between-the-buns/:path*",
+    "/btb/:path*",
   ],
 };

@@ -14,7 +14,7 @@ const products = [
     cta: "Sign in",
   },
   {
-    href: "/between-the-buns/login",
+    href: "/btb/login",
     tag: "Client",
     title: "Between the Buns",
     desc: "Dedicated staff hub — prep counts, cleaning schedules, recipes and store operations.",

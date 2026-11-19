@@ -56,7 +56,7 @@ test("daily checks print every opening and closing duty, long employee attributi
     await expect(await request.post("/api/btb/checklists", { data: { date: today, type, version: 0, notes: notes.join(" "), changes: items.map((item) => ({ id: item.id, completed: true })) } })).toBeOK();
     expected.push(...items.map((item) => item.text), ...notes, `Saved by ${employee.name} · version 1`);
   }
-  await signInEmployee(page, opening.email!, "/between-the-buns/checklists");
+  await signInEmployee(page, opening.email!, "/btb/demo/checklists");
   await page.getByRole("region", { name: "Opening checklist", exact: true }).getByLabel("Handover notes").fill("UNSAVED-HANDOVER-NOT-FOR-PRINT");
   await page.getByRole("button", { name: "Saved history", exact: true }).click();
   await completeOnePagePdf(page, info, "complete-opening-closing", expected, ["UNSAVED-HANDOVER-NOT-FOR-PRINT", "Saved check history", "Sign out"]);
@@ -75,7 +75,7 @@ test("a full week prints all named opening and closing coverage and employees de
     ends_next_day: !!(index % 2), duty: index === 0 ? "opening" : index === 19 ? "closing" : "service", updated_by_name: "Schedule Manager",
   })));
   await fixture.configure({ tables: { btb_employees: employees, btb_shifts: shifts } });
-  await signInBtb(page, "manager", "/between-the-buns/staff-schedule");
+  await signInBtb(page, "manager", "/btb/demo/staff-schedule");
   await page.getByRole("combobox", { name: "View", exact: true }).selectOption(employees[0].id);
   await expect(page.locator(".schedule-shift")).toHaveCount(7);
   await completeOnePagePdf(page, info, "complete-weekly-schedule", [
@@ -95,7 +95,7 @@ test("a large saved order prints every catalog and archived line, full descripti
   const lines = [...catalog.map((item, index) => ({ item_name: item.name, par: index + 12, on_hand: index % 5 })), archived];
   const saved = await request.post("/api/btb/orders", { data: { date, version: 1, lines } });
   await expect(saved).toBeOK();
-  await signInBtb(page, "supervisor", "/between-the-buns/order-sheet");
+  await signInBtb(page, "supervisor", "/btb/demo/order-sheet");
   await page.getByRole("searchbox", { name: "Search order items" }).fill(catalog[0].name);
   await page.getByLabel(`PAR for ${catalog[0].name}`, { exact: true }).fill("99999");
   await completeOnePagePdf(page, info, "complete-saved-order", [

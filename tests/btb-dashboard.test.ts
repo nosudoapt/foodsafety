@@ -6,14 +6,14 @@ import { btbDateWindow } from "../src/lib/btb-dashboard";
 import { loadBtbOverview } from "../src/lib/btb-dashboard-data";
 import { queryClient, jsonRows } from "./helpers/query-client";
 
-const card = (slug: string) => BTB_CARDS.find((item) => item.href === `/between-the-buns/${slug}`)!;
+const card = (slug: string) => BTB_CARDS.find((item) => item.href === `/btb/demo/${slug}`)!;
 const signal = () => new AbortController().signal;
 
 test("an empty permission table preserves defaults; failed loading blocks operations", () => {
   assert.equal(btbPageAllowed(card("prep-list"), "staff", []), true);
   assert.equal(btbPageAllowed(card("prep-list"), "staff", null), false);
   assert.equal(btbPageAllowed(card("admin"), "admin", null), true);
-  assert.deepEqual(accessibleBtbCards("admin", []).map((item) => item.href), ["/between-the-buns/admin"]);
+  assert.deepEqual(accessibleBtbCards("admin", []).map((item) => item.href), ["/btb/demo/admin"]);
   assert.equal(btbPageAllowed(card("franchise-inspection"), "manager", []), false);
 });
 
@@ -22,8 +22,8 @@ test("saved restrictions narrow page access and cannot widen a role", () => {
   assert.equal(btbPageAllowed(card("prep-list"), "staff", rows), false);
   assert.equal(btbPageAllowed(card("prep-list"), "manager", rows), true);
   assert.equal(btbPageAllowed(card("vault"), "staff", rows), false);
-  assert.equal(btbCardForPath("/between-the-buns/prep-manual/chapter?print=1")?.feature, "reference");
-  assert.equal(btbCardForPath("/between-the-buns/prep-manual-extra"), undefined);
+  assert.equal(btbCardForPath("/btb/demo/prep-manual/chapter?print=1")?.feature, "reference");
+  assert.equal(btbCardForPath("/btb/demo/prep-manual-extra"), undefined);
 });
 
 test("bulk permissions reject duplicate, unknown, malformed and privilege-expanding rows", () => {

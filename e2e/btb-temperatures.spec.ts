@@ -8,7 +8,7 @@ const input = { id, record_type: "cold_storage", equipment_name: "Walk-in fridge
 const row = { ...input, user_id: owner, restaurant_name: "Between the Buns", location_id: null, unit: "C", is_safe: false, recorded_at: new Date().toISOString() };
 
 test("HTTP-12 off-form readings show operator-approved read-only targets and block unconfigured types", async ({ page }) => {
-  await signInBtb(page, "staff", "/between-the-buns/temperatures");
+  await signInBtb(page, "staff", "/btb/demo/temperatures");
   await page.getByRole("button", { name: "Add off-form reading" }).click();
   await page.getByRole("combobox", { name: "Equipment", exact: true }).selectOption("Walk-in fridge");
   await expect(page.getByLabel("Approved minimum (°C)")).toHaveValue("0");
@@ -26,7 +26,7 @@ test("BTB temperature saves retain failures, survive reload and keep independent
   await signInFoodSafe(page, "manager");
   await signInBtb(page, "manager");
   await page.locator("#btb-tools").getByRole("searchbox", { name: "Search BTB tools" }).fill("temperature sheet");
-  await page.locator('#btb-tools a[href="/between-the-buns/temperatures"]').click();
+  await page.locator('#btb-tools a[href="/btb/demo/temperatures"]').click();
   const cell = page.getByLabel(/^COOLER-1 11:00 AM (°C|PPM)$/);
   await expect(cell).toBeVisible();
   await fixture.configure({ failures: [{ table: "btb_save_temperature_sheet", method: "POST", times: 1 }] });
@@ -90,7 +90,7 @@ test("temperature retries are append-once and ignore forged identity, location, 
 
 test("temperature endpoints enforce login, operational permissions and saved page restrictions", async ({ page, request, fixture }) => {
   expect((await request.get("/api/btb/temperatures")).status()).toBe(401);
-  await signInBtb(page, "corporate", "/between-the-buns/temperatures");
+  await signInBtb(page, "corporate", "/btb/demo/temperatures");
   await expect(page.getByText("Read-only overview.")).toBeVisible();
   await expect(page.getByLabel(/^COOLER-1 11:00 AM (°C|PPM)$/)).toHaveCount(0);
   expect((await page.request.post("/api/btb/temperatures", { data: input })).status()).toBe(403);
@@ -101,7 +101,7 @@ test("temperature endpoints enforce login, operational permissions and saved pag
   await apiSignIn(request, "admin@btb.demo");
   expect((await request.get("/api/btb/temperatures")).status()).toBe(403);
   await fixture.configure({ tables: { role_page_access: [{ role: "manager", page: "temperatures", allowed: false }] } });
-  await signInBtb(page, "manager", "/between-the-buns/temperatures");
+  await signInBtb(page, "manager", "/btb/demo/temperatures");
   await expect(page.getByRole("heading", { name: "This page isn’t in your workspace." })).toBeVisible();
   expect((await page.request.get("/api/btb/temperatures")).status()).toBe(403);
   expect((await page.request.post("/api/btb/temperatures", { data: input })).status()).toBe(403);
@@ -110,7 +110,7 @@ test("temperature endpoints enforce login, operational permissions and saved pag
 test("individual temperature readings use the verified employee and reject ended sessions and cross-site writes", async ({ page, request, fixture }) => {
   await apiSignIn(request);
   const employee = await createEmployee(request);
-  await signInEmployee(page, employee.email!, "/between-the-buns/temperatures");
+  await signInEmployee(page, employee.email!, "/btb/demo/temperatures");
   const response = await page.request.post("/api/btb/temperatures", { data: input });
   await expect(response).toBeOK();
   expect((await response.json()).record.notes).toContain(`Recorded by: ${employee.name} [${employee.id}]`);
@@ -122,7 +122,7 @@ test("individual temperature readings use the verified employee and reject ended
 
 test("history failures show retry rather than an empty register; unverified storage cannot own readings", async ({ page, request, fixture }) => {
   await fixture.configure({ failures: [{ table: "temperature_records", method: "GET", times: 1 }] });
-  await signInBtb(page, "manager", "/between-the-buns/temperatures");
+  await signInBtb(page, "manager", "/btb/demo/temperatures");
   await expect(page.getByRole("main").getByRole("alert")).toContainText("history couldn’t be loaded");
   await expect(page.getByRole("button", { name: "Add off-form reading", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Try again", exact: true }).click();

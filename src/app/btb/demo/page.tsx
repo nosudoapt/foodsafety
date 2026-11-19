@@ -10,6 +10,6 @@ import BtbHub from "./hub";
 export default async function BetweenTheBunsHome() {
   const cookieStore = await cookies();
   const role = roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
-  if (!role) redirect("/between-the-buns/login");
+  if (!role) redirect("/btb/login");
   return <BtbHub role={role} />;
 }

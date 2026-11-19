@@ -9,11 +9,11 @@ import { canonicalCheckItems } from "../src/lib/btb-operations";
 import { checkDraftKey, parseCheckDraft, previewChecks } from "../src/lib/btb-check-drafts";
 
 // The Opening/Closing checklist used to be the middle tab of the prep sheet.
-// These tests pin the split: it lives at /between-the-buns/checklists behind
+// These tests pin the split: it lives at /btb/demo/checklists behind
 // its own gate, has its own hub card, and the prep sheet no longer carries it.
 
-const PAGE = join(process.cwd(), "src/app/between-the-buns/checklists/page.tsx");
-const PREP = join(process.cwd(), "src/app/between-the-buns/prep-list/page.tsx");
+const PAGE = join(process.cwd(), "src/app/btb/demo/checklists/page.tsx");
+const PREP = join(process.cwd(), "src/app/btb/demo/prep-list/page.tsx");
 
 const pageSource = readFileSync(PAGE, "utf8");
 const prepSource = readFileSync(PREP, "utf8");
@@ -56,12 +56,12 @@ test("the prep sheet no longer carries the checklist tab", () => {
 });
 
 test("the hub has a dedicated Opening & Closing card wired to the feature", () => {
-  const cards = BTB_CARDS.filter((c) => c.href === "/between-the-buns/checklists");
+  const cards = BTB_CARDS.filter((c) => c.href === "/btb/demo/checklists");
   assert.equal(cards.length, 1, "exactly one card for the checklists route");
   assert.equal(cards[0].feature, "checklists");
   assert.equal(cards[0].title, "Opening & Closing");
   // And the prep sheet card no longer pretends to be the checklist's home.
-  assert.ok(BTB_CARDS.some((c) => c.href === "/between-the-buns/prep-list"));
+  assert.ok(BTB_CARDS.some((c) => c.href === "/btb/demo/prep-list"));
 });
 
 test("checklists access mirrors the prep sheet for every role", () => {

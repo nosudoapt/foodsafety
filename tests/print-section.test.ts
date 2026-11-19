@@ -12,9 +12,9 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 
 const css = read("src/app/globals.css");
 const button = read("src/components/PrintButton.tsx");
-const prepManual = read("src/app/between-the-buns/prep-manual/page.tsx");
-const recipeCharts = read("src/app/between-the-buns/menu/page.tsx");
-const allergyChart = read("src/app/between-the-buns/allergen-chart/page.tsx");
+const prepManual = read("src/app/btb/demo/prep-manual/page.tsx");
+const recipeCharts = read("src/app/btb/demo/menu/page.tsx");
+const allergyChart = read("src/app/btb/demo/allergen-chart/page.tsx");
 const procedureManuals = read("src/components/PrintManuals.tsx");
 
 const PAGES: [string, string][] = [

@@ -191,7 +191,7 @@ function TeamCard({ employees, onChanged }: { employees: SettingsEmployee[]; onC
         <p className="ops-meta">
           Add team members, give them a login, or deactivate one — records are never deleted.
           Staff certificate expiry reminders go to the manager and owner addresses set in{" "}
-          <a href="/between-the-buns/licence-reminders">Licence Reminders</a>.
+          <a href="/btb/demo/licence-reminders">Licence Reminders</a>.
         </p>
       </div>
       {!open && <Button variant="soft" onClick={() => startEdit(null)}><Plus size={16} aria-hidden="true" />Add employee</Button>}

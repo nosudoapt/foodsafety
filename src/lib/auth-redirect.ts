@@ -5,7 +5,7 @@ export function safeNextPath(value: string | null, fallback = "/dashboard", pref
     const url = new URL(value, "https://foodsafe.invalid");
     if (url.origin !== "https://foodsafe.invalid") return fallback;
     if (prefix && url.pathname !== prefix && !url.pathname.startsWith(`${prefix}/`)) return fallback;
-    if (url.pathname.startsWith("/auth/") || url.pathname === "/between-the-buns/login") return fallback;
+    if (url.pathname.startsWith("/auth/") || url.pathname === "/btb/login" || url.pathname.startsWith("/btb/login/") || url.pathname === "/btb/admin/login") return fallback;
     return `${url.pathname}${url.search}${url.hash}`;
   } catch { return fallback; }
 }

@@ -15,7 +15,7 @@ test("personal BTB document uploads retain failed drafts and use the dedicated p
   await signInFoodSafe(page, "owner");
   const direct: string[] = [];
   page.on("request", (request) => { if (tables.some((table) => request.url().includes(`/rest/v1/${table}`))) direct.push(request.url()); });
-  await signInEmployee(page, manager.email!, "/between-the-buns/documents");
+  await signInEmployee(page, manager.email!, "/btb/demo/documents");
   await expect(page.getByRole("article", { name: "BTB service standards" })).toBeVisible();
   await expect(page.getByRole("article", { name: "Kitchen opening procedure" })).toHaveCount(0);
   await page.getByRole("button", { name: "Upload document", exact: true }).click();
@@ -59,7 +59,7 @@ test("personal BTB document uploads retain failed drafts and use the dedicated p
 
 test("corporate can create artwork and dated posts through BTB with recoverable saves and mutations", async ({ page, fixture }, info) => {
   await signInFoodSafe(page, "designer");
-  await signInBtb(page, "corporate", "/between-the-buns/marketing");
+  await signInBtb(page, "corporate", "/btb/demo/marketing");
   await page.getByRole("button", { name: "Add Promotion", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Add Promotion" });
   await dialog.getByLabel("Title", { exact: true }).fill("BTB winter artwork");
@@ -170,7 +170,7 @@ test("uploader scope and identity are server-owned and foreign records cannot be
 
 test("uploader connection failures retain browsing and recover after the profile is reconnected", async ({ page, fixture }) => {
   await fixture.configure({ failures: [{ table: "profiles", method: "GET", match: { id: `eq.${uploader}` }, times: 1 }] });
-  await signInBtb(page, "manager", "/between-the-buns/documents");
+  await signInBtb(page, "manager", "/btb/demo/documents");
   await expect(page.getByRole("article", { name: "BTB service standards" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Upload document", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Retry uploader connection" }).click();
@@ -189,7 +189,7 @@ test("uploader connection failures retain browsing and recover after the profile
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("article", { name: "Retain while reconnecting" })).toBeVisible();
   await fixture.configure({ failures: [{ table: "profiles", method: "GET", match: { id: `eq.${uploader}` }, times: 1 }] });
-  await page.goto("/between-the-buns/marketing");
+  await page.goto("/btb/demo/marketing");
   await expect(page.getByRole("article", { name: "Burger special" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add Promotion", exact: true })).toBeDisabled();
   await expect(page.getByLabel("Caption", { exact: true })).toBeDisabled();
