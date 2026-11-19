@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Exercise invitation fallbacks without changing production configuration.
+const emailMode = process.env.BTB_TEST_EMAIL_MODE;
+
 // Both browser and server-side Supabase calls resolve to the loopback fixture.
 // The API handlers and session/role checks run as they do in the production app.
 export default defineConfig({
@@ -33,9 +36,9 @@ export default defineConfig({
         SUPABASE_URL: "http://127.0.0.1:5102",
         SUPABASE_SERVICE_ROLE_KEY: "browser-test-service-key",
         BTB_UPLOADER_PROFILE_ID: "10000000-0000-4000-8000-000000000099",
-        RESEND_API_KEY: "browser-test-resend-key",
+        RESEND_API_KEY: emailMode === "missing-sender" ? "" : "browser-test-resend-key",
         BTB_EMAIL_FROM: "BTB Tests <btb@example.test>",
-        CRON_SECRET: "browser-test-cron-secret",
+        CRON_SECRET: emailMode === "missing-scheduler" ? "" : "browser-test-cron-secret",
         BTB_PASSWORD: "browser-test-shared-password",
         PLATFORM_ADMIN_BOOTSTRAP_TOKEN: "browser-test-bootstrap-token",
         DEMO_PLACEHOLDER: undefined as unknown as string,

@@ -56,6 +56,12 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
     const routeName = f.split(sep).at(-2) ?? "";
     if (SESSION_LIFECYCLE_ROUTES.has(routeName)) continue;
     const src = read(f);
+    if (f.includes(`${sep}btb${sep}invitations${sep}`)) {
+      assert.ok(["lookup", "accept"].includes(routeName), `${f} must be an explicitly audited token-authorized setup route`);
+      assert.ok(src.includes(routeName === "lookup" ? "lookupBtbInvitation(" : "acceptBtbInvitation("), `${f} must verify the single-use invitation token server-side`);
+      assert.ok(src.includes("requireBtbOrigin(") && src.includes("readBody("), `${f} must bound the request and reject cross-origin setup`);
+      continue;
+    }
     assert.ok(
       src.includes("btbRoute(") || src.includes("btbIdentityFromSession(") || src.includes("verifiedBtbRole as roleFromSession") || src.includes("legacyBtbRole as roleFromSession")
         || src.includes("platformRoute(") || src.includes("requireBtbAccess(")

@@ -28,6 +28,37 @@
 .btb-console__panel h2 { font: 400 1.8rem/1.2 var(--font-display); }
 .btb-console__panel p { font-size: .9375rem; max-width: 62ch; color: var(--muted-2); line-height: 1.7; }
 .btb-console__footer { padding: 20px 32px; border-top: 1px solid var(--line); color: var(--muted); font-size: .75rem; }
+.btb-console__stack { display: grid; gap: 24px; min-width: 0; }
+.btb-console__stack > .ui-pagehead { margin-bottom: 0; }
+.btb-console__sectionhead { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.btb-console__sectionhead h2 { font: 400 1.8rem/1.2 var(--font-display); }
+.btb-console__hint { color: var(--muted); font-size: .8125rem; line-height: 1.65; }
+.btb-console__toolbar { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.btb-console__search { display: flex; gap: 10px; align-items: center; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm); padding: 0 12px; width: min(100%, 360px); color: var(--muted); }
+.btb-console__search input { width: 100%; min-width: 0; min-height: 44px; background: transparent; font-size: .875rem; outline-offset: 0; }
+.btb-console__text-link { display: inline-flex; align-items: center; gap: 8px; color: var(--brand); min-height: 44px; width: fit-content; text-decoration: none; font-size: .875rem; font-weight: 500; }
+.btb-console__text-link:hover { text-decoration: underline; }
+.btb-console__location-grid, .btb-console__people-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,300px),1fr)); gap: 20px; }
+.btb-console__location-card, .btb-console__person-card { padding: 24px; display: grid; align-content: start; gap: 14px; min-width: 0; }
+.btb-console__location-card h2 { font: 400 1.65rem/1.25 var(--font-display); }
+.btb-console__location-card > p { color: var(--muted); font-size: .875rem; }
+.btb-console__location-card dl, .btb-console__person-card dl { display: grid; gap: 8px; border-block: 1px solid var(--line-soft); padding-block: 16px; }
+.btb-console__location-card dl > div, .btb-console__person-card dl > div { display: grid; grid-template-columns: minmax(100px,1fr) minmax(0,1.5fr); gap: 12px; font-size: .8125rem; }
+.btb-console__location-card dt, .btb-console__person-card dt { color: var(--muted); }
+.btb-console__location-card dd, .btb-console__person-card dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.btb-console__settings { padding: 28px; display: grid; gap: 24px; }
+.btb-console__settings form { max-width: 700px; }
+.btb-console__form-actions { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; margin-top: 24px; }
+.ui-form-stack > .btb-console__checkbox { display: flex; align-items: flex-start; gap: 12px; }
+.ui-form-stack > .btb-console__checkbox input { margin-top: 3px; width: 20px; height: 20px; flex-shrink: 0; }
+.btb-console__checkbox { min-height: 44px; padding-block: 10px; cursor: pointer; }
+.btb-console__person-email { display: flex; align-items: flex-start; gap: 8px; font-size: .875rem; overflow-wrap: anywhere; }
+.btb-console__person-email svg { margin-top: 3px; flex-shrink: 0; }
+.btb-console__person-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }
+.btb-console__person-actions .ui-button { padding: 10px 12px; font-size: .8125rem; }
+.btb-console__receipt { padding: 24px; display: grid; gap: 12px; border-color: var(--brand); }
+.btb-console__receipt > p { font-size: .875rem; line-height: 1.6; }
+.btb-console__receipt .ui-button { width: fit-content; }
 @media (max-width: 900px) {
   .btb-console__body { grid-template-columns: 1fr; }
   .btb-console__sidebar { padding: 12px 20px; border-right: 0; border-bottom: 1px solid var(--line); gap: 0; }
@@ -41,4 +72,7 @@
   .btb-console__identity { font-size: .8125rem; }
   .btb-console__header .ui-button { padding: 10px 12px; font-size: .8125rem; }
   .btb-console__panel { padding: 20px; }
+  .btb-console__settings, .btb-console__location-card, .btb-console__person-card, .btb-console__receipt { padding: 20px; }
+  .btb-console__search input, .btb-console .ui-form-stack :is(input,select) { font-size: 1rem; }
+  .btb-console__toolbar > .btb-console__hint { width: 100%; }
 }

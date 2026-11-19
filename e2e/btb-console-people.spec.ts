@@ -1,0 +1,125 @@
+import { test, expect, capture, east, west, password, signInBtb } from "./fixtures";
+import { consoleSites, signInConsole } from "./btb-console-fixtures";
+
+const origin = { Origin: "http://127.0.0.1:5101" };
+const endpoint = `/api/btb/admin/locations/${east}/people`;
+const person = { name: "Casey Staff", email: "casey@workspace.test", role: "staff" };
+const tokenFromBody = (body: string) => new URL(body.match(/https?:\/\/[^\s]+\/btb\/login\/set-password\?token=[a-f0-9]{64}/)![0]).searchParams.get("token")!;
+
+test("console location writes preserve unadopted FoodSafe sites and retain failed drafts", async ({ page, fixture }) => {
+  await fixture.configure({ tables: consoleSites });
+  await signInConsole(page, "/btb/admin/locations");
+  await expect(page.getByRole("heading", { name: "Locations & people", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Add location", exact: true }).click();
+  await page.getByLabel("Location name").fill("BTB South");
+  await page.getByLabel("Address", { exact: false }).fill("12 Main Street");
+  await page.getByLabel("IANA timezone").fill("Mars/Here");
+  await page.getByRole("button", { name: "Create location" }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("IANA timezone");
+  await expect(page.getByLabel("Location name")).toHaveValue("BTB South");
+  await page.getByLabel("IANA timezone").fill("America/Regina");
+  await page.getByRole("button", { name: "Create location" }).click();
+  await expect(page.getByRole("heading", { name: "BTB South", exact: true })).toBeVisible();
+  const id = page.url().split("/").at(-1)!;
+  const created = await (await page.request.get(`/api/btb/admin/locations/${id}`)).json();
+  expect(created.location).toMatchObject({ name: "BTB South", active: true, people: 0, pages: [], timezone: "America/Regina" });
+  const csrf = await page.request.patch(`/api/btb/admin/locations/${id}`, { headers: { Origin: "https://outside.example" }, data: { ...created.location, version: 1 } });
+  expect(csrf.status()).toBe(403);
+  await page.getByLabel("Active location").uncheck();
+  await page.getByRole("button", { name: "Save location" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Location saved" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Invite person", exact: true })).toBeDisabled();
+  const stale = await page.request.patch(`/api/btb/admin/locations/${id}`, { headers: origin, data: { name: "Stale", address: "", timezone: "America/Regina", active: true, version: 1 } });
+  expect(stale.status()).toBe(409);
+  const state = await fixture.state();
+  expect(state.tables.btb_employees.some(row => row.name === "BTB South")).toBeFalsy();
+  expect(state.tables.btb_events.filter(row => row.location_id === id).every(row => row.actor_id === null && row.actor_name === "Console: Alex Console")).toBeTruthy();
+});
+
+test("invitation email uses the outbox, setup is single-use and only creates an employee session", async ({ page, fixture }) => {
+  await fixture.configure({ tables: { ...consoleSites, btb_location_page_access: [{ location_id: east, page: "prep-manual", allowed: true }] } });
+  await signInConsole(page, `/btb/admin/locations/${east}`);
+  await page.getByRole("button", { name: "Invite person", exact: true }).click();
+  await page.getByLabel("Person’s name").fill(person.name);
+  await page.getByLabel("Employee email").fill(person.email);
+  await page.getByRole("button", { name: "Create invitation", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Invitation queued", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: person.name, exact: true })).toBeVisible();
+  await expect(page.getByLabel("Private setup link")).toHaveCount(0);
+  let state = await fixture.state();
+  const pending = state.tables.btb_invitations.find(row => row.email === person.email)!;
+  expect(state.tables.btb_employee_credentials.some(row => row.employee_id === pending.employee_id)).toBeFalsy();
+  const job = state.tables.btb_email_jobs.find(row => row.kind === "invite")!;
+  expect(job.recipient).toBe(person.email); expect(job.status).toBe("pending");
+  const token = tokenFromBody(job.body as string);
+  expect(pending.token_hash).not.toBe(token);
+  const dispatch = await page.request.get("/api/cron/btb-daily-reports", { headers: { Authorization: "Bearer browser-test-cron-secret" } });
+  expect(dispatch.status()).toBe(200);
+  state = await fixture.state();
+  expect(state.emailDeliveries.filter(delivery => delivery.body.to[0] === person.email)).toHaveLength(1);
+  await page.getByRole("button", { name: "Refresh people" }).click();
+  await expect(page.getByText("Email provider accepted", { exact: true })).toBeVisible();
+  await page.goto(`/btb/login/set-password?token=${token}`);
+  await expect(page.getByText(person.email, { exact: true })).toBeVisible();
+  await page.getByLabel(/^New employee password/).fill(password);
+  await page.getByLabel("Confirm employee password", { exact: true }).fill("mismatched-password");
+  await page.getByRole("button", { name: "Set password & open workspace" }).click();
+  await expect(page.locator("main").getByRole("alert")).toContainText("don’t match");
+  await expect(page.getByLabel(/^New employee password/)).toHaveValue(password);
+  await page.getByLabel("Confirm employee password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Set password & open workspace" }).click();
+  await expect(page).toHaveURL(/\/btb\/demo$/);
+  expect(await (await page.request.get("/api/btb/me")).json()).toMatchObject({ authenticated: true, email: person.email, role: "staff", employeeId: pending.employee_id });
+  expect(await (await page.request.get("/api/btb/admin/me")).json()).toMatchObject({ authenticated: true });
+  const replay = await page.request.post("/api/btb/invitations/accept", { headers: origin, data: { token, password } });
+  expect(replay.status()).toBe(410);
+  const invalid = await page.request.post("/api/btb/invitations/lookup", { headers: origin, data: { token: "0".repeat(64) } });
+  expect(invalid.status()).toBe(410); expect(await invalid.text()).not.toMatch(/employee_id|password_hash|token_hash/);
+  const csrf = await page.request.post("/api/btb/invitations/accept", { headers: { Origin: "https://outside.example" }, data: { token, password } });
+  expect(csrf.status()).toBe(403);
+});
+
+test("re-inviting, blocking and membership removal revoke links without deleting people", async ({ page, fixture }) => {
+  await fixture.configure({ tables: consoleSites });
+  await signInConsole(page);
+  const add = await page.request.post(endpoint, { headers: origin, data: { ...person, p_actor: "fake", subject: "Forged", body: "forged", recipient: "outside@example.test" } });
+  expect(add.status()).toBe(200); const first = await add.json(); expect(first.manualLink).toBeUndefined();
+  const addedElsewhere = await page.request.post(`/api/btb/admin/locations/${west}/people`, { headers: origin, data: person });
+  expect(addedElsewhere.status()).toBe(200); expect((await addedElsewhere.json()).employee_id).toBe(first.employee_id);
+  let state = await fixture.state();
+  const firstToken = tokenFromBody(state.tables.btb_email_jobs.find(row => (row.payload as { invitation_id?: string })?.invitation_id === first.invitation_id)!.body as string);
+  expect((await page.request.post("/api/btb/invitations/lookup", { headers: origin, data: { token: firstToken } })).status()).toBe(410);
+  expect(state.tables.btb_email_jobs.filter(row => row.kind === "invite").every(row => row.recipient === person.email && row.subject !== "Forged" && row.body !== "forged")).toBeTruthy();
+  const latestToken = tokenFromBody(state.tables.btb_email_jobs.find(row => row.kind === "invite" && row.status === "pending")!.body as string);
+  expect((await page.request.post("/api/btb/invitations/accept", { headers: origin, data: { token: latestToken, password } })).status()).toBe(200);
+  await page.goto(`/btb/admin/locations/${east}`);
+  await page.getByRole("button", { name: `Block ${person.name}`, exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("EVERY assigned location");
+  await page.getByRole("button", { name: "Block at all locations" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "blocked at every location" })).toBeVisible();
+  expect(await (await page.request.get("/api/btb/me")).json()).toMatchObject({ authenticated: false });
+  await page.getByRole("button", { name: `Re-invite ${person.name}`, exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("unblocks them");
+  await page.getByRole("button", { name: "Create new invitation" }).click();
+  await expect(page.getByText("Invited", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: `Remove ${person.name} from this location`, exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("other memberships");
+  await page.getByRole("button", { name: "Remove membership" }).click();
+  await expect(page.getByRole("heading", { name: person.name, exact: true })).toHaveCount(0);
+  state = await fixture.state();
+  expect(state.tables.btb_employees.filter(row => row.id === first.employee_id)).toHaveLength(1);
+  expect(state.tables.btb_location_access.filter(row => row.employee_id === first.employee_id).map(row => row.location_id)).toEqual([west]);
+  for (const data of [{ ...person, role: "admin" }, { ...person, email: "staff@btb.demo" }]) expect((await page.request.post(endpoint, { headers: origin, data })).status()).toBe(400);
+});
+
+test("demo cookies cannot administer people and location/people UI is responsive", async ({ page, fixture }, info) => {
+  await fixture.configure({ tables: consoleSites });
+  await signInBtb(page, "admin");
+  expect((await page.request.get(endpoint)).status()).toBe(401);
+  expect((await page.request.post(endpoint, { headers: origin, data: person })).status()).toBe(401);
+  await signInConsole(page, "/btb/admin/locations");
+  for (const width of [1440, 768, 375]) { await page.setViewportSize({ width, height: 1000 }); await capture(page, info, `console-locations-${width}`); }
+  await page.goto(`/btb/admin/locations/${east}`);
+  await expect(page.getByRole("button", { name: "Invite person", exact: true })).toBeEnabled();
+  for (const width of [1440, 768, 375]) { await page.setViewportSize({ width, height: 1000 }); await capture(page, info, `console-people-${width}`); }
+});

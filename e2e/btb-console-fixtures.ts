@@ -1,6 +1,7 @@
 import { createHmac, scryptSync } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { expect } from "./fixtures";
+import { east, west } from "./fixtures";
 
 // Disposable loopback-only credentials. Never production defaults or seeds.
 export const consoleId = "40000000-0000-4000-8000-000000000001";
@@ -11,6 +12,12 @@ export const consoleAdmin = {
   id: consoleId, name: "Alex Console", email: consoleEmail, active: true, session_version: 1,
   password_hash: `scrypt:${salt}:${scryptSync(consolePassword, salt, 64).toString("hex")}`,
   created_at: "2026-01-01T00:00:00Z",
+};
+
+export const consoleSites = {
+  btb_super_admins: [consoleAdmin],
+  btb_location_settings: [east, west].map(location_id => ({ location_id, active: true, timezone: "America/Regina", version: 1 })),
+  btb_superadmin_locations: [east, west].map(location_id => ({ location_id })),
 };
 
 export function consoleCookie(expires: number, version = 1) {
