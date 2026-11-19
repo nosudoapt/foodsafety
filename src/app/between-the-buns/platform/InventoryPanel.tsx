@@ -5,6 +5,8 @@ import { AlertTriangle, Check, CircleAlert, FileText, Lock, RefreshCw, Save, Upl
 import { Badge, Button, Card, Input, StatTile } from "@/components/ui";
 import { LoadState, jsonRequest, messageOf } from "@/components/btb/Feedback";
 import { fetchJson } from "@/lib/fetch-json";
+import { isIsoDate } from "@/lib/btb-team";
+import { amount, stockQuantity, taxProblem } from "@/lib/btb-finance";
 import {
   closingValue,
   foodCost,
@@ -23,32 +25,35 @@ import {
   SALES_BASIS,
   type InventoryData,
   type InventoryImport,
+  type InventoryItem,
   type MasterRowDraft,
   type PurchaseLineDraft,
   type SalesFigure,
 } from "@/lib/btb-platform-inventory";
 
-export default function InventoryPanel({ locationId, month, data, loading, error, reload }: {
+export default function InventoryPanel({ locationId, month, data, loading, error, reload, readOnly = false }: {
   locationId: string;
   month: string;
   data: InventoryData | null;
   loading: boolean;
   error: string;
   reload: () => void;
+  readOnly?: boolean;
 }) {
   return <>
     <LoadState loading={loading} error={error} onRetry={reload} />
-    {data && <InventoryWorkspace locationId={locationId} month={month} data={data} reload={reload} />}
+    {data && <InventoryWorkspace locationId={locationId} month={month} data={data} reload={reload} readOnly={readOnly} />}
   </>;
 }
 
-function InventoryWorkspace({ locationId, month, data, reload }: {
+function InventoryWorkspace({ locationId, month, data, reload, readOnly }: {
   locationId: string;
   month: string;
   data: InventoryData;
   reload: () => void;
+  readOnly: boolean;
 }) {
-  return <section className="ops-panel" aria-label="Inventory and food cost">
+  return <section className="ops-panel inventory-workspace" aria-label="Inventory and food cost">
     <div className="ops-toolbar">
       <div>
         <h2 className="ops-section-title">{monthLabel(month)} · inventory &amp; food cost</h2>
@@ -59,6 +64,8 @@ function InventoryWorkspace({ locationId, month, data, reload }: {
       </div>
       <Button variant="ghost" onClick={reload}><RefreshCw size={16} aria-hidden="true" />Refresh ledger</Button>
     </div>
+    {readOnly && <p className="ui-notice">Read-only oversight. A location manager or owner confirms source invoices and changes inventory.</p>}
+    <fieldset disabled={readOnly} className="ops-fieldset ops-panel">
     <ReadinessStrip data={data} />
     <div className="ops-reading-grid">
       <FoodCostCard data={data} />
@@ -68,6 +75,7 @@ function InventoryWorkspace({ locationId, month, data, reload }: {
     <ClosingCount locationId={locationId} month={month} data={data} reload={reload} />
     <PurchasesCard data={data} locationId={locationId} month={month} reload={reload} />
     <PeriodClose locationId={locationId} month={month} data={data} reload={reload} />
+    </fieldset>
   </section>;
 }
 
@@ -218,6 +226,7 @@ const KIND_LABEL: Record<string, string> = {
   local: "Local receipt",
   sales: "POS sales report",
 };
+const numericText = (value: unknown) => numberOf(value) === null ? "" : String(numberOf(value));
 
 const readFileBase64 = (file: File): Promise<string> => new Promise((resolve, reject) => {
   const reader = new FileReader();
@@ -283,26 +292,28 @@ function DocumentQueue({ locationId, month, data, reload }: {
       let aiFailure = "";
       let extracted: Record<string, unknown> | null = null;
       let aiText = "";
+      let extractor = "manual-upload";
       try {
-        const draft = await fetchJson<{ extracted: Record<string, unknown>; text?: string }>(
+        const draft = await fetchJson<{ extracted: Record<string, unknown>; text?: string; extractor?: string }>(
           "/api/btb/platform/inventory/extract",
           jsonRequest({ location_id: locationId, file_id: saved.file.id, kind }),
         );
         extracted = draft.extracted;
         aiText = draft.text ?? "";
+        extractor = draft.extractor ?? "ai";
       } catch (cause) { aiFailure = messageOf(cause); }
       await fetchJson("/api/btb/platform/import", jsonRequest({
         location_id: locationId,
         month,
         kind,
         file_id: saved.file.id,
-        extractor: extracted ? "ai-assisted" : "manual-upload",
-        text: aiText || (extracted ? "AI extraction draft — every value must be checked against the source document." : ""),
+        extractor,
+        text: aiText,
         extracted: extracted ?? {},
         error: extracted ? null : aiFailure || "Extraction was not available. Read the source document and enter its reviewed values here.",
       }));
       setNotice(extracted
-        ? `${file.name} was read with AI help and added to the review queue. Check every figure against the document — nothing reached the ledger yet.`
+        ? `${file.name} was read ${extractor === "gfs-text-reader" ? "with the offline GFS reader" : "with AI help"} and added to the review queue. Check every figure — nothing reached the ledger yet.`
         : `${file.name} was added to the review queue. Nothing reached the ledger yet.`);
       reload();
     } catch (cause) { setFailure(messageOf(cause)); }
@@ -343,12 +354,13 @@ function DocumentQueue({ locationId, month, data, reload }: {
     {notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
 
     {!pending.length && <p className="ui-empty">No documents are waiting for review this month.</p>}
-    {pending.map((row) => <ImportReview key={row.id} row={row} locationId={locationId} month={month} reload={reload} />)}
+    {pending.map((row) => <ImportReview key={row.id} row={row} items={data.items} locationId={locationId} month={month} reload={reload} />)}
   </div></Card>;
 }
 
-function ImportReview({ row, locationId, month, reload }: {
+function ImportReview({ row, items, locationId, month, reload }: {
   row: InventoryImport;
+  items: InventoryItem[];
   locationId: string;
   month: string;
   reload: () => void;
@@ -364,14 +376,24 @@ function ImportReview({ row, locationId, month, reload }: {
     vendor: textOf(extracted.vendor),
     reference: textOf(extracted.reference),
     date: textOf(extracted.date),
-    total: textOf(extracted.total),
+    total: numericText(extracted.total),
   };
   const [vendor, setVendor] = useState(invoice.vendor);
   const [reference, setReference] = useState(invoice.reference);
   const [date, setDate] = useState(invoice.date);
   const [total, setTotal] = useState(invoice.total);
-  const [lines, setLines] = useState<PurchaseLineDraft[]>(() =>
-    rowsOf(extracted.lines).map((line) => purchaseLineDraft(line)));
+  const initialLines = () => rowsOf(extracted.lines).map((raw) => {
+    const draft = purchaseLineDraft(raw);
+    const matches = items.filter((item) => item.source === row.kind && item.item_number && draft.item_code && item.item_number.trim().toLowerCase() === draft.item_code.trim().toLowerCase());
+    return !draft.item_id && !draft.stock_excluded && matches.length === 1 ? { ...draft, item_id: matches[0].id } : draft;
+  });
+  const [lines, setLines] = useState<PurchaseLineDraft[]>(initialLines);
+  const [dueDate, setDueDate] = useState(textOf(extracted.due_date));
+  const initialTax = { subtotal: numericText(extracted.subtotal), gst: numericText(extracted.gst), other_tax: numericText(extracted.other_tax), charges: numericText(extracted.charges) };
+  const [tax, setTax] = useState(initialTax);
+  const [taxConfirmed, setTaxConfirmed] = useState(false);
+  const [eligibility, setEligibility] = useState("");
+  const [updatePrices, setUpdatePrices] = useState(false);
   const [reviewConfirmed, setReviewConfirmed] = useState(false);
 
   const [master, setMaster] = useState<MasterRowDraft[]>(() => masterDrafts(extracted));
@@ -382,7 +404,8 @@ function ImportReview({ row, locationId, month, reload }: {
     setReference(invoice.reference);
     setDate(invoice.date);
     setTotal(invoice.total);
-    setLines(rowsOf(extracted.lines).map((line) => purchaseLineDraft(line)));
+    setLines(initialLines());
+    setDueDate(textOf(extracted.due_date)); setTax(initialTax); setTaxConfirmed(false); setEligibility(""); setUpdatePrices(false);
     setMaster(masterDrafts(extracted));
     setUpdateExisting(false);
     setReviewConfirmed(false);
@@ -416,7 +439,7 @@ function ImportReview({ row, locationId, month, reload }: {
     });
   };
 
-  const updateLine = (index: number, key: keyof PurchaseLineDraft, value: string) => {
+  const updateLine = <K extends keyof PurchaseLineDraft>(index: number, key: K, value: PurchaseLineDraft[K]) => {
     setLines((current) => current.map((line, at) => at === index ? { ...line, [key]: value } : line));
   };
 
@@ -437,18 +460,31 @@ function ImportReview({ row, locationId, month, reload }: {
     setFailure(""); setNotice("");
     const problem = purchaseLinesProblem(lines);
     if (problem) { setFailure(problem); return; }
-    const amount = parseQuantity(total);
+    const invoiceTotal = amount(total);
     if (!vendor.trim()) { setFailure("Enter the supplier shown on the receipt."); return; }
-    if (amount === null) { setFailure("Enter the confirmed CAD total."); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { setFailure("Enter the purchase date as YYYY-MM-DD."); return; }
+    if (invoiceTotal === null) { setFailure("Enter the confirmed CAD total (up to two decimal places)."); return; }
+    if (!isIsoDate(date) || date.slice(0, 7) !== month) { setFailure("Enter the invoice date within the selected accounting month."); return; }
+    if (dueDate && !isIsoDate(dueDate)) { setFailure("Enter a valid due date or leave it missing."); return; }
     if (row.kind === "gfs" && !reference.trim()) { setFailure("Enter the GFS invoice number."); return; }
     if (!reviewConfirmed) { setFailure("Tick to confirm you checked these values against the source document."); return; }
+    for (const [index, line] of lines.entries()) {
+      const item = items.find((item) => item.id === line.item_id);
+      if (!item && !line.stock_excluded) { setFailure(`Line ${index + 1}: map the stock item, or explicitly exclude this expense from stock.`); return; }
+      if (item && (!item.pack_size || item.pack_size <= 0)) { setFailure(`Line ${index + 1}: confirm this item's catalogue pack size before receiving stock.`); return; }
+      if (stockQuantity(line.cases) === null || stockQuantity(line.packets) === null || amount(line.line_total) === null) { setFailure(`Line ${index + 1}: quantities allow four decimals and CAD totals allow two.`); return; }
+    }
+    const taxValues = { total: invoiceTotal, subtotal: amount(tax.subtotal), gst: amount(tax.gst), other_tax: amount(tax.other_tax), charges: amount(tax.charges), itc_eligible: eligibility === "" ? null : eligibility === "yes" };
+    if (taxConfirmed) { const problem = taxProblem(taxValues); if (problem) { setFailure(problem); return; } }
     void post("confirm_purchase", {
       import_id: row.id,
       vendor: vendor.trim(),
       reference: reference.trim(),
       date,
-      total: amount,
+      total: invoiceTotal,
+      due_date: dueDate || null,
+      subtotal: taxValues.subtotal, gst: taxValues.gst, other_tax: taxValues.other_tax, charges: taxValues.charges,
+      tax_confirmed: taxConfirmed, itc_eligible: taxValues.itc_eligible,
+      update_prices: updatePrices,
       currency: "CAD",
       description: vendor.trim(),
       review_confirmed: true,
@@ -458,10 +494,12 @@ function ImportReview({ row, locationId, month, reload }: {
           item_id: line.item_id,
           description: line.description.trim(),
           item_code: line.item_code,
-          cases: parseQuantity(line.cases) ?? 0,
-          packets: parseQuantity(line.packets) ?? 0,
+           cases: parseQuantity(line.cases),
+           packets: parseQuantity(line.packets),
           unit_price: line.unit_price.trim() === "" ? null : parseQuantity(line.unit_price),
-          line_total: parseQuantity(line.line_total),
+           line_total: parseQuantity(line.line_total),
+           price_basis: line.price_basis || null,
+           stock_excluded: line.stock_excluded,
         }))
         .filter((line) => line.description !== ""),
     });
@@ -480,33 +518,51 @@ function ImportReview({ row, locationId, month, reload }: {
         {open ? "Close" : "Review & edit"}
       </Button>
     </div>
-    {(row.extraction_error || row.extraction_error !== null) && !open && <p className="ui-notice ui-notice--warning">
+    {row.extraction_error && !open && <p className="ui-notice ui-notice--warning">
       <AlertTriangle size={16} aria-hidden="true" /><span>{row.extraction_error}</span>
     </p>}
     {open && <div className="ops-panel">
+      <a href={`/api/btb/platform/file/${row.file_id}`} target="_blank" rel="noopener noreferrer" className="ops-link">Open original source document (new tab)</a>
       {row.kind !== "master" && row.kind !== "sales" && <>
         <div className="ops-form-grid">
           <label>Supplier<Input value={vendor} disabled={busy} onChange={(event) => setVendor(event.target.value)} /></label>
           <label>Invoice / receipt number<Input value={reference} disabled={busy} placeholder={row.kind === "gfs" ? "Required for GFS" : "Optional"} onChange={(event) => setReference(event.target.value)} /></label>
           <label>Purchase date<Input value={date} disabled={busy} type="date" onChange={(event) => setDate(event.target.value)} /></label>
+          <label>Invoice due date (if known)<Input value={dueDate} disabled={busy} type="date" onChange={(event) => setDueDate(event.target.value)} /></label>
           <label>Confirmed total (CAD)<Input value={total} disabled={busy} inputMode="decimal" onChange={(event) => setTotal(event.target.value)} /></label>
         </div>
         <div className="ops-import__lines">
           <h4>Purchased lines</h4>
+          <p className="ops-meta">Item-code matches are suggestions. Check every mapping and quantity. Approval receives cases × catalogue pack size + packets; non-stock expenses are explicitly excluded.</p>
           {lines.map((line, index) => {
-            return <div className="ops-line" key={index}>
-              <Input aria-label={`Line ${index + 1} description`} value={line.description} disabled={busy} placeholder="Item description" onChange={(event) => updateLine(index, "description", event.target.value)} />
-              <Input aria-label={`Line ${index + 1} item code`} value={line.item_code ?? ""} disabled={busy} placeholder="Code" onChange={(event) => updateLine(index, "item_code", event.target.value)} />
-              <Input aria-label={`Line ${index + 1} cases`} value={line.cases} disabled={busy} inputMode="decimal" placeholder="Cases" onChange={(event) => updateLine(index, "cases", event.target.value)} />
-              <Input aria-label={`Line ${index + 1} packets`} value={line.packets} disabled={busy} inputMode="decimal" placeholder="Packets" onChange={(event) => updateLine(index, "packets", event.target.value)} />
-              <Input aria-label={`Line ${index + 1} unit price`} value={line.unit_price} disabled={busy} inputMode="decimal" placeholder="Unit $" onChange={(event) => updateLine(index, "unit_price", event.target.value)} />
-              <Input aria-label={`Line ${index + 1} line total`} value={line.line_total} disabled={busy} inputMode="decimal" placeholder="Line total" onChange={(event) => updateLine(index, "line_total", event.target.value)} />
+            return <fieldset className="ops-fieldset finance-line" key={index} disabled={busy}><legend>Line {index + 1}</legend>
+              <div className="ops-form-grid">
+              <label>Description<Input value={line.description} onChange={(event) => updateLine(index, "description", event.target.value)} /></label>
+              <label>Item code<Input value={line.item_code ?? ""} onChange={(event) => updateLine(index, "item_code", event.target.value)} /></label>
+              <label>Receive into stock<select className="ui-input" value={line.stock_excluded ? "__expense" : line.item_id ?? ""} onChange={(event) => {
+                const value = event.target.value; setLines((current) => current.map((draft, at) => at === index ? { ...draft, item_id: value && value !== "__expense" ? value : null, stock_excluded: value === "__expense" } : draft));
+              }}><option value="">Choose item — not mapped</option><option value="__expense">Non-stock expense — exclude</option>{items.map((item) => <option key={item.id} value={item.id}>{item.item_number ? `${item.item_number} · ` : ""}{item.name} (pack {item.pack_size ?? "missing"})</option>)}</select></label>
+              <label>Cases<Input value={line.cases} inputMode="decimal" onChange={(event) => updateLine(index, "cases", event.target.value)} /></label>
+              <label>Packets / eaches<Input value={line.packets} inputMode="decimal" onChange={(event) => updateLine(index, "packets", event.target.value)} /></label>
+              <label>Printed unit price (CAD, if shown)<Input value={line.unit_price} inputMode="decimal" onChange={(event) => updateLine(index, "unit_price", event.target.value)} /></label>
+              <label>Printed price is per<select className="ui-input" value={line.price_basis} onChange={(event) => updateLine(index, "price_basis", event.target.value as PurchaseLineDraft["price_basis"])}><option value="">Choose price unit</option><option value="case">Case</option><option value="packet">Packet / each</option></select></label>
+              <label>Line total (CAD)<Input value={line.line_total} inputMode="decimal" onChange={(event) => updateLine(index, "line_total", event.target.value)} /></label>
+              </div>
               <Button variant="ghost" aria-label={`Remove line ${index + 1}`} disabled={busy}
                 onClick={() => setLines((current) => current.filter((_, at) => at !== index))}>Remove</Button>
-            </div>;
+            </fieldset>;
           })}
           <Button variant="soft" disabled={busy} onClick={() => setLines((current) => [...current, purchaseLineDraft()])}>Add line</Button>
         </div>
+        <fieldset className="ops-fieldset finance-line" disabled={busy}><legend>GST and purchase costing</legend>
+          <p className="ops-meta">Copy the actual tax breakdown. Blank stays missing; do not infer GST from the total. Verified, eligible GST is excluded from purchase cost. Ask your accountant about input-tax-credit eligibility.</p>
+          <div className="ops-form-grid">{([["subtotal", "Subtotal"], ["gst", "GST"], ["other_tax", "Other tax"], ["charges", "Additional charges"]] as const).map(([key, label]) => <label key={key}>{label} (CAD)<Input value={tax[key]} inputMode="decimal" onChange={(event) => { setTax({ ...tax, [key]: event.target.value }); setTaxConfirmed(false); }} /></label>)}
+            <label>GST input-tax-credit eligibility<select className="ui-input" value={eligibility} onChange={(event) => { setEligibility(event.target.value); setTaxConfirmed(false); }}><option value="">Not verified</option><option value="yes">Verified eligible</option><option value="no">Verified not eligible</option></select></label>
+          </div>
+          <label className="ops-checkbox"><input type="checkbox" checked={taxConfirmed} onChange={(event) => setTaxConfirmed(event.target.checked)} /><span>I verified the tax breakdown and GST eligibility.</span></label>
+          {!taxConfirmed && <p className="ui-notice ui-notice--warning">This can be saved as a tax-unverified invoice. Verify it in Finance before finalizing inventory or GST.</p>}
+        </fieldset>
+        <label className="ops-checkbox"><input type="checkbox" checked={updatePrices} disabled={busy} onChange={(event) => setUpdatePrices(event.target.checked)} /><span>Apply these reviewed unit prices to the catalogue. Case prices also derive a packet price using the verified pack size. Supplier price history is recorded either way.</span></label>
         <label className="ops-checkbox"><input type="checkbox" checked={reviewConfirmed} disabled={busy} onChange={(event) => setReviewConfirmed(event.target.checked)} />
           <span>I checked these values against the original {KIND_LABEL[row.kind ?? "gfs"]}.</span></label>
         <label>Possible duplicate explanation (only if this looks like one already entered)
@@ -535,6 +591,7 @@ function ImportReview({ row, locationId, month, reload }: {
         <label className="ops-checkbox"><input type="checkbox" checked={reviewConfirmed} disabled={busy} onChange={(event) => setReviewConfirmed(event.target.checked)} />
           <span>I checked these rows against the original master sheet.</span></label>
       </>}
+      {row.kind !== "gfs" && row.kind !== "local" && <label>Rejection reason<Input value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} /></label>}
       {failure && <p className="ui-notice ui-notice--error" role="alert">{failure}</p>}
       {notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
       <div className="ops-toolbar">

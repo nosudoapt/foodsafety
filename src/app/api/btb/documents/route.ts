@@ -37,16 +37,16 @@ export const POST = btbRoute("documents", true, async ({ db, identity }, request
     const notifyDays = notify && Number.isInteger(body.notify_days) ? Math.max(0, Math.min(365, body.notify_days as number)) : null;
     const renewal = await db.from("compliance_documents").insert({
       restaurant_name: BTB_RESTAURANT, location_id: null, doc_type: docType, name, expiry_date: expiry,
-      notes, notify, notify_days: notifyDays, user_id: profile, uploaded_by: profile, ...file,
+      notes, notify, notify_days: notifyDays, uploaded_by: profile, ...file,
     }).select("id").single();
-    dbError(renewal.error, "The upload wasn't saved to Renewals. Your file and details are still here; please try again.");
+    dbError(renewal.error, "The upload wasn’t saved to Renewals. Your file and details are still here; please try again.");
     return { document: null, routedToRenewals: true };
   }
   const result = await db.from("business_documents").insert({
     user_id: profile, uploaded_by: profile, restaurant_name: BTB_RESTAURANT,
     doc_type: "other", expiry_date: null, name, notes, ...file, ...btbUploadCreator(identity),
   }).select(COLUMNS).single();
-  dbError(result.error, "The document wasn't uploaded. Your file and details are still here; please try again.");
+  dbError(result.error, "The document wasn’t uploaded. Your file and details are still here; please try again.");
   if (!result.data) throw new BtbApiError("The upload could not be confirmed. Reload the register before retrying.", 503);
   return { document: result.data };
 });

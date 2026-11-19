@@ -148,7 +148,10 @@ BEGIN
     RAISE EXCEPTION 'Invalid replay key' USING ERRCODE='22023';
   END IF;
   IF p_date IS NULL THEN RAISE EXCEPTION 'A count date is required' USING ERRCODE='22023'; END IF;
-  IF p_rows IS NULL OR jsonb_typeof(p_rows) <> 'array' OR jsonb_array_length(p_rows) > 500 THEN
+  -- A saved sheet can contain every historical catalogue item (the seventh
+  -- archived sheet in practice exceeds 1,000 rows), so cap the payload well
+  -- above one day's catalogue while still bounding it.
+  IF p_rows IS NULL OR jsonb_typeof(p_rows) <> 'array' OR jsonb_array_length(p_rows) > 5000 THEN
     RAISE EXCEPTION 'Invalid prep rows' USING ERRCODE='22023';
   END IF;
   FOR v_token IN SELECT x FROM jsonb_array_elements(p_rows) x LOOP

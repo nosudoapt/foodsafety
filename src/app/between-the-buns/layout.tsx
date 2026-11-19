@@ -61,7 +61,7 @@ function BtbShell({ children }: { children: React.ReactNode }) {
         <div className="btb-search">
           <label className="btb-search__field">
             <Search size={15} aria-hidden="true" />
-            <span className="sr-only">Search BTB tools</span>
+            <span className="sr-only">Search BTB pages</span>
             <input
               type="search"
               placeholder="Search tools…"

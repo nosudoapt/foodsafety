@@ -133,4 +133,16 @@ BEGIN
   RETURN v_used;
 END $$;
 
+-- The helpers above are server-only. Other releases revoke by the btb_platform_*
+-- prefix; these are named btb_ai_*, so revoke them explicitly. Without this the
+-- default PUBLIC execute privilege would let anon/authenticated call them.
+DO $$
+DECLARE f record;
+BEGIN
+  FOR f IN SELECT oid::regprocedure sig FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname LIKE 'btb_ai_%' LOOP
+    EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC,anon,authenticated',f.sig);
+    EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role',f.sig);
+  END LOOP;
+END $$;
+
 COMMIT;

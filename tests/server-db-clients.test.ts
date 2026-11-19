@@ -58,12 +58,12 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
     const src = read(f);
     assert.ok(
       src.includes("btbRoute(") || src.includes("btbIdentityFromSession(") || src.includes("verifiedBtbRole as roleFromSession") || src.includes("legacyBtbRole as roleFromSession")
-        || src.includes("platformRoute("),
+        || src.includes("platformRoute(") || src.includes("requireBtbAccess("),
       `${f} must verify individual account state, not just decode a cookie role`,
     );
     // platformRoute() resolves the personal employee session server-side (and
     // re-verifies the credential version in SQL), so it also reads the cookie.
-    if (!src.includes("btbRoute(") && !src.includes("platformRoute(")) {
+    if (!src.includes("btbRoute(") && !src.includes("platformRoute(") && !src.includes("requireBtbAccess(")) {
       assert.ok(src.includes("BTB_COOKIE"), `${f} must read the BTB cookie`);
     }
     if (src.includes("platformRoute(")) {
@@ -71,6 +71,9 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
         src.includes('from "@/lib/btb-platform-route"'),
         `${f} must import the shared platformRoute wrapper, not hand-roll session resolution`,
       );
+    }
+    if (src.includes("requireBtbAccess(")) {
+      assert.ok(src.includes('from "@/lib/btb-api"'), `${f} must use the shared server-side account verification helper`);
     }
   }
 });
@@ -123,6 +126,9 @@ test("no client component directly accesses a protected inventory/access table",
     "btb_employees", "btb_employee_credentials", "btb_training_records", "btb_training_reviews",
     "btb_shifts", "btb_shift_checks", "btb_order_sheets", "btb_order_revisions", "btb_franchise_tasks",
     "btb_staff_licences", "btb_notification_settings", "btb_licence_email_log",
+    "btb_invoices", "btb_stock_balances", "btb_stock_movements", "btb_supplier_prices",
+    "btb_bank_accounts", "btb_bank_statements", "btb_bank_transactions", "btb_bank_allocations",
+    "btb_gst_periods", "btb_finance_commands", "btb_time_entries", "btb_time_commands",
   ];
   for (const file of srcFiles) {
     const source = read(file);

@@ -17,7 +17,8 @@ export async function extractPdfText(bytes: Uint8Array): Promise<string> {
   try {
     const doc = await task.promise;
     const pages: string[] = [];
-    const limit = Math.min(doc.numPages, 12);
+    if (doc.numPages > 12) return ""; // Never send a truncated document as a complete extraction.
+    const limit = doc.numPages;
     for (let n = 1; n <= limit; n++) {
       const page = await doc.getPage(n);
       const content = await page.getTextContent();
@@ -31,5 +32,7 @@ export async function extractPdfText(bytes: Uint8Array): Promise<string> {
     return pages.join("\n").trim();
   } catch {
     return "";
+  } finally {
+    await task.destroy();
   }
 }

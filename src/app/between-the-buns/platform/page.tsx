@@ -1,12 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { BadgeCheck, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, FileText, Info, MapPin, Megaphone } from "lucide-react";
+import { BadgeCheck, Boxes, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Clock3, FileText, Info, Landmark, MapPin, Megaphone } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
 import { IndividualLoginNotice, LoadState } from "@/components/btb/Feedback";
 import { useBtbData } from "@/components/btb/useBtbData";
 import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
+import { ScopedScheduleWorkspace } from "@/components/btb/StaffSchedule";
 import { btbToday, isIsoDate } from "@/lib/btb-team";
 import { platformCan, type PlatformBootstrap, type PlatformModule } from "@/lib/btb-platform";
 import { btbMonth, isMonthKey, monthLabel, shiftMonth, type InventoryData } from "@/lib/btb-platform-inventory";
@@ -17,6 +18,9 @@ import ReportsPanel, { type ReportsData } from "./ReportsPanel";
 import CompliancePanel, { type ComplianceData } from "./CompliancePanel";
 import MarketingPanel from "./MarketingPanel";
 import type { MarketingData } from "@/lib/btb-platform-marketing";
+import { locationToday } from "@/lib/btb-time";
+import type { FinanceData } from "@/lib/btb-finance";
+import FinancePanel from "./FinancePanel";
 
 const shiftDate = (date: string, days: number) =>
   new Date(Date.parse(`${date}T12:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
@@ -27,7 +31,7 @@ export default function PlatformPage() {
 
 function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
   const { identity } = useBtbWorkspace();
-  const [module, setModule] = useState<PlatformModule>("operations");
+  const [selectedModule, setModule] = useState<PlatformModule>("operations");
   const [locationId, setLocationId] = useState("");
   const [date, setDate] = useState(() => btbToday());
   const [month, setMonth] = useState(() => btbMonth());
@@ -37,49 +41,54 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
   const active = locationId || locations[0]?.id || "";
   const role = bootstrap.data?.identity.role ?? identity?.role ?? null;
   const modules = useMemo(
-    () => (["operations", "inventory", "marketing", "compliance", "reports", "notifications"] as PlatformModule[])
+    () => (["operations", "schedule", "inventory", "finance", "marketing", "compliance", "reports", "notifications"] as PlatformModule[])
       .filter((item) => !role || platformCan(role, item)),
     [role],
   );
+  const activeModule = modules.includes(selectedModule) ? selectedModule : modules[0] ?? "operations";
 
   const read = useBtbData<OperationsData>(
-    module === "operations" && active && isIsoDate(date)
+    activeModule === "operations" && active && isIsoDate(date)
       ? `/api/btb/platform/read?module=operations&location=${active}&date=${date}`
       : null,
   );
   const inventory = useBtbData<InventoryData>(
-    module === "inventory" && active && isMonthKey(month)
+    activeModule === "inventory" && active && isMonthKey(month)
       ? `/api/btb/platform/read?module=inventory&location=${active}&month=${month}`
       : null,
   );
+  const finance = useBtbData<FinanceData>(
+    activeModule === "finance" && active ? `/api/btb/platform/finance?location=${active}` : null,
+  );
   const inbox = useBtbData<NotificationData>(
-    module === "notifications" && active ? `/api/btb/platform/read?module=notifications&location=${active}` : null,
+    activeModule === "notifications" && active ? `/api/btb/platform/read?module=notifications&location=${active}` : null,
   );
 
   const marketing = useBtbData<MarketingData>(
-    module === "marketing" && active
+    activeModule === "marketing" && active
       ? `/api/btb/platform/read?module=marketing&location=${active}`
       : null,
   );
   const compliance = useBtbData<ComplianceData>(
-    module === "compliance" && active
+    activeModule === "compliance" && active
       ? `/api/btb/platform/read?module=compliance&location=${active}`
       : null,
   );
   const reports = useBtbData<ReportsData>(
-    module === "reports" && active && isIsoDate(date)
+    activeModule === "reports" && active && isIsoDate(date)
       ? `/api/btb/platform/read?module=reports&location=${active}&date=${date}`
       : null,
   );
 
   const location = useMemo(() => locations.find((item) => item.id === active), [locations, active]);
   const personal = !!identity?.employeeId;
+  const financeWrite = personal && (role === "manager" || role === "owner");
 
   return <div className="ops-workspace">
-    <div className="btb-screen">
+    <div className="btb-screen ops-panel">
       <PageHeader
         title="Location workspace"
-        subtitle="Opening, closing and cleaning duties, scheduled Celsius checks, sanitizer PPM and the record behind every day."
+        subtitle="Daily operations, staff schedules and approved hours, invoice stock receipts, supplier prices, GST and bank reconciliation."
         action={location && <Badge accent="purple">{location.name}</Badge>}
       />
       {!personal && <IndividualLoginNotice next="/between-the-buns/platform" />}
@@ -100,27 +109,33 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
               <p className="ops-meta"><MapPin size={14} aria-hidden="true" /> {locations[0].name}</p>
             ) : null}
             <nav className="ops-module-tabs" aria-label="Workspace module">
-              {modules.includes("operations") && <button type="button" aria-current={module === "operations" ? "page" : undefined} onClick={() => setModule("operations")}>
+              {modules.includes("operations") && <button type="button" aria-current={activeModule === "operations" ? "page" : undefined} onClick={() => setModule("operations")}>
                 <ClipboardList size={16} aria-hidden="true" /> Daily operations
               </button>}
-              {modules.includes("inventory") && <button type="button" aria-current={module === "inventory" ? "page" : undefined} onClick={() => setModule("inventory")}>
+              {modules.includes("schedule") && <button type="button" aria-current={activeModule === "schedule" ? "page" : undefined} onClick={() => setModule("schedule")}>
+                <Clock3 size={16} aria-hidden="true" /> Schedule &amp; hours
+              </button>}
+              {modules.includes("inventory") && <button type="button" aria-current={activeModule === "inventory" ? "page" : undefined} onClick={() => setModule("inventory")}>
                 <Boxes size={16} aria-hidden="true" /> Inventory &amp; food cost
               </button>}
-              {modules.includes("marketing") && <button type="button" aria-current={module === "marketing" ? "page" : undefined} onClick={() => setModule("marketing")}>
+              {modules.includes("finance") && <button type="button" aria-current={activeModule === "finance" ? "page" : undefined} onClick={() => setModule("finance")}>
+                <Landmark size={16} aria-hidden="true" /> Finance &amp; stock
+              </button>}
+              {modules.includes("marketing") && <button type="button" aria-current={activeModule === "marketing" ? "page" : undefined} onClick={() => setModule("marketing")}>
                 <Megaphone size={16} aria-hidden="true" /> Marketing
               </button>}
-              {modules.includes("compliance") && <button type="button" aria-current={module === "compliance" ? "page" : undefined} onClick={() => setModule("compliance")}>
+              {modules.includes("compliance") && <button type="button" aria-current={activeModule === "compliance" ? "page" : undefined} onClick={() => setModule("compliance")}>
                 <BadgeCheck size={16} aria-hidden="true" /> Compliance
               </button>}
-              {modules.includes("reports") && <button type="button" aria-current={module === "reports" ? "page" : undefined} onClick={() => setModule("reports")}>
+              {modules.includes("reports") && <button type="button" aria-current={activeModule === "reports" ? "page" : undefined} onClick={() => setModule("reports")}>
                 <FileText size={16} aria-hidden="true" /> Reports &amp; delivery
               </button>}
-              {modules.includes("notifications") && <button type="button" aria-current={module === "notifications" ? "page" : undefined} onClick={() => setModule("notifications")}>
+              {modules.includes("notifications") && <button type="button" aria-current={activeModule === "notifications" ? "page" : undefined} onClick={() => setModule("notifications")}>
                 <Info size={16} aria-hidden="true" /> Notifications
               </button>}
             </nav>
           </div>
-          {module === "inventory" ? (
+          {activeModule === "inventory" ? (
             <LocationNav
               location={location}
               month={month}
@@ -128,7 +143,7 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
               onNext={() => setMonth((current) => shiftMonth(current, 1))}
               onCurrent={() => setMonth(btbMonth())}
             />
-          ) : (
+          ) : (activeModule === "operations" || activeModule === "reports") && (
           <div className="ops-date-nav">
             <Button variant="ghost" aria-label="Previous day" onClick={() => setDate((current) => shiftDate(current, -1))}>
               <ChevronLeft size={18} aria-hidden="true" />
@@ -145,7 +160,7 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
           </div>
           )}
         </div>
-        {location && !location.settings_confirmed && module === "operations" && (
+        {location && !location.settings_confirmed && activeModule === "operations" && (
           <div className="ui-notice ui-notice--warning">
             <Info size={18} aria-hidden="true" />
             <div>
@@ -163,10 +178,12 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
           <p>Your account is signed in, but no BTB location has been assigned to you. Ask a manager or corporate administrator to add your membership.</p>
         </div></Card>
       )}
+    </div>
+    <div className={activeModule === "schedule" ? "ops-panel" : "btb-screen"}>
       {bootstrap.data && !!locations.length && role && (
-        module === "operations"
+        activeModule === "operations"
           ? <OperationsPanel readOnly={readOnly || !personal} date={date} locationId={active} data={read.data} loading={read.loading} error={read.error} reload={read.reload} />
-          : module === "inventory"
+          : activeModule === "inventory"
             ? <InventoryPanel
                 key={`${active}:${month}`}
                 locationId={active}
@@ -175,8 +192,23 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
                 loading={inventory.loading}
                 error={inventory.error}
                 reload={inventory.reload}
+                readOnly={!financeWrite}
               />
-            : module === "marketing"
+            : activeModule === "finance"
+              ? <FinancePanel
+                  key={active}
+                  locationId={active}
+                  data={finance.data}
+                  loading={finance.loading}
+                  error={finance.error}
+                  reload={finance.reload}
+                  canWrite={financeWrite}
+                  today={locationToday(location?.timezone ?? "UTC")}
+                  timezone={location?.timezone ?? "UTC"}
+                />
+            : activeModule === "schedule" && location
+              ? <ScopedScheduleWorkspace key={active} locations={[location]} initialLocation={active} />
+            : activeModule === "marketing"
               ? <MarketingPanel
                   locationId={active}
                   data={marketing.data}
@@ -185,9 +217,9 @@ function LocationWorkspace({ readOnly }: { readOnly: boolean }) {
                   error={marketing.error}
                   reload={marketing.reload}
                 />
-              : module === "compliance"
+               : activeModule === "compliance"
               ? <CompliancePanel locationId={active} data={compliance.data} loading={compliance.loading} error={compliance.error} reload={compliance.reload} />
-              : module === "reports"
+               : activeModule === "reports"
               ? <ReportsPanel date={date} locationId={active} data={reports.data} loading={reports.loading} error={reports.error} reload={reports.reload} />
               : <NotificationsPanel data={inbox.data} loading={inbox.loading} error={inbox.error} reload={inbox.reload} />
       )}

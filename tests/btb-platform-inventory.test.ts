@@ -188,7 +188,7 @@ test("a blank extracted line stays blank, not zero", () => {
   assert.equal(filled.line_total, "174");
 });
 
-test("reviewed purchase lines are blocked until every counted line has a total", () => {
+test("reviewed purchase lines require explicit totals, including non-stock and zero-quantity lines", () => {
   const complete = purchaseLineDraft({ description: "Beef patties", cases: 3, packets: 2, line_total: 174 });
   assert.equal(purchaseLinesProblem([complete]), null);
 
@@ -202,7 +202,9 @@ test("reviewed purchase lines are blocked until every counted line has a total",
   assert.match(purchaseLinesProblem([noTotal]) ?? "", /line total/i);
 
   const zeroLine = purchaseLineDraft({ description: "Credit / no delivery", cases: 0, packets: 0 });
-  assert.equal(purchaseLinesProblem([zeroLine]), null, "an explicit 0/0 line needs no total");
+  assert.match(purchaseLinesProblem([zeroLine]) ?? "", /line total/i);
+  assert.equal(purchaseLinesProblem([{ ...zeroLine, line_total: "0" }]), null, "a verified zero is present, not missing");
+  assert.equal(purchaseLinesProblem([purchaseLineDraft({ description: "Delivery fee", cases: 0, packets: 0, line_total: 10, stock_excluded: true })]), null);
 
   // Junk read from a scan is normalised away on load, not rendered as a price.
   const junkFromScan = purchaseLineDraft({ description: "Oil", cases: 0, packets: 1, line_total: 30, unit_price: "n/a" });
@@ -210,4 +212,7 @@ test("reviewed purchase lines are blocked until every counted line has a total",
   // ...but junk someone types into the reviewed cell is still rejected.
   const junkTyped = { ...junkFromScan, unit_price: "n/a" };
   assert.match(purchaseLinesProblem([junkTyped]) ?? "", /unit price/i);
+  assert.equal(junkFromScan.price_basis, "", "an absent price unit must not default to case");
+  assert.match(purchaseLinesProblem([{ ...junkFromScan, unit_price: "30" }]) ?? "", /per case or packet/i);
+  assert.equal(purchaseLinesProblem([{ ...junkFromScan, unit_price: "30", price_basis: "packet" }]), null);
 });

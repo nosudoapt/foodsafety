@@ -1,40 +1,66 @@
 import { btbDatabaseTables, btbUploadTables, createBtbDatabase, databaseRows, identifier, insertRows, rpc } from "../tests/helpers/btb-database.mjs";
+import { initializePlatformDatabase } from "../tests/helpers/btb-platform-database.mjs";
 
 const db = await createBtbDatabase({}, { temperatureStore: true });
-const databaseTables = [...btbDatabaseTables, ...btbUploadTables, "temperature_records"];
+await initializePlatformDatabase(db);
+const platformTables = [
+  "btb_location_settings", "btb_location_access", "btb_events", "btb_file_objects", "btb_notifications", "btb_email_jobs",
+  "btb_operation_templates", "btb_sanitizer_settings", "btb_sanitizer_logs", "btb_document_imports",
+  "btb_design_formats", "btb_design_versions", "btb_promotion_comments", "btb_social_platforms", "btb_compliance_versions",
+  "btb_ai_settings", "btb_ai_usage", "btb_invoices", "btb_stock_balances", "btb_stock_movements", "btb_supplier_prices",
+  "btb_bank_accounts", "btb_bank_statements", "btb_bank_transactions", "btb_bank_allocations", "btb_gst_periods", "btb_finance_commands",
+  "btb_time_entries", "btb_time_commands",
+];
+// Location settings/access must exist before location-scoped shifts, so seed
+// those fixture tables last. Everything else keeps its existing order.
+const databaseTables = [
+  ...[...btbDatabaseTables, ...btbUploadTables, "equipment", "temperature_records", ...platformTables]
+    .filter((table) => !["btb_location_settings", "btb_location_access", "btb_shifts"].includes(table)),
+  "btb_location_settings", "btb_location_access", "btb_shifts",
+];
+// Legacy inventory remains JavaScript-backed. Use explicit aliases for the
+// location-platform SQL fixtures so synthetic legacy IDs never enter UUID FKs.
+const inventoryTables = ["inventory_items", "inventory_counts", "inventory_purchases", "inventory_purchase_lines", "inventory_month_summary", "inventory_month_snapshots", "inventory_audit_log"];
+const fixtureTables = new Map([...databaseTables.map((table) => [table, table]), ...inventoryTables.map((table) => [`platform_${table}`, table])]);
 const names = new Set(databaseTables);
-const primaryKey = (table) => ({ btb_employee_credentials: "employee_id", btb_notification_settings: "restaurant_name", btb_franchise_tasks: "task_key", btb_login_limits: "key" })[table] ?? "id";
+const primaryKeys = (table) => ({
+  btb_employee_credentials: ["employee_id"], btb_notification_settings: ["restaurant_name"], btb_franchise_tasks: ["task_key"], btb_login_limits: ["key"],
+  btb_location_settings: ["location_id"], btb_location_access: ["location_id", "employee_id"], btb_sanitizer_settings: ["location_id"],
+  btb_social_platforms: ["name"], btb_ai_settings: ["location_id"], btb_ai_usage: ["location_id", "day"], btb_stock_balances: ["item_id"],
+  inventory_month_snapshots: ["count_month", "scope_key"],
+})[table] ?? ["id"];
 
 export function isBtbDatabaseTable(table) { return names.has(table); }
 
 export async function resetBtbDatabase(tables) {
-  await db.exec(`TRUNCATE ${databaseTables.map(identifier).join(",")}, temperature_record_events, compliance_documents, locations, profiles CASCADE`);
+  await db.exec(`TRUNCATE ${[...databaseTables, "prep_counts", ...inventoryTables].map(identifier).join(",")}, temperature_record_events, compliance_documents, locations, profiles CASCADE`);
   await db.exec("INSERT INTO btb_notification_settings(restaurant_name) VALUES ('Between the Buns')");
   await configureBtbDatabase(tables);
 }
 
 export async function configureBtbDatabase(tables) {
   await db.transaction(async (tx) => {
-    for (const location of tables.locations ?? []) await tx.query("INSERT INTO locations(id) VALUES ($1) ON CONFLICT DO NOTHING", [location.id]);
+    for (const location of tables.locations ?? []) await tx.query("INSERT INTO locations(id,name,address) VALUES ($1,$2,$3) ON CONFLICT(id) DO UPDATE SET name=excluded.name,address=excluded.address", [location.id, location.name ?? "Test location", location.address ?? ""]);
     if (tables.profiles) {
       await tx.query("DELETE FROM profiles WHERE id::text NOT IN (SELECT jsonb_array_elements_text($1::jsonb))", [JSON.stringify(tables.profiles.map((profile) => profile.id))]);
       for (const profile of tables.profiles) await tx.query("INSERT INTO profiles(id,restaurant_name,role) VALUES ($1,$2,$3) ON CONFLICT (id) DO UPDATE SET restaurant_name=excluded.restaurant_name,role=excluded.role", [profile.id, profile.restaurant_name, profile.role]);
     }
-    for (const table of databaseTables.filter((table) => table in tables)) {
+    for (const [fixture, table] of fixtureTables) {
+      if (!(fixture in tables)) continue;
       // Existing synthetic evidence must retain its fixture timestamp; actual
       // PostgREST writes below always run with the real timestamp/audit triggers.
       if (table === "temperature_records") await tx.exec("SET LOCAL session_replication_role='replica'");
-      const rows = tables[table];
-      const key = primaryKey(table);
+      const rows = tables[fixture];
+      const keys = primaryKeys(table);
       if (!rows.length) { await tx.exec(`DELETE FROM ${identifier(table)}`); if (table === "temperature_records") await tx.exec("SET LOCAL session_replication_role='origin'"); continue; }
       // Replace omitted rows before inserting: a different primary key may reuse
       // a unique date/email from the previous fixture. Keep retained IDs intact.
-      await tx.query(`DELETE FROM ${identifier(table)} WHERE ${identifier(key)}::text NOT IN (SELECT jsonb_array_elements_text($1::jsonb))`, [JSON.stringify(rows.map((row) => row[key]))]);
+      await tx.query(`DELETE FROM ${identifier(table)} value WHERE NOT EXISTS (SELECT 1 FROM jsonb_array_elements($1::jsonb) fixture WHERE ${keys.map((key) => `value.${identifier(key)}::text = fixture->>'${key}'`).join(" AND ")})`, [JSON.stringify(rows)]);
       for (const row of rows) {
         const columns = Object.keys(row).map(identifier);
-        const updates = columns.filter((column) => column !== identifier(key)).map((column) => `${column}=excluded.${column}`);
+        const updates = columns.filter((column) => !keys.map(identifier).includes(column)).map((column) => `${column}=excluded.${column}`);
         await tx.query(`INSERT INTO ${identifier(table)} (${columns}) SELECT ${columns} FROM jsonb_populate_record(NULL::${identifier(table)}, $1::jsonb)
-          ON CONFLICT (${identifier(key)}) DO ${updates.length ? `UPDATE SET ${updates}` : "NOTHING"}`, [JSON.stringify(row)]);
+          ON CONFLICT (${keys.map(identifier)}) DO ${updates.length ? `UPDATE SET ${updates}` : "NOTHING"}`, [JSON.stringify(row)]);
       }
       if (table === "temperature_records") await tx.exec("SET LOCAL session_replication_role='origin'");
     }
@@ -42,12 +68,28 @@ export async function configureBtbDatabase(tables) {
       await tx.exec("DELETE FROM compliance_documents");
       await insertRows(tx, "compliance_documents", tables.compliance_documents.filter((row) => row.restaurant_name === "Between the Buns"));
     }
+    // The legacy prep sheet reads from the JavaScript fixture, but its atomic
+    // save RPC operates on this SQL copy. Seed the copy so scoped saves keep
+    // evidence from other sites/restaurants exactly as the real table would.
+    if (tables.prep_counts) {
+      await tx.exec("DELETE FROM prep_counts");
+      await insertRows(tx, "prep_counts", tables.prep_counts);
+    }
   });
 }
 
 export async function btbDatabaseState() {
-  const pairs = await Promise.all(databaseTables.map(async (table) => [table, await databaseRows(db, table)]));
+  const pairs = await Promise.all([...fixtureTables].map(async ([fixture, table]) => [fixture, await databaseRows(db, table)]));
   return { ...Object.fromEntries(pairs), temperature_record_events: await databaseRows(db, "temperature_record_events") };
+}
+
+/**
+ * The legacy prep sheet is still a JavaScript-backed table in this fixture,
+ * but its atomic save RPC writes the SQL copy. Mirror that copy after a replay
+ * so the next browser read (and /__test/state) sees the committed sheet.
+ */
+export async function sqlTableRows(table) {
+  return databaseRows(db, table);
 }
 
 function where(params, values) {
@@ -115,7 +157,7 @@ export async function btbPostgrest(table, method, params, body, headers, isRpc) 
       const saved = [];
       for (const row of rows) {
         const columns = Object.keys(row).map(identifier).join(",");
-        const keys = (params.get("on_conflict") ?? primaryKey(table)).split(",");
+        const keys = params.get("on_conflict")?.split(",") ?? primaryKeys(table);
         const updates = Object.keys(row).filter(key => !keys.includes(key)).map(key => `${identifier(key)}=excluded.${identifier(key)}`);
         const conflict = headers.prefer?.includes("resolution=merge-duplicates")
           ? ` ON CONFLICT (${keys.map(identifier)}) DO ${updates.length ? `UPDATE SET ${updates}` : "NOTHING"}` : "";

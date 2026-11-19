@@ -147,10 +147,10 @@ function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = tru
           const { data, error } = await supabase.from("compliance_documents").insert({
             restaurant_name: restaurant, doc_type: docType, name: name.trim(), expiry_date: expiry,
             notes: notes.trim(), notify, notify_days: notify && notifyChoice !== "default" ? Number(notifyChoice) : null,
-            user_id: userId, uploaded_by: userId,
+            uploaded_by: userId,
             ...(file ? { file_name: file.name, file_url: await fileToDataUrl(file) } : {}),
           }).select("id").abortSignal(AbortSignal.timeout(15_000)).single();
-          if (error || !data) throw new Error("The upload wasn't saved to Renewals. Your file and details are still here; please try again.");
+          if (error || !data) throw new Error("The upload wasn’t saved to Renewals. Your file and details are still here; please try again.");
           setNotice(`${name.trim()} saved to the Renewals register with its reminder.`);
           setShowUpload(false); setName(""); setNotes(""); setFile(null); setExpiry(""); setNotifyChoice("default"); setDocType("other");
           if (fileInputRef.current) fileInputRef.current.value = "";
@@ -161,7 +161,7 @@ function DocumentWorkspace({ title, subtitle, readOnly = false, showHeader = tru
           doc_type: "other", name: name.trim(), file_name: file.name,
           file_url: await fileToDataUrl(file), file_size: file.size, expiry_date: null, notes: notes.trim(),
         }).select(SELECT).abortSignal(AbortSignal.timeout(15_000)).single();
-        if (error || !data) throw new Error("The document wasn't uploaded. Your file and details are still here; please try again.");
+        if (error || !data) throw new Error("The document wasn’t uploaded. Your file and details are still here; please try again.");
         document = data as VaultRow;
       }
       setRows((prev) => [document as VaultRow, ...prev]);

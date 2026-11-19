@@ -143,9 +143,11 @@ test("uploader scope and identity are server-owned and foreign records cannot be
   const foreignPost = before.tables.social_media_calendar[0];
   const response = await request.post("/api/btb/documents", { headers: { Origin: appOrigin }, data: { name: "Scoped document", file, file_size: 999999, user_id: foreignDocument.user_id, uploaded_by: foreignDocument.user_id, restaurant_name: "Another restaurant", btb_created_by: randomUUID(), btb_created_by_name: "Forged actor", expiry_date: "2030-01-01", doc_type: "insurance" } });
   await expect(response).toBeOK();
-  expect((await fixture.state()).tables.business_documents.find((row) => row.name === "Scoped document")).toMatchObject({ user_id: uploader, uploaded_by: uploader, restaurant_name: "Between the Buns", btb_created_by: null, btb_created_by_name: "Manager (shared workspace)", file_size: pdf.byteLength, expiry_date: null, doc_type: "other" });
+  // An expiry date routes the upload to Renewals, not the plain document vault.
+  expect((await fixture.state()).tables.compliance_documents.find((row) => row.name === "Scoped document")).toMatchObject({ restaurant_name: "Between the Buns", uploaded_by: uploader, location_id: null, file_size: pdf.byteLength, expiry_date: "2030-01-01", doc_type: "insurance", notify: true });
+  expect((await fixture.state()).tables.business_documents.find((row) => row.name === "Scoped document")).toBeUndefined();
   const documents = await request.get("/api/btb/documents?restaurant_name=Another%20restaurant");
-  expect((await documents.json()).documents).toHaveLength(2);
+  expect((await documents.json()).documents).toHaveLength(1);
   expect(await documents.text()).not.toContain("file_url");
   expect((await request.get(`/api/btb/documents?download=${foreignDocument.id}`)).status()).toBe(404);
   expect((await request.delete("/api/btb/documents", { data: { id: foreignDocument.id } })).status()).toBe(404);

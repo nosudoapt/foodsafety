@@ -20,7 +20,7 @@ export default function MonthEndInventoryPage() {
 }
 
 function InventoryWorkspace({ readOnly }: { readOnly: boolean }) {
-  const [month, setMonth] = useState(thisMonth());
+  const [month, setMonth] = useState(prevMonth(thisMonth()));
   const months = useMemo(() => recentMonths(thisMonth(), 24), []);
   // A month owns its requests and drafts. An old response cannot populate the
   // newly selected month, even if it arrives after navigation.

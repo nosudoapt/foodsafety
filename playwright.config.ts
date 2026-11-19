@@ -36,6 +36,8 @@ export default defineConfig({
         RESEND_API_KEY: "browser-test-resend-key",
         BTB_EMAIL_FROM: "BTB Tests <btb@example.test>",
         CRON_SECRET: "browser-test-cron-secret",
+        BTB_PASSWORD: "browser-test-shared-password",
+        PLATFORM_ADMIN_BOOTSTRAP_TOKEN: "browser-test-bootstrap-token",
         DEMO_PLACEHOLDER: undefined as unknown as string,
         NEXT_TELEMETRY_DISABLED: "1",
         TZ: "UTC",

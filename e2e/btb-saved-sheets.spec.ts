@@ -7,7 +7,10 @@ import { ACTIVE_LOCATION_KEY } from "../src/lib/locations";
 const today = btbToday();
 const item = parKeys[0];
 const dateAt = (offset: number) => new Date(new Date(`${today}T12:00:00Z`).getTime() + offset * 86_400_000).toISOString().slice(0, 10);
-const prep = (id: string, date = today, name = item) => ({ id, restaurant_name: "Between the Buns", location_id: null, item_name: name, par: 12.5, on_hand: 2.5, pull: 0, urgent: true, count_date: date, created_at: `${date}T16:00:00Z` });
+// prep_counts.id is a UUID in the SQL fixture that backs the replay RPC, so
+// generate one per seeded row instead of the old readable JS ids.
+let prepSeq = 0;
+const prep = (_id: string, date = today, name = item) => ({ id: `55000000-0000-4000-8000-${String(++prepSeq).padStart(12, "0")}`, restaurant_name: "Between the Buns", location_id: null, item_name: name, par: 12.5, on_hand: 2.5, pull: 0, urgent: true, count_date: date, created_at: `${date}T16:00:00Z` });
 
 test("prep history reloads saved dates and quantities; same-date loading and saving preserve legacy zeros and scope", async ({ page, fixture }, info) => {
   await fixture.configure({ tables: { prep_counts: [
@@ -41,8 +44,8 @@ test("prep history reloads saved dates and quantities; same-date loading and sav
   const rows = (await fixture.state()).tables.prep_counts;
   expect(rows.find((row) => row.item_name === item && row.count_date === today)).toMatchObject({ par: 12.5, on_hand: 4, urgent: true });
   expect(rows.find((row) => row.item_name === "Archived item — zero stock")).toMatchObject({ par: 0, on_hand: 0, pull: 0 });
-  expect(rows.some((row) => row.id === "other-site")).toBe(true);
-  expect(rows.some((row) => row.id === "other-restaurant")).toBe(true);
+  expect(rows.some((row) => row.item_name === "Other site only")).toBe(true);
+  expect(rows.some((row) => row.item_name === "Other restaurant only")).toBe(true);
   await page.reload();
   await expect(page.getByLabel(`On hand: ${item}`, { exact: true })).toHaveValue("4");
   await expect(page.getByLabel(`Urgent: ${item}`, { exact: true })).toBeChecked();
@@ -111,18 +114,21 @@ test("cleaning history reopens saved names, dates and photos; new entries surviv
   await page.setViewportSize({ width: 375, height: 812 });
   await capture(page, info, "cleaning-saved-history-mobile");
   await page.getByRole("button", { name: "Open", exact: true }).click();
-  await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Taylor");
+  await expect(page.getByLabel("Cleaned by", { exact: true }).first()).toHaveValue("Taylor");
   await expect(page.getByLabel("Date", { exact: true }).first()).toHaveValue(older);
   await expect(page.getByLabel("Time", { exact: true }).first()).toHaveValue("09:30");
   await expect(page.getByRole("button", { name: "Zoom before photo 1", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Zoom after photo 1", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "This Week", exact: true }).last().click();
   const saved = page.waitForResponse((response) => response.url().includes("/rest/v1/cleaning_logs") && response.request().method() === "POST");
-  await page.getByLabel("Name", { exact: true }).first().fill("Morgan");
+  // Attribution is automatic from the signed-in account; a time edit creates
+  // the new entry whose persistence is checked below.
+  await page.getByLabel("Time", { exact: true }).first().fill("10:45");
   expect((await saved).ok()).toBe(true);
   await expect(page.getByLabel("Date", { exact: true }).first()).toHaveValue(today);
   await page.reload();
-  await expect(page.getByLabel("Name", { exact: true }).first()).toHaveValue("Morgan");
+  await expect(page.getByLabel("Time", { exact: true }).first()).toHaveValue("10:45");
+  await expect(page.getByLabel("Cleaned by", { exact: true }).first()).toHaveValue("Manager (shared workspace)");
   await page.getByRole("button", { name: "History (2)", exact: true }).click();
   await expect(page.getByRole("button", { name: "Open", exact: true })).toHaveCount(2);
 });
@@ -137,7 +143,7 @@ test("corporate can review saved prep and cleaning while operational roles keep 
   await page.getByRole("button", { name: "Load", exact: true }).click();
   await expect(page.getByLabel(`On hand: ${item}`, { exact: true })).toHaveValue("2.5");
   await page.goto("/between-the-buns/cleaning-schedule");
-  await expect(page.getByLabel("Name", { exact: true }).first()).toBeDisabled();
+  await expect(page.getByLabel("Cleaned by", { exact: true }).first()).toBeDisabled();
   await expect(page.getByRole("button", { name: "Clear Week", exact: true })).toHaveCount(0);
   for (const role of ["staff", "supervisor"] as const) {
     await signInBtb(page, role, "/between-the-buns/prep-list");

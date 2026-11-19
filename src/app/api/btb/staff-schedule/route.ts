@@ -1,4 +1,4 @@
-import { btbRoute, BtbApiError, dbError, readAll, readBody, TEAM_COLUMNS } from "@/lib/btb-api";
+import { btbRoute, BtbApiError, btbEmployeeIsLocationManaged, dbError, readAll, readBody, TEAM_COLUMNS } from "@/lib/btb-api";
 import { attributionName, BTB_RESTAURANT, isIsoDate, isUuid, isVersion, type TeamMember } from "@/lib/btb-team";
 import { addDays } from "@/lib/staff-schedule";
 import { SHIFT_DUTIES, shiftInterval, type BtbShift } from "@/lib/btb-operations";
@@ -9,7 +9,7 @@ export const GET = btbRoute("staff_schedule", false, async ({ db }, request) => 
   if (!isIsoDate(start)) throw new BtbApiError("Choose a valid week.");
   const [employees, shifts] = await Promise.all([
     readAll<TeamMember>((from, to) => db.from("btb_employees").select(TEAM_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).order("name").order("id").range(from, to), "The team list could not be loaded."),
-    readAll<BtbShift>((from, to) => db.from("btb_shifts").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).gte("shift_date", start).lt("shift_date", addDays(start, 7)).order("shift_date").order("start_time").order("id").range(from, to), "This week’s schedule could not be loaded."),
+    readAll<BtbShift>((from, to) => db.from("btb_shifts").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).gte("shift_date", start).lt("shift_date", addDays(start, 7)).order("shift_date").order("start_time").order("id").range(from, to), "This week’s schedule could not be loaded."),
   ]);
   return { employees, shifts };
 });
@@ -17,6 +17,7 @@ export const GET = btbRoute("staff_schedule", false, async ({ db }, request) => 
 export const POST = btbRoute("staff_schedule", true, async ({ db, identity }, request) => {
   const body = await readBody(request);
   if (!isUuid(body.employee_id) || !isVersion(body.version) || (body.id != null && !isUuid(body.id)) || typeof body.ends_next_day !== "boolean" || !SHIFT_DUTIES.some((duty) => duty.value === body.duty)) throw new BtbApiError("Choose an employee and a valid shift duty.");
+  if (await btbEmployeeIsLocationManaged(db, body.employee_id)) throw new BtbApiError("Use the assigned location schedule for this employee.", 403);
   const shift = body as unknown as BtbShift;
   if (!shiftInterval(shift)) throw new BtbApiError("Enter valid start and end times. For an overnight close, choose “Ends next day”.");
   const result = await db.rpc("btb_save_shift", {
@@ -32,7 +33,7 @@ export const POST = btbRoute("staff_schedule", true, async ({ db, identity }, re
 export const DELETE = btbRoute("staff_schedule", true, async ({ db }, request) => {
   const body = await readBody(request);
   if (!isUuid(body.id) || !isVersion(body.version)) throw new BtbApiError("Choose a saved shift.");
-  const result = await db.from("btb_shifts").delete().eq("restaurant_name", BTB_RESTAURANT).eq("id", body.id).eq("version", body.version).select("id");
+  const result = await db.from("btb_shifts").delete().eq("restaurant_name", BTB_RESTAURANT).is("location_id", null).eq("id", body.id).eq("version", body.version).select("id");
   dbError(result.error, "The shift could not be removed.");
   if (result.data?.length !== 1) throw new BtbApiError("This shift changed. Reload the week before removing it.", 409);
   return { ok: true };

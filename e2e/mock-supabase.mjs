@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { btbDatabaseState, btbPostgrest, configureBtbDatabase, isBtbDatabaseTable, resetBtbDatabase } from "./btb-postgrest.mjs";
+import { btbDatabaseState, btbPostgrest, configureBtbDatabase, isBtbDatabaseTable, resetBtbDatabase, sqlTableRows } from "./btb-postgrest.mjs";
 
 // Test-only PostgREST/Auth fixture. Binds loopback, stores everything in memory,
 // and never forwards a request to an external service.
@@ -64,9 +64,9 @@ function seed() {
     inhouse_inspections: [],
     marketing_promotions: [{ ...scope, ...campaign, id: "71000000-0000-4000-8000-000000000001", title: "Autumn specials", status: "active", file_url: document.file_url, file_name: "autumn-specials.pdf", file_size: 1200 }, { ...scope, ...campaign, id: "71000000-0000-4000-8000-000000000002", title: "Winter menu launch", month: Number(monthAt(1).slice(5)), year: Number(monthAt(1).slice(0, 4)) }, { ...btb, ...campaign, user_id: btbUploader, location_id: null, id: "71000000-0000-4000-8000-000000000003", title: "Burger special", status: "active" }],
     social_media_calendar: [{ ...personal, user_id: userId("designer"), id: "72000000-0000-4000-8000-000000000001", post_date: today(), day: (new Date(`${today()}T12:00:00Z`).getUTCDay() + 6) % 7, channel: "Instagram", caption: "Seasonal menu" }],
-    corporate_dates: [{ id: "date1", title: "GST Return", category: "tax", due_date: today(), recurrence: "quarterly", notes: "Review the period before filing.", created_by: null, location_id: null, created_at: time }, { id: "date2", title: "FoodSafe site filing", category: "other", due_date: today(), recurrence: "none", notes: "Location-specific entry", created_by: null, location_id: east, created_at: time }],
+    corporate_dates: [{ id: "date1", title: "GST Return", category: "tax", due_date: today(), recurrence: "quarterly", notes: "Review the period before filing.", created_by: null, location_id: null, file_name: null, file_url: null, created_at: time }, { id: "date2", title: "FoodSafe site filing", category: "other", due_date: today(), recurrence: "none", notes: "Location-specific entry", created_by: null, location_id: east, file_name: null, file_url: null, created_at: time }],
     btb_checklists: [{ ...btb, id: "btb-check1", check_date: btbDay, completed: true }, { ...btb, id: "btb-check2", check_date: btbDay, completed: false }],
-    prep_counts: [{ ...btb, id: "prep1", count_date: btbDay }, { ...btb, id: "prep2", count_date: btbDay }],
+    prep_counts: [{ ...btb, id: "57000000-0000-4000-8000-000000000001", item_name: "Prep line one", count_date: btbDay }, { ...btb, id: "57000000-0000-4000-8000-000000000002", item_name: "Prep line two", count_date: btbDay }],
     cleaning_logs: [{ ...btb, id: "btb-clean1", done_date: btbDay }],
     order_sheets: [{ ...btb, id: "order1", order_date: btbDay }],
     btb_order_sheets: [{ restaurant_name: "Between the Buns", id: "60000000-0000-4000-8000-000000000002", order_date: btbDay, lines: [{ item_name: "White Bun - Not sliced", par: 12, on_hand: 3 }], saved_by_name: "Manager (shared workspace)" }],
@@ -94,8 +94,8 @@ const schemas = {
   marketing_promotions: { columns: "id,user_id,restaurant_name,title,description,file_name,file_url,file_size,month,year,status,category,size,person_name,location_id,created_at,updated_at", required: "user_id,restaurant_name,title,month,year" },
   social_media_calendar: { columns: "id,user_id,restaurant_name,day,channel,caption,post_date,created_at", required: "user_id,restaurant_name,day,channel,caption" },
   daily_checks: { columns: "id,user_id,restaurant_name,check_type,checklist_items,completed,completed_at,notes,created_at", required: "user_id,restaurant_name,check_type,checklist_items" },
-  compliance_documents: { columns: "id,restaurant_name,doc_type,name,file_name,file_url,issue_date,expiry_date,notes,uploaded_by,location_id,created_at", required: "restaurant_name,doc_type,name" },
-  corporate_dates: { columns: "id,location_id,title,category,due_date,recurrence,notes,created_by,created_at", required: "title,category,due_date,recurrence" },
+  compliance_documents: { columns: "id,restaurant_name,doc_type,name,file_name,file_url,file_size,issue_date,expiry_date,notes,uploaded_by,user_id,location_id,notify,notify_days,other_file_name,other_file_url,created_at", required: "restaurant_name,doc_type,name" },
+  corporate_dates: { columns: "id,location_id,title,category,due_date,recurrence,notes,file_name,file_url,created_by,created_at", required: "title,category,due_date,recurrence" },
 };
 
 function schemaError(table, fields, entries = []) {
@@ -240,6 +240,9 @@ async function handleRequest(req, res) {
   if (isBtbDatabaseTable(table) || url.pathname.startsWith("/rest/v1/rpc/btb_")) {
     const result = await btbPostgrest(table, req.method, url.searchParams, body, req.headers, url.pathname.includes("/rpc/"));
     if (fail?.afterCommit && result.status < 400) return send(res, fail.status ?? 500, { message: "Saved, but the response was lost (test fixture)", code: "FIXTURE_ERROR" });
+    // The prep sheet's atomic replay RPC persists to SQL while its ordinary
+    // reads still use the legacy JavaScript fixture table.
+    if (table === "btb_replay_prep_save" && result.status < 400) tables.prep_counts = await sqlTableRows("prep_counts");
     return send(res, result.status, result.body, result.headers);
   }
   tables[table] ??= [];

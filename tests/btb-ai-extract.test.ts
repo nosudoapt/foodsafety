@@ -22,6 +22,15 @@ test("purchase drafts accept printed currency strings and keep blanks as null", 
   assert.equal(line.line_total, 179.8);
 });
 
+test("extracted money never turns currency-only, malformed or coercible strings into a source amount", () => {
+  for (const total of [null, undefined, "", " ", "$", ",", "$ , ", "1,00.00", "12$34", "1e2", "0x10", "+10", false, [], {}, Number.NaN, Infinity]) {
+    assert.equal(normalizeDraft("local", { vendor: "Fixture supplier", total })!.total, null, String(total));
+  }
+  for (const [total, expected] of [[0, 0], ["$0.00", 0], [" 1,234.50 ", 1234.5], ["-$12.50", -12.5]] as const) {
+    assert.equal(normalizeDraft("local", { vendor: "Fixture supplier", total })!.total, expected);
+  }
+});
+
 test("sales drafts keep every labelled figure and drop unlabeled rows", () => {
   const draft = normalizeDraft("sales", {
     figures: [

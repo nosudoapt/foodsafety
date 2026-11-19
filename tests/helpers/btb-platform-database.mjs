@@ -1,26 +1,35 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { randomUUID, createHash } from "node:crypto";
 import { createBtbDatabase } from "./btb-database.mjs";
 
 const root = new URL("../../supabase/", import.meta.url);
-export const platformMigrations = ["foundation", "operations", "inventory", "marketing", "automation", "api"];
-export async function createPlatformDatabase(through = "api") {
-  const db = await createBtbDatabase();
-  await db.exec("ALTER TABLE locations ADD COLUMN name text NOT NULL DEFAULT 'Test location'; ALTER TABLE locations ADD COLUMN address text NOT NULL DEFAULT ''; ALTER TABLE locations ALTER COLUMN id SET DEFAULT gen_random_uuid(); GRANT ALL ON locations TO service_role;");
+export const platformMigrations = ["foundation", "operations", "inventory", "marketing", "automation", "api", "ai", "finance", "time"];
+
+// Upgrade the same database used by legacy/temperature browser workflows. Do
+// not copy the JavaScript-backed legacy inventory fixtures (their IDs are not
+// PostgreSQL UUIDs) into the independent location-scoped inventory store.
+export async function initializePlatformDatabase(db, through = "time") {
+  if (!platformMigrations.includes(through)) throw new Error(`Unknown platform release: ${through}`);
+  await db.exec("ALTER TABLE locations ADD COLUMN IF NOT EXISTS name text NOT NULL DEFAULT 'Test location'; ALTER TABLE locations ADD COLUMN IF NOT EXISTS address text NOT NULL DEFAULT ''; ALTER TABLE locations ALTER COLUMN id SET DEFAULT gen_random_uuid(); GRANT ALL ON locations TO service_role;");
   const core = readFileSync(new URL("schema.sql", root), "utf8");
   for (const table of ["equipment", "temperature_records"]) {
     await db.exec(core.match(new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\([\\s\\S]*?^\\);`, "m"))[0].replaceAll("uuid_generate_v4()", "gen_random_uuid()"));
   }
-  await db.exec("ALTER TABLE temperature_records ADD COLUMN location_id uuid REFERENCES locations(id);");
+  await db.exec("ALTER TABLE temperature_records ADD COLUMN IF NOT EXISTS location_id uuid REFERENCES locations(id);");
   for (const file of ["schema-month-end-inventory.sql", "schema-inventory-summary.sql", "schema-inventory-purchases.sql", "schema-inventory-snapshots.sql", "schema-inventory-audit.sql"]) {
     await db.exec(readFileSync(new URL(file, root), "utf8").replaceAll("uuid_generate_v4()", "gen_random_uuid()"));
   }
   for (const name of platformMigrations) {
     const file = new URL(`schema-btb-platform-${name}.sql`, root);
-    if (existsSync(file)) await db.exec(readFileSync(file, "utf8"));
+    await db.exec(readFileSync(file, "utf8"));
     if (name === through) break;
   }
-  return db;
+}
+
+export async function createPlatformDatabase(through = "time") {
+  const db = await createBtbDatabase();
+  try { await initializePlatformDatabase(db, through); return db; }
+  catch (error) { await db.close(); throw error; }
 }
 export const IDS = {
   a: "10000000-0000-4000-8000-000000000001", b: "10000000-0000-4000-8000-000000000002",

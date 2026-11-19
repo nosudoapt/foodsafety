@@ -183,13 +183,16 @@ test("BTB compliance tabs use company scope even alongside an active FoodSafe se
   await signInFoodSafe(page, "owner");
   await expect(page.getByRole("heading", { name: "Your business, at a glance." })).toBeVisible();
   await signInBtb(page, "manager", "/between-the-buns/compliance");
-  await expect(page.getByRole("article", { name: "BTB food premises licence", exact: true })).toBeVisible();
-  await expect(page.getByRole("article", { name: "Food premises licence", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Add renewal", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Add renewal", exact: true });
-  await dialog.getByLabel("Name", { exact: true }).fill("BTB trading permit");
-  await dialog.getByLabel("Expiry date").fill(dateAhead(20));
-  await dialog.getByRole("button", { name: "Save renewal" }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: "BTB food premises licence" })).toBeVisible();
+  await expect(page.getByText("Food premises licence", { exact: true })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Add documents", exact: true }).click();
+  await page.getByRole("button", { name: "Just a deadline (no document)", exact: true }).click();
+  await page.getByLabel("What is it?").fill("BTB trading permit");
+  await page.getByLabel("Type — decides where it goes").selectOption("business_license");
+  await page.getByLabel("Expiry date").fill(dateAhead(20));
+  await page.getByRole("button", { name: "Save all", exact: true }).click();
+  await expect(page.locator(".compliance-upload__status")).toContainText("the Renewals register");
+  await page.getByRole("tab", { name: "Renewals", exact: true }).click();
   await expect(page.getByRole("article", { name: "BTB trading permit" })).toBeVisible();
   await capture(page, info, "btb-compliance-hub");
   const renewals = page.getByRole("tab", { name: "Renewals", exact: true });
@@ -203,7 +206,10 @@ test("BTB compliance tabs use company scope even alongside an active FoodSafe se
   await expect(page.getByRole("tab", { name: "Email reminders" })).toBeFocused();
   await page.getByRole("tab", { name: "Business documents" }).click();
   await expect(page.getByRole("article", { name: "BTB service standards" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Upload document", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Upload document", exact: true })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Add documents", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Just a deadline (no document)", exact: true })).toBeVisible();
+  await page.getByRole("tab", { name: "Business documents", exact: true }).click();
   await page.setViewportSize({ width: 375, height: 812 });
   await capture(page, info, "mobile-btb-compliance-documents");
   await page.goto("/between-the-buns/marketing");
@@ -219,8 +225,9 @@ test("BTB compliance tabs use company scope even alongside an active FoodSafe se
 test("saved BTB restrictions apply inside the combined compliance hub", async ({ page, fixture }) => {
   await fixture.configure({ tables: { role_page_access: [{ role: "supervisor", page: "documents", allowed: false }, { role: "supervisor", page: "tax-dates", allowed: false }] } });
   await signInBtb(page, "supervisor", "/between-the-buns/compliance");
-  await expect(page.getByRole("article", { name: "BTB food premises licence", exact: true })).toBeVisible();
-  await expect(page.getByRole("tab")).toHaveCount(2);
+  await expect(page.getByRole("listitem").filter({ hasText: "BTB food premises licence" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Tax & filing dates" })).toHaveCount(0);
+  await expect(page.getByRole("tab", { name: "Business documents" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add renewal", exact: true })).toHaveCount(0);
   expect((await fixture.state()).requests.some((request) => request.path.endsWith("/business_documents") || request.path.endsWith("/corporate_dates"))).toBeFalsy();
 });

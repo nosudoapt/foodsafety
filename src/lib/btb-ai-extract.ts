@@ -35,11 +35,13 @@ const SYSTEM_PROMPT = [
 const KIND_CONTRACT: Record<ExtractKind, string> = {
   gfs: `Extract a GFS invoice. Return JSON:
 {"vendor":"supplier name as printed","reference":"invoice number","date":"YYYY-MM-DD or null","total":"invoice total as printed",
- "lines":[{"description":"item description","item_code":"item code","cases":number|null,"packets":number|null,"unit_price":number|null,"line_total":number|null}]}
-Include one line per invoice row, in order.`,
+ "subtotal":number|null,"gst":number|null,"other_tax":number|null,"charges":number|null,
+ "lines":[{"description":"item description","item_code":"item code","cases":number|null,"packets":number|null,"unit_price":number|null,"line_total":number|null,"price_basis":"case"|"packet"|null}]}
+Include one line per invoice row, in order. Use CONFIRMED/delivered quantity, not ordered quantity. CS means cases, EA/PK means packets. Only extract a tax amount explicitly labelled on the document; never infer GST from the difference between totals.`,
   local: `Extract a local purchase receipt. Return JSON:
 {"vendor":"shop or supplier name (may be absent on a till receipt — use null)","reference":"receipt/invoice number or null","date":"YYYY-MM-DD or null","total":"receipt total as printed",
- "lines":[{"description":"item text","item_code":null,"cases":null,"packets":null,"unit_price":number|null,"line_total":number|null}]}
+ "subtotal":number|null,"gst":number|null,"other_tax":number|null,"charges":number|null,
+ "lines":[{"description":"item text","item_code":null,"cases":null,"packets":null,"unit_price":number|null,"line_total":number|null,"price_basis":"case"|"packet"|null}]}
 For till receipts put the printed quantity in packets when a per-item amount exists.`,
   sales: `Extract the monthly POS sales summary. Return JSON:
 {"figures":[{"label":"the report's own line label, e.g. Total Net Sales","value":number}]}

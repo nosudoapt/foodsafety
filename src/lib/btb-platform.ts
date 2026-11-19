@@ -3,7 +3,7 @@
 import type { BtbRole } from "./btb-roles";
 import { isIsoDate, isUuid } from "./btb-team";
 
-export type PlatformModule = "operations" | "inventory" | "marketing" | "compliance" | "reports" | "settings" | "notifications";
+export type PlatformModule = "operations" | "schedule" | "inventory" | "finance" | "marketing" | "compliance" | "reports" | "settings" | "notifications";
 
 export interface PlatformLocation {
   id: string;
@@ -17,7 +17,9 @@ export interface PlatformBootstrap { identity: PlatformIdentity; locations: Plat
 
 export const PLATFORM_MODULES: Record<PlatformModule, { title: string; roles: readonly BtbRole[] }> = {
   operations: { title: "Daily operations", roles: ["staff", "supervisor", "manager", "corporate", "owner"] },
+  schedule: { title: "Schedule & hours", roles: ["staff", "supervisor", "manager", "corporate", "owner"] },
   inventory: { title: "Inventory & food cost", roles: ["manager", "corporate", "owner"] },
+  finance: { title: "Finance & stock", roles: ["manager", "corporate", "owner"] },
   marketing: { title: "Design & promotions", roles: ["manager", "designer", "corporate", "owner"] },
   compliance: { title: "Compliance & expiry", roles: ["staff", "supervisor", "manager", "corporate", "owner"] },
   reports: { title: "Reports & delivery", roles: ["manager", "corporate", "owner"] },
@@ -32,7 +34,7 @@ export function platformCan(role: BtbRole, module: PlatformModule): boolean {
 export const PLATFORM_SLUG = "platform";
 export const PLATFORM_PATH = "/between-the-buns/platform";
 
-/** Read models exposed by btb_platform_read (release 11). */
+/** Read models exposed by btb_platform_read (release 11). Finance and time use their own scoped endpoints. */
 export const PLATFORM_READ_MODULES = ["operations", "inventory", "marketing", "compliance", "reports", "settings", "notifications"] as const;
 export type PlatformReadModule = (typeof PLATFORM_READ_MODULES)[number];
 

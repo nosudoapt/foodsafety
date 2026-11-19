@@ -66,12 +66,23 @@ function ComplianceHub({ readOnly }: { readOnly: boolean }) {
   return (
     <div className="compliance-hub">
       <PageHeader
-        title="Compliance"
+        title="Compliance, docs & reminders"
         subtitle="One place for everything that expires, needs a certificate or needs a reminder — set up once, then just answer what needs you today."
       />
       <nav className="dash__segmented compliance-hub__tabs" role="tablist" aria-label="Compliance sections">
-        {tabs.map((t) => (
+        {tabs.map((t, index) => (
           <button key={t.id} role="tab" aria-pressed={active === t.id} aria-selected={active === t.id}
+            tabIndex={active === t.id ? 0 : -1}
+            onKeyDown={(event) => {
+              const last = tabs.length - 1;
+              const target = event.key === "ArrowRight" ? (index + 1) % tabs.length
+                : event.key === "ArrowLeft" ? (index - 1 + tabs.length) % tabs.length
+                : event.key === "Home" ? 0 : event.key === "End" ? last : null;
+              if (target === null) return;
+              event.preventDefault();
+              setTab(tabs[target].id);
+              event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[target]?.focus();
+            }}
             onClick={() => setTab(t.id)}>
             {t.id === "home" && <ShieldCheck size={15} aria-hidden="true" />}
             {t.id === "upload" && <UploadCloud size={15} aria-hidden="true" />}
@@ -80,6 +91,7 @@ function ComplianceHub({ readOnly }: { readOnly: boolean }) {
         ))}
       </nav>
 
+      <div role="tabpanel" aria-label={tabs.find((t) => t.id === active)?.label} className="compliance-hub__panel">
       {active === "home" && <ComplianceHome readOnly={readOnly} onOpen={(next) => setTab(next)} tabs={tabs.map((t) => t.id)} />}
       {active === "upload" && <MultiDocumentUpload restaurant={BTB_RESTAURANT} />}
       {active === "renewals" && <ComplianceRegister readOnly={readOnly} restaurant={BTB_RESTAURANT} showHeader={false} embedded />}
@@ -88,6 +100,7 @@ function ComplianceHub({ readOnly }: { readOnly: boolean }) {
       {active === "documents" && <DocumentVault title="Business documents" subtitle="Forms, SOPs, brand assets & menus — files that don’t expire."
         readOnly={!btbCanEdit("documents", identity.role)} showHeader={false} embedded uploader={{ restaurantName: BTB_RESTAURANT }} />}
       {active === "reminders" && <LicenceRemindersPage />}
+      </div>
     </div>
   );
 }

@@ -356,12 +356,13 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
 .ops-shell { display: grid; gap: 16px; min-width: 0; }
 .ops-toolbar-left { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; min-width: 0; }
 .ops-module-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px; background: var(--paper-2); border: 1px solid var(--line); border-radius: var(--r-pill); }
-.ops-module-tabs > button { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 16px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted-2); font-size: .875rem; font-weight: 500; cursor: pointer; transition: background-color var(--t-fast), color var(--t-fast); }
+.ops-module-tabs > button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border: 0; border-radius: var(--r-pill); background: transparent; color: var(--muted-2); font-size: .875rem; font-weight: 500; cursor: pointer; transition: background-color var(--t-fast), color var(--t-fast); }
 .ops-module-tabs > button:hover { background: var(--surface); color: var(--ink); }
 .ops-module-tabs > button[aria-current="page"] { background: var(--surface); color: var(--brand); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / .06); }
 .ops-date-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .ops-date-nav .ui-input { width: auto; }
 .ops-panel { display: grid; gap: 18px; min-width: 0; }
+.ops-panel[hidden] { display: none; }
 .ops-panel > .ui-card { min-width: 0; }
 .ops-section-title { font: 400 1.65rem/1.3 var(--font-display); letter-spacing: -.02em; }
 .ops-checklist-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
@@ -487,3 +488,37 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
 .compliance-upload__status { flex-shrink: 0; padding-top: 4px; }
 .compliance-upload__preview { width: 100%; height: 60vh; border: 1px solid var(--line); border-radius: var(--r-sm); background: white; }
 @media print { .compliance-hub__tabs, .compliance-overview__actions, .compliance-upload { display: none !important; } }
+
+/* Keep the hub's section switcher tidy instead of ragged wrapped rows on phones. */
+@media (max-width: 720px) {
+  .compliance-hub__tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .compliance-hub__tabs > button { justify-content: center; text-align: center; }
+  .ops-table :is(th, td) { padding: 11px 12px; }
+}
+
+/* Reviewed finance and actual staff time reuse the workspace's semantic tokens. */
+:is(.finance-workspace, .staff-time-workspace, .inventory-workspace) .ui-card > .ops-panel { padding: 24px; }
+.finance-row-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
+.finance-row-actions :is(.ui-button, .ops-link) { min-height: 44px; }
+.finance-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 0; }
+.finance-figures > div { display: grid; align-content: start; gap: 6px; padding: 16px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--paper); min-width: 0; }
+.finance-figures dt { color: var(--muted-2); font-size: .875rem; }
+.finance-figures dd { margin: 0; color: var(--ink); font-size: 1.25rem; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.finance-line { padding: 20px; border: 1px solid var(--line); border-radius: var(--r-md); }
+.finance-audit { display: grid; gap: 12px; margin: 12px 0 0; padding-left: 24px; font-size: .875rem; overflow-wrap: anywhere; }
+:is(.finance-workspace, .staff-time-workspace) .ops-table { min-width: 760px; }
+:is(.finance-workspace, .staff-time-workspace) .ops-table-wrap { max-width: 100%; }
+:is(.finance-workspace, .staff-time-workspace) .ops-table td { overflow-wrap: anywhere; }
+:is(.finance-workspace, .staff-time-workspace) summary { min-height: 44px; padding-block: 10px; cursor: pointer; font-weight: 600; }
+.finance-preview { max-height: 320px; }
+@media (max-width: 1000px) {
+  .finance-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 600px) {
+  :is(.finance-workspace, .staff-time-workspace, .inventory-workspace) .ui-card > .ops-panel { padding: 16px; }
+  .finance-line { padding: 14px; }
+  .finance-figures { gap: 10px; }
+  .finance-figures > div { padding: 12px; }
+  .ops-module-tabs { border-radius: var(--r-md); width: 100%; }
+  .ops-module-tabs > button { flex: 1 1 140px; justify-content: center; padding-inline: 12px; }
+}

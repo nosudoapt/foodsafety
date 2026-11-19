@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   itemKey,
   parKeys,
@@ -129,6 +129,8 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pullMissing, setPullMissing] = useState(false);
+  // A slow sheet/date read must not overwrite what the user started typing.
+  const editedSinceLoad = useRef(false);
   const [offlineOps, setOfflineOps] = useState<OfflineOp[]>([]);
   const offlinePending = offlineOps.length;
   const [syncing, setSyncing] = useState(false);
@@ -208,6 +210,8 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
 
   const handleDateChange = (newDate: string) => {
     if (!isIsoDate(newDate) || newDate === date || saving) return;
+    // A fresh load is starting; only edits made after this point win.
+    editedSinceLoad.current = false;
     setDate(newDate);
     setLoading(true);
     setSavedAt(null);
@@ -243,18 +247,20 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
         );
         const maps = buildParMaps(histRows, date);
 
-        const next: PrepData = { ...sheet?.data };
-        for (const key of prepCatalog) {
-          if (Object.hasOwn(next, key)) continue;
-          // Nothing saved for this date yet — seed PAR so a manager doesn't
-          // retype it every day. On Hand stays blank: staff still counts it.
-          const snap = PAR_KEY_SET.has(key) ? parFor(maps, key) : undefined;
-          next[key] = snap && snap.par > 0 ? { ...EMPTY, par: String(snap.par), urgent: !!snap.urgent } : { ...EMPTY };
+        if (!editedSinceLoad.current) {
+          const next: PrepData = { ...sheet?.data };
+          for (const key of prepCatalog) {
+            if (Object.hasOwn(next, key)) continue;
+            // Nothing saved for this date yet — seed PAR so a manager doesn't
+            // retype it every day. On Hand stays blank: staff still counts it.
+            const snap = PAR_KEY_SET.has(key) ? parFor(maps, key) : undefined;
+            next[key] = snap && snap.par > 0 ? { ...EMPTY, par: String(snap.par), urgent: !!snap.urgent } : { ...EMPTY };
+          }
+          setPrepData(next);
+          setSavedAt(null);
         }
-        setPrepData(next);
         setError(null);
         setSheetError("");
-        setSavedAt(null);
       } catch {
         if (!cancelled) setSheetError("This day’s saved prep sheet couldn’t be loaded. Please try again.");
       } finally {
@@ -268,6 +274,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   }, [date, sheetRevision]);
 
   const updateEntry = (key: string, field: keyof PrepEntry, value: string | boolean) => {
+    editedSinceLoad.current = true;
     setSavedAt(null);
     setPrepData((prev) => {
       const current = prev[key] || { ...EMPTY };
@@ -349,6 +356,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   };
 
   const loadPrepList = (list: SavedPrepList) => {
+    editedSinceLoad.current = false;
     setLoading(true);
     setDate(list.date);
     setSheetRevision((value) => value + 1);
@@ -367,7 +375,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
   }).length;
 
   const tabClass = (tab: typeof activeTab) =>
-    `px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
+    `whitespace-nowrap px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
       activeTab === tab ? "bg-red-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
     }`;
 
@@ -422,7 +430,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
           </div>
 
           {/* Tabs */}
-          <div className="mt-3 flex justify-center gap-2 print:hidden">
+          <div className="mt-3 flex flex-wrap justify-center gap-2 print:hidden">
             <button onClick={() => setActiveTab("today")} className={tabClass("today")}>
               Today&apos;s Prep
             </button>
@@ -440,7 +448,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
             {error}
           </div>
         )}
-        {sheetError && <div className="ui-notice ui-notice--error"><p role="alert">{sheetError}</p><button className="ui-button ui-button--ghost" disabled={loading} onClick={() => { setLoading(true); setSheetRevision((value) => value + 1); }}>Retry saved sheet</button></div>}
+        {sheetError && <div className="ui-notice ui-notice--error"><p role="alert">{sheetError}</p><button className="ui-button ui-button--ghost" disabled={loading} onClick={() => { editedSinceLoad.current = false; setLoading(true); setSheetRevision((value) => value + 1); }}>Retry saved sheet</button></div>}
 
         {/* Records are stored on this device, not falsely reported as database saves. */}
         {offlinePending > 0 && <OfflineQueueNotice ops={offlineOps} syncing={syncing} onRetry={() => { void retryOffline(); }} />}
@@ -475,7 +483,7 @@ function PrepList({ readOnly, canEditPar }: { readOnly: boolean; canEditPar: boo
 
             {/* Save Button */}
             {!readOnly && (
-              <div className="mt-6 flex gap-3">
+              <div className="mt-6 flex flex-wrap gap-3">
                 <button
                   onClick={savePrepList}
                   disabled={saving || loading || !!sheetError}

@@ -1,6 +1,16 @@
 # BTB — next-session handoff
 
-Updated: 2026-11-16 after the QA security pass. Continue with focused reads; completed features do not need rebuilding. The November 2 verification is retained separately from the latest work.
+Updated: 2026-11-19 after completing finance/time, the Playwright repairs and UI polish. Continue with focused reads; completed features do not need rebuilding. Earlier November handoffs below are historical unless explicitly reaffirmed here.
+
+## November 19 completed-work publication
+
+- The user authorized committing and pushing all completed work. Push target: **`btb/finance-stock-schedule-polish`**, including the 25 earlier unpushed QA/security commits. `main` is linked to the production Vercel sites; do not merge there or deploy without separate approval.
+- **No new top-level hub cards.** `src/lib/btb-hub.ts` is unchanged from `origin/main`. New modules inside **Location Workspace** are **Finance & stock** (Invoices, Stock & prices, GST, Bank reconciliation) and **Schedule & hours** (clocking, explained corrections, manager approval and approved-hours CSV with UTC timestamps).
+- Updated existing workflows: Location Workspace, Staff Schedule, Daily Prep Sheet, Month-End Inventory, Compliance and Temperature Log. The earlier QA commits also harden login/vault, operation timing, notifications and offline replay.
+- Prep reads preserve fresh edits; replay saves allow 5,000 rows and retain the complete 1,101-item archived sheet. SQL/legacy browser fixtures agree on committed saves without replacing other-site/restaurant rows. Compliance has keyboard tabs and a two-column phone switcher; narrow tables and prep actions were polished.
+- Completed application verification: **102/102 Playwright tests**, **467 Node tests passed, one skipped** locally, standalone TypeScript, normal `npm run build` and `git diff --check`. A fresh staged-source checkout also passed: **466 Node tests, two skipped, zero failures**. Its additional skip is the real-invoice PDF check because that private source document is deliberately ignored; synthetic reader tests remain runnable.
+- **Production is unchanged.** Finance release `12`, time release `13`, AI and the other SQL fixes remain source files/local test releases only. Do not run `db:migrate`, create `_migrations` or apply `supabase/*.sql` to production. Local-only release order and invariants: [BTB platform local setup](deploy/BTB_PLATFORM_LOCAL_SETUP.md).
+- Secrets, private references, dependencies and generated test/build output stay local. The last Playwright run rebuilt ignored `.next` for loopback fixtures; it is not a deployable production artifact.
 
 ## November 2026 QA correction (HTTP-01)
 
@@ -38,9 +48,9 @@ Updated: 2026-11-16 after the QA security pass. Continue with focused reads; com
 
 - Repository: `/Users/nitpreetsingh/Documents/GitHub/FoodSafeHere/foodsafety` (the parent folder is not a Git repo).
 - This release includes the accumulated application work and the localhost stale-cache fix. Check `git status` before further edits and preserve any user changes. Neither release SQL transaction has been confirmed live. The dedicated Supabase Auth/profile uploader has been provisioned and verified live.
-- Git origin: `github.com/nosudoapt/foodsafety.git`, branch `main`. GitHub commit statuses confirm Vercel integrations for both `foodsafety` and `bitesbrew` under `nosudoapts-projects`. The user requested committing/pushing this release; verify the current commit's deployment status before checking the live app.
+- Git origin: `github.com/nosudoapt/foodsafety.git`. The November 19 work belongs on `btb/finance-stock-schedule-polish`, not production-linked `main`. Historical GitHub statuses confirm Vercel integrations for both `foodsafety` and `bitesbrew` under `nosudoapts-projects`; the current authorization is GitHub publication only.
 - Read `AGENTS.md`; before code changes, consult relevant local Next.js documentation under `node_modules/next/dist/docs/`.
-- **No verification job is running.** The normal `.env.local` production build has replaced the browser-fixture build.
+- **No application verification job is running.** The latest ignored `.next` is a browser-fixture build, not a production deployment artifact. GitHub publication includes source only.
 
 ## Remaining work, in order
 
@@ -123,7 +133,7 @@ One **Loyalty Rewards** card contains employee/customer guides for staff, superv
 ## Live deployment blockers
 
 - Neither `supabase/schema-btb-team-operations.sql` nor `supabase/schema-btb-uploads.sql` has been **confirmed applied live**; the public documents API still returns 503. The user will use SQL Editor, so the historical **28P01** database-password failure is not a blocker for this chosen workflow.
-- Missing local email configuration: `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET`. Production setup, real manager/corporate recipients and deployed scheduling remain outstanding. Separate BTB login environment variables are no longer needed.
+- Missing local email configuration: `RESEND_API_KEY`, `BTB_EMAIL_FROM`, `CRON_SECRET`. Production setup, real manager/corporate recipients and deployed scheduling remain outstanding. The November QA correction requires `BTB_PASSWORD` before any separately authorized application deployment.
 - Both Vercel projects successfully deployed temperature/prep application commit `1ec8471` after login commit `8e1d98b`; public FoodSafety login and all three restored/reviewed workflows are verified. Generated deployment URLs require Vercel authentication.
 - Reminder settings default to disabled with empty recipients. Reminders use `[30, 7, 1, 0]` days, five-minute leases, frozen retry content/provider keys, **three total delivery attempts**, and stop uncertain retries after 23 hours. Manual dispatch: 30 claims/45 seconds; cron: 300/270 seconds with a 300-second route maximum. Daily schedule: **15:00 UTC / 09:00 America/Regina** (`vercel.json`). Browser simulation is not proof of real inbox delivery.
 - The real uploader is ready. Copy its UUID to Vercel, then confirm live document/marketing responses include `uploader.connected: true` after deployment. Auth `listUsers` previously returned HTTP 500 and a later profile reread hit transient HTTP 522; the script now uses targeted lookups, and the final live verification/rerun succeeded.
@@ -138,7 +148,7 @@ One **Loyalty Rewards** card contains employee/customer guides for staff, superv
 - `e2e/mock-supabase.mjs`: Saskatchewan-dated fixtures and HTTP error responses instead of server termination.
 - `e2e/manuals.spec.ts`: independent manuals sessions, role/site restrictions, read-failure recovery and complete section pagination. `src/lib/training-manuals.ts` is the shared server-only reader.
 - `e2e/btb-uploads.spec.ts`, `tests/btb-uploads-database.test.mjs`: real profile FKs, role/session isolation, retained drafts, connection recovery, validation, scope and pagination. `src/lib/btb-uploader.ts` and `scripts/provision-btb-uploader.mjs` implement profile resolution/provisioning.
-- Browser fixtures: PGlite-backed SQL, `127.0.0.1:5101` / `5102`; FoodSafe `${role}@workspace.test` and individual employees use `BrowserTest!234`; shared BTB `${role}@btb.demo` accounts use `admin1234`. Fake service key: `browser-test-service-key`.
+- Browser fixtures: PGlite-backed SQL, `127.0.0.1:5101` / `5102`; FoodSafe `${role}@workspace.test` and individual employees use `BrowserTest!234`; shared BTB `${role}@btb.demo` accounts use `browser-test-shared-password`. Fake service key: `browser-test-service-key`.
 - Email simulation is loopback-only via `/__test/send-email`; includes rejection and accepted-then-500 cases. Browser-origin checks compare against the incoming Host header.
 - PDF raster reviews: `/private/var/folders/ls/qsfwpxnx2rx4ln2q5kf7qglr0000gn/T/opencode/btb-final-print-review/` (created using `pdfjs-dist/legacy/build/pdf.mjs` and `@napi-rs/canvas`).
 - The development app remains at **http://127.0.0.1:5001**. Read-only local real-data screenshots use `btb-restored-live-*.png`; published-site captures use `btb-published-*.png`, under `/private/var/folders/ls/qsfwpxnx2rx4ln2q5kf7qglr0000gn/T/opencode/`. The read-only public verification script is `btb-release-smoke.cjs` in that same temporary directory.

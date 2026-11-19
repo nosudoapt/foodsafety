@@ -301,17 +301,22 @@ export interface PurchaseLineDraft {
   packets: string;
   unit_price: string;
   line_total: string;
+  price_basis: "case" | "packet" | "";
+  stock_excluded: boolean;
 }
 
 /** Document kinds the AI extractor (and the import pipeline) understand. */
 export type ExtractKind = ImportKind;
 
-const draftNumber = (value: unknown): number | null =>
-  typeof value === "number" && Number.isFinite(value) ? value
-  : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value.replace(/[$,]/g, ""))) ? Number(value.replace(/[$,]/g, ""))
-  : null;
+const draftNumber = (value: unknown): number | null => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  if (!/^-?\$?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?$/.test(text)) return null;
+  const number = Number(text.replace(/[$,]/g, ""));
+  return Number.isFinite(number) ? number : null;
+};
 const draftText = (value: unknown): string | null => (typeof value === "string" && value.trim() !== "" ? value.trim() : null);
-const draftRows = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
 
 /**
  * Shape-validate an AI draft before it reaches the review screen.
@@ -323,15 +328,13 @@ export function normalizeDraft(kind: ExtractKind, raw: unknown): Record<string, 
   if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
   if (kind === "sales") {
-    const figures = draftRows(source.figures)
-      .map((row) => row as Record<string, unknown>)
+    const figures = rowsOf(source.figures)
       .filter((row) => draftText(row.label) !== null && draftNumber(row.value) !== null)
       .map((row) => ({ label: draftText(row.label), value: draftNumber(row.value) }));
     return figures.length ? { figures } : null;
   }
   if (kind === "master") {
-    const items = draftRows(source.items)
-      .map((row) => row as Record<string, unknown>)
+    const items = rowsOf(source.items)
       .filter((row) => draftText(row.name) !== null)
       .map((row) => ({
         item_number: draftText(row.item_number),
@@ -347,8 +350,7 @@ export function normalizeDraft(kind: ExtractKind, raw: unknown): Record<string, 
       }));
     return items.length ? { items } : null;
   }
-  const lines = draftRows(source.lines)
-    .map((row) => row as Record<string, unknown>)
+  const lines = rowsOf(source.lines)
     .filter((row) => draftText(row.description) !== null)
     .map((row) => ({
       description: draftText(row.description),
@@ -357,12 +359,18 @@ export function normalizeDraft(kind: ExtractKind, raw: unknown): Record<string, 
       packets: draftNumber(row.packets),
       unit_price: draftNumber(row.unit_price),
       line_total: draftNumber(row.line_total),
+      price_basis: row.price_basis === "case" || row.price_basis === "packet" ? row.price_basis : null,
     }));
   const draft = {
     vendor: draftText(source.vendor),
     reference: draftText(source.reference),
     date: draftText(source.date),
+    due_date: draftText(source.due_date),
     total: draftNumber(source.total),
+    subtotal: draftNumber(source.subtotal),
+    gst: draftNumber(source.gst),
+    other_tax: draftNumber(source.other_tax),
+    charges: draftNumber(source.charges),
     lines,
   };
   return draft.vendor || draft.total !== null || lines.length ? draft : null;
@@ -381,6 +389,8 @@ export function purchaseLineDraft(row: Record<string, unknown> = {}): PurchaseLi
     packets: qty("packets"),
     unit_price: qty("unit_price"),
     line_total: qty("line_total"),
+    price_basis: row.price_basis === "packet" || row.price_basis === "case" ? row.price_basis : "",
+    stock_excluded: row.stock_excluded === true,
   };
 }
 
@@ -439,18 +449,11 @@ export function purchaseLinesProblem(lines: readonly PurchaseLineDraft[]): strin
     const packets = parseQuantity(line.packets);
     if (cases === null) return `${where}: enter cases (0 if none).`;
     if (packets === null) return `${where}: enter packets (0 if none).`;
-    // A line with no quantity needs no price, but a line someone counted must
-    // carry its confirmed total; a blank total is missing, never zero.
-    if (cases > 0 || packets > 0) {
-      if (parseQuantity(line.line_total) === null) {
-        return `${where}: enter the confirmed line total.`;
-      }
-      if (line.unit_price.trim() !== "" && parseQuantity(line.unit_price) === null) {
-        return `${where}: the unit price is not a number.`;
-      }
-    }
+    if (parseQuantity(line.line_total) === null) return `${where}: enter the confirmed line total (0 only when verified).`;
+    if (line.unit_price.trim() !== "" && parseQuantity(line.unit_price) === null) return `${where}: the unit price is not a number.`;
+    if (line.unit_price.trim() !== "" && !line.price_basis) return `${where}: choose whether the printed price is per case or packet.`;
   }
-  return null;
+  return lines.length ? null : "Review at least one invoice line.";
 }
 
 /** One prerequisite shown in the month's readiness strip. */

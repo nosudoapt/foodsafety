@@ -163,7 +163,7 @@ test("designer is walled into the Marketing Portal", () => {
 });
 
 // The proxy matcher drives both gates: the Supabase gate (PROTECTED_PREFIXES)
-// and the BTB cookie gate. Everything but BTB must mirror the Supabase list.
+// and BTB's cookie/CSRF gates. Non-BTB entries mirror the Supabase list.
 test("proxy matcher stays in sync with PROTECTED_PREFIXES", () => {
   const source = readFileSync(join(__dirname, "../../src/proxy.ts"), "utf8");
   const block = source.match(/matcher:\s*\[([\s\S]*?)\]/);
@@ -176,6 +176,7 @@ test("proxy matcher stays in sync with PROTECTED_PREFIXES", () => {
   const prefixes = entries.map((e) => e.replace(/\/:path\*$/, ""));
 
   assert.ok(prefixes.includes("/between-the-buns"), "BTB must be matched so its cookie gate runs");
-  const supabaseGated = prefixes.filter((p) => p !== "/between-the-buns");
+  assert.ok(prefixes.includes("/api/btb"), "BTB APIs must be matched so the extra CSRF gate runs");
+  const supabaseGated = prefixes.filter((p) => p !== "/between-the-buns" && p !== "/api/btb");
   assert.deepEqual([...supabaseGated].sort(), [...PROTECTED_PREFIXES].sort());
 });
