@@ -1,4 +1,4 @@
-import { btbRoute, BtbApiError, dbError, readAll, readBody } from "@/lib/btb-api";
+import { btbRoute, BtbApiError, dbError, readAll, readBody, requireBtbAccess } from "@/lib/btb-api";
 import { btbCanEdit } from "@/lib/btb-access";
 import { BTB_RESTAURANT, isUuid } from "@/lib/btb-team";
 import { BTB_UPLOAD_BODY_BYTES } from "@/lib/btb-uploads";
@@ -32,12 +32,16 @@ export const POST = btbRoute("documents", true, async ({ db, identity }, request
   // reminder timing rides along (type default, a fixed window, or off).
   const expiry = typeof body.expiry_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.expiry_date) ? body.expiry_date : null;
   if (expiry) {
+    // Routing an upload never inherits the source page's authorization.
+    await requireBtbAccess("compliance", true);
     const docType = typeof body.doc_type === "string" && body.doc_type.trim() ? body.doc_type.trim() : "other";
     const notify = body.notify !== false;
     const notifyDays = notify && Number.isInteger(body.notify_days) ? Math.max(0, Math.min(365, body.notify_days as number)) : null;
     const renewal = await db.from("compliance_documents").insert({
       restaurant_name: BTB_RESTAURANT, location_id: null, doc_type: docType, name, expiry_date: expiry,
-      notes, notify, notify_days: notifyDays, uploaded_by: profile, ...file,
+      // Renewals have attachment names/URLs, not the plain vault's file_size
+      // column. parseBtbUpload has already enforced the decoded 3 MiB limit.
+      notes, notify, notify_days: notifyDays, uploaded_by: profile, file_name: file.file_name, file_url: file.file_url,
     }).select("id").single();
     dbError(renewal.error, "The upload wasn’t saved to Renewals. Your file and details are still here; please try again.");
     return { document: null, routedToRenewals: true };

@@ -1,0 +1,4 @@
+/* Do not snapshot a signed-in BTB document across login/logout boundaries.
+   This also avoids Chromium's aborted cross-document transition race. Only
+   BTB imports this stylesheet; FoodSafe's motion and selectors stay intact. */
+@view-transition { navigation: none; }

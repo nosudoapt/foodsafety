@@ -159,6 +159,11 @@
       "step": 33,
       "file": "schema-btb-invitations.sql",
       "description": "Transactional person invitations, one-time password setup, existing employee credentials and unioned location page grants."
+    },
+    {
+      "step": 34,
+      "file": "fix-btb-page-capabilities.sql",
+      "description": "Live role/location page grants, read/write browser capabilities, restrictive RLS and checked atomic prep replay."
     }
   ]
 }

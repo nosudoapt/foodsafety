@@ -12,34 +12,43 @@ import { searchBtbCards } from "@/lib/btb-dashboard";
 import { btbCardForPath } from "@/lib/btb-page-access";
 import { BTB_ROLE_LABELS } from "@/lib/btb-roles";
 import { fetchJson } from "@/lib/fetch-json";
+import { announceBtbSessionChange, clearBtbPublicCapabilities } from "@/lib/btb-public-fetch";
 import "@/app/btb-operations.css";
 
 // The sign-in and set-password screens live at /btb/login, outside this
 // layout, so they render their own full-page shell. Everything under
 // /btb/demo gets the workspace chrome.
 export default function BetweenTheBunsLayout({ children }: { children: React.ReactNode }) {
-  return <BtbWorkspaceProvider><ActivityTracker /><BtbShell>{children}</BtbShell></BtbWorkspaceProvider>;
+  return <BtbWorkspaceProvider><BtbActivityTracker /><BtbShell>{children}</BtbShell></BtbWorkspaceProvider>;
+}
+
+function BtbActivityTracker() {
+  const { identity, access, loading } = useBtbWorkspace();
+  return <ActivityTracker workspace="btb" enabled={!loading && !!identity && !!access} identityKey={`${identity?.employeeId ?? "shared"}:${identity?.role ?? ""}:${identity?.sessionVersion ?? ""}`} />;
 }
 
 function BtbShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { identity, rows, loading } = useBtbWorkspace();
+  const { identity, rows, pageGrants, loading } = useBtbWorkspace();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const current = btbCardForPath(pathname);
-  const matches = identity && query.trim() !== "" ? searchBtbCards(identity.role, rows, query).slice(0, 6) : [];
+  const matches = identity && query.trim() !== "" ? searchBtbCards(identity.role, rows, query, pageGrants).filter(card => card.feature !== "platform" || identity.employeeId).slice(0, 6) : [];
 
   const signOut = async () => {
     if (signingOut) return;
     setSigningOut(true);
+    clearBtbPublicCapabilities();
     setError("");
     try {
       await fetchJson("/api/btb/logout", { method: "POST" });
-      router.replace("/btb/login");
-      router.refresh();
+      announceBtbSessionChange();
+      // Cross the authentication boundary with a fresh document. Refreshing
+      // the old protected route races its server redirect and retains RSC data.
+      window.location.replace("/btb/login");
     } catch {
       setError("Could not sign out. Please try again.");
     } finally { setSigningOut(false); }

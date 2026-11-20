@@ -1,10 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { supabase } from "@/lib/supabase";
-import { getProfileContext } from "@/lib/profile";
 import { downloadDataUrl, fileToDataUrl, formatFileSize, printDataUrl } from "@/lib/files";
 import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
+import { BTB_CARDS } from "@/lib/btb-hub";
+import { btbCanEdit } from "@/lib/btb-access";
+import { btbPageAllowed } from "@/lib/btb-page-access";
+import { BTB_REFERENCE_SLOTS } from "@/lib/btb-reference-slots";
+import { BTB_UPLOAD_MAX_BYTES } from "@/lib/btb-uploads";
+import { fetchJson } from "@/lib/fetch-json";
+import { jsonRequest } from "@/components/btb/Feedback";
 
 interface StoredManual {
   id: string;
@@ -21,13 +26,8 @@ interface ManualPdfSlotProps {
   category: string;
   /** Card heading; defaults to the title. */
   heading?: string;
-  /** If no row matches the title yet, show the newest row in the category
-   *  (keeps manuals uploaded before this slot existed visible). */
-  fallbackToCategory?: boolean;
   accent?: "red" | "rust";
 }
-
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 const HEAD_STYLES: Record<string, { card: string; head: string }> = {
   red: { card: "border-red-200", head: "bg-red-50 border-red-100" },
@@ -38,9 +38,11 @@ const HEAD_STYLES: Record<string, { card: string; head: string }> = {
  * print; only managers (identity role "manager", the same MGR_ONLY tier the
  * Manuals page uses for edits) see the "Add PDF" button. Re-uploading simply
  * files a newer copy — the newest row wins. */
-export default function ManualPdfSlot({ title, category, heading, fallbackToCategory = false, accent = "red" }: ManualPdfSlotProps) {
-  const { identity } = useBtbWorkspace();
-  const canUpload = identity?.role === "manager" || identity?.role === "admin";
+export default function ManualPdfSlot({ title, category, heading, accent = "red" }: ManualPdfSlotProps) {
+  const { identity, rows, pageGrants } = useBtbWorkspace();
+  const manualsCard = BTB_CARDS.find(card => card.feature === "manuals")!;
+  const canUpload = !!identity && btbCanEdit("manuals", identity.role) && btbPageAllowed(manualsCard, identity.role, rows, pageGrants);
+  const slot = Object.entries(BTB_REFERENCE_SLOTS).find(([, value]) => value.title === title && value.category === category)?.[0];
   const [manual, setManual] = useState<StoredManual | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -51,32 +53,20 @@ export default function ManualPdfSlot({ title, category, heading, fallbackToCate
     let cancelled = false;
     (async () => {
       try {
-        let { data } = await supabase
-          .from("print_manuals")
-          .select("id, title, file_name, file_size, file_url")
-          .eq("title", title)
-          .order("created_at", { ascending: false })
-          .limit(1);
-        if (!data?.length && fallbackToCategory) {
-          ({ data } = await supabase
-            .from("print_manuals")
-            .select("id, title, file_name, file_size, file_url")
-            .eq("category", category)
-            .order("created_at", { ascending: false })
-            .limit(1));
-        }
+        if (!slot) throw new Error("This PDF slot is not configured.");
+        const { manual } = await fetchJson<{ manual: StoredManual | null }>(`/api/btb/reference-pdf?slot=${encodeURIComponent(slot)}`, { signal: AbortSignal.timeout(12_000) });
         if (!cancelled) {
-          setManual((data?.[0] as StoredManual | undefined) ?? null);
+          setManual(manual);
           setLoaded(true);
         }
-      } catch {
-        if (!cancelled) setLoaded(true);
+      } catch (cause) {
+        if (!cancelled) { setError(cause instanceof Error ? cause.message : "This PDF could not be loaded."); setLoaded(true); }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [category, fallbackToCategory, title]);
+  }, [slot]);
 
   const pick = (file: File | undefined) => {
     setError("");
@@ -86,8 +76,8 @@ export default function ManualPdfSlot({ title, category, heading, fallbackToCate
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
-    if (file.size > MAX_FILE_BYTES) {
-      setError("PDF must be under 10 MB — compress it first.");
+    if (file.size > BTB_UPLOAD_MAX_BYTES) {
+      setError("PDF must be under 3 MB — compress it first.");
       if (fileRef.current) fileRef.current.value = "";
       return;
     }
@@ -98,26 +88,9 @@ export default function ManualPdfSlot({ title, category, heading, fallbackToCate
     setBusy(true);
     setError("");
     try {
-      const ctx = await getProfileContext();
-      if (!ctx) throw new Error("No profile found for this session — sign in again.");
-      const { error: insertError } = await supabase.from("print_manuals").insert({
-        user_id: ctx.userId,
-        restaurant_name: ctx.restaurantName,
-        title,
-        description: "",
-        file_name: file.name,
-        file_url: await fileToDataUrl(file),
-        file_size: file.size,
-        category,
-      });
-      if (insertError) throw insertError;
-      const { data } = await supabase
-        .from("print_manuals")
-        .select("id, title, file_name, file_size, file_url")
-        .eq("title", title)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      setManual((data?.[0] as StoredManual | undefined) ?? null);
+      if (!canUpload || !slot) throw new Error("Manual editing is not enabled in your workspace.");
+      const { manual } = await fetchJson<{ manual: StoredManual }>("/api/btb/reference-pdf", jsonRequest({ slot, file: { name: file.name, url: await fileToDataUrl(file) } }));
+      setManual(manual);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The PDF couldn't be uploaded. Try again.");
     } finally {
@@ -189,7 +162,7 @@ export default function ManualPdfSlot({ title, category, heading, fallbackToCate
               )}
             </div>
           )}
-          {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+          {error && <p className="mt-2 text-xs text-red-600" role="alert">{error}</p>}
         </div>
       </div>
     </div>

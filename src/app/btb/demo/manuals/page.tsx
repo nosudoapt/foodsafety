@@ -1,10 +1,6 @@
-"use client";
-import BtbFeatureGate from "@/components/BtbFeatureGate";
-import PrintManuals from "@/components/PrintManuals";
-export default function Page() {
-  return (
-    <BtbFeatureGate feature="manuals">
-      {(readOnly) => <PrintManuals application="btb" readOnly={readOnly} />}
-    </BtbFeatureGate>
-  );
+import BtbServerPage from "@/components/btb/BtbServerPage";
+import View from "./view";
+
+export default async function Page() {
+  return await BtbServerPage({ page: "manuals", children: <View /> });
 }

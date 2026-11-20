@@ -5,6 +5,12 @@ import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api
 import { inventoryDb } from "@/lib/supabase-server";
 import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, assertEditableItem, isUuid, parseNewItem, requireRole } from "@/lib/btb-inventory-api";
 import { requireItemWithoutFinalizedHistory } from "@/lib/inventory-server-guards";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const GET = btbInventoryRoute(readItems);
+export const POST = btbInventoryRoute(createItem);
+export const PATCH = btbInventoryRoute(updateItem);
+export const DELETE = btbInventoryRoute(deleteItem);
 
 // Inventory item list — previously read/edited DIRECTLY from the browser via
 // the anon key (month-end-inventory/page.tsx). All access now goes through
@@ -21,7 +27,7 @@ import { requireItemWithoutFinalizedHistory } from "@/lib/inventory-server-guard
 // migration (schema-inventory-master-list.sql).
 const ITEM_COLS = "id, name, unit, unit_size, category, unit_cost, position, location_id, protected, item_number, pack_size, case_price";
 
-export async function GET() {
+async function readItems() {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), INVENTORY_READ_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -36,7 +42,7 @@ export async function GET() {
   return NextResponse.json({ items: data ?? [] });
 }
 
-export async function POST(req: Request) {
+async function createItem(req: Request) {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -90,7 +96,7 @@ export async function POST(req: Request) {
   return NextResponse.json({ item: data });
 }
 
-export async function PATCH(req: Request) {
+async function updateItem(req: Request) {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -136,7 +142,7 @@ export async function PATCH(req: Request) {
 // Deletion rule: names seeded from the master sheet may not be removed; a name
 // the crew added later may be, as long as no finalized month depends on it.
 // A master item is retired by counting 0, never by vanishing from the sheet.
-export async function DELETE(req: Request) {
+async function deleteItem(req: Request) {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });

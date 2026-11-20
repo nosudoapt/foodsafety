@@ -13,7 +13,7 @@ export type BtbRole = "staff" | "supervisor" | "manager" | "corporate" | "admin"
 type Row = Record<string, unknown>;
 interface Failure { table: string; method?: string; status?: number; times?: number; match?: Record<string, string | null>; afterCommit?: boolean; message?: string }
 interface FixtureOptions { tables?: Record<string, Row[]>; failures?: Failure[]; emailFailures?: ("reject" | "accepted-then-500")[] }
-interface FixtureState { tables: Record<string, Row[]>; requests: { path: string; method: string; query: Record<string, string>; body: unknown }[]; emailDeliveries: { id: string; key: string; body: { to: string[]; subject: string; text: string } }[]; emailRequests: { key: string; body: unknown }[] }
+interface FixtureState { tables: Record<string, Row[]>; requests: { path: string; method: string; query: Record<string, string>; body: unknown; authorization: "anon" | "authenticated" | "service_role"; capability: boolean }[]; emailDeliveries: { id: string; key: string; body: { to: string[]; subject: string; text: string } }[]; emailRequests: { key: string; body: unknown }[] }
 
 class LocalFixture {
   constructor(private request: APIRequestContext) {}

@@ -1,10 +1,9 @@
-import { btbDatabaseTables, btbUploadTables, createBtbDatabase, databaseRows, identifier, insertRows, rpc } from "../tests/helpers/btb-database.mjs";
-import { initializePlatformDatabase } from "../tests/helpers/btb-platform-database.mjs";
-import { initializeAdminDatabase } from "../tests/helpers/btb-admin-database.mjs";
+import { btbDatabaseTables, btbUploadTables, databaseRows, identifier, rpc } from "../tests/helpers/btb-database.mjs";
+import { btbCapabilityTables, createCapabilityDatabase } from "../tests/helpers/btb-capabilities-database.mjs";
 
-const db = await createBtbDatabase({}, { temperatureStore: true });
-await initializePlatformDatabase(db);
-await initializeAdminDatabase(db);
+// Disposable PostgreSQL only: the same installed release SQL and RLS used by
+// the security tests. Never execute migrations against a configured Supabase.
+const db = await createCapabilityDatabase();
 const platformTables = [
   "btb_location_settings", "btb_location_access", "btb_events", "btb_file_objects", "btb_notifications", "btb_email_jobs",
   "btb_operation_templates", "btb_sanitizer_settings", "btb_sanitizer_logs", "btb_document_imports",
@@ -16,7 +15,8 @@ const platformTables = [
 // Location settings/access must exist before location-scoped shifts, so seed
 // those fixture tables last. Everything else keeps its existing order.
 const databaseTables = [
-  ...[...btbDatabaseTables, ...btbUploadTables, "equipment", "temperature_records", ...platformTables]
+  ...[...new Set([...btbDatabaseTables, ...btbUploadTables, ...btbCapabilityTables, "equipment", "temperature_records", ...platformTables,
+    "role_page_access", "btb_public_tokens", "app_activity"])]
     .filter((table) => !["btb_location_settings", "btb_location_access", "btb_shifts"].includes(table)),
   "btb_location_settings", "btb_location_access", "btb_shifts",
   "btb_super_admins", "btb_admin_login_limits", "btb_superadmin_locations", "btb_location_page_access", "btb_invitations",
@@ -30,6 +30,7 @@ const primaryKeys = (table) => ({
   btb_employee_credentials: ["employee_id"], btb_notification_settings: ["restaurant_name"], btb_franchise_tasks: ["task_key"], btb_login_limits: ["key"],
   btb_location_settings: ["location_id"], btb_location_access: ["location_id", "employee_id"], btb_sanitizer_settings: ["location_id"],
   btb_admin_login_limits: ["key"], btb_superadmin_locations: ["location_id"], btb_location_page_access: ["location_id", "page"],
+  role_page_access: ["role", "page"], btb_public_tokens: ["token_hash"],
   btb_social_platforms: ["name"], btb_ai_settings: ["location_id"], btb_ai_usage: ["location_id", "day"], btb_stock_balances: ["item_id"],
   inventory_month_snapshots: ["count_month", "scope_key"],
 })[table] ?? ["id"];
@@ -37,7 +38,7 @@ const primaryKeys = (table) => ({
 export function isBtbDatabaseTable(table) { return names.has(table); }
 
 export async function resetBtbDatabase(tables) {
-  await db.exec(`TRUNCATE ${[...databaseTables, "prep_counts", ...inventoryTables].map(identifier).join(",")}, temperature_record_events, compliance_documents, locations, profiles CASCADE`);
+  await db.exec(`TRUNCATE ${[...new Set([...databaseTables, ...inventoryTables, "temperature_record_events", "locations", "profiles"])].map(identifier).join(",")} CASCADE`);
   await db.exec("INSERT INTO btb_notification_settings(restaurant_name) VALUES ('Between the Buns')");
   await configureBtbDatabase(tables);
 }
@@ -68,17 +69,6 @@ export async function configureBtbDatabase(tables) {
       }
       if (table === "temperature_records") await tx.exec("SET LOCAL session_replication_role='origin'");
     }
-    if (tables.compliance_documents) {
-      await tx.exec("DELETE FROM compliance_documents");
-      await insertRows(tx, "compliance_documents", tables.compliance_documents.filter((row) => row.restaurant_name === "Between the Buns"));
-    }
-    // The legacy prep sheet reads from the JavaScript fixture, but its atomic
-    // save RPC operates on this SQL copy. Seed the copy so scoped saves keep
-    // evidence from other sites/restaurants exactly as the real table would.
-    if (tables.prep_counts) {
-      await tx.exec("DELETE FROM prep_counts");
-      await insertRows(tx, "prep_counts", tables.prep_counts);
-    }
   });
 }
 
@@ -87,26 +77,17 @@ export async function btbDatabaseState() {
   return { ...Object.fromEntries(pairs), temperature_record_events: await databaseRows(db, "temperature_record_events") };
 }
 
-/**
- * The legacy prep sheet is still a JavaScript-backed table in this fixture,
- * but its atomic save RPC writes the SQL copy. Mirror that copy after a replay
- * so the next browser read (and /__test/state) sees the committed sheet.
- */
-export async function sqlTableRows(table) {
-  return databaseRows(db, table);
-}
-
 function where(params, values) {
   const clauses = [];
   const bind = (value) => { values.push(value); return `$${values.length}`; };
   for (const [column, expression] of params) {
-    if (["select", "order", "limit", "offset", "on_conflict"].includes(column)) continue;
-    if (column === "or") {
+    if (["select", "order", "limit", "offset", "on_conflict", "columns"].includes(column)) continue;
+    if (column === "or" || column === "and") {
       const alternatives = expression.slice(1, -1).split(",").map((filter) => {
         const separator = filter.indexOf(".");
         return where(new URLSearchParams([[filter.slice(0, separator), filter.slice(separator + 1)]]), values).replace(/^ WHERE /, "");
       });
-      clauses.push(`(${alternatives.join(" OR ")})`);
+      clauses.push(`(${alternatives.join(column === "or" ? " OR " : " AND ")})`);
       continue;
     }
     const [op, ...rest] = expression.split(".");
@@ -127,18 +108,16 @@ function where(params, values) {
 export async function btbPostgrest(table, method, params, body, headers, isRpc) {
   try {
     const server = headers.apikey === "browser-test-service-key";
-    // Browser RPC calls are authorized inside the SECURITY DEFINER functions
-    // themselves (tenant scoping, actor binding), so they bypass the table gate.
-    if (!server && !isRpc && !btbUploadTables.includes(table) && table !== "temperature_records") return { status: 403, body: { code: "42501", message: "Permission denied" } };
+    const subject = (!server && headers.authorization?.endsWith(".fixture-signature"))
+      ? (() => { try { return JSON.parse(Buffer.from(headers.authorization.split(".")[1], "base64url").toString()).sub ?? ""; } catch { return ""; } })()
+      : "";
+    const context = async tx => {
+      await tx.exec(`SET LOCAL ROLE ${server ? "service_role" : subject ? "authenticated" : "anon"}`);
+      await tx.query("SELECT set_config('request.jwt.claim.sub',$1,true),set_config('request.headers',$2,true)", [subject, JSON.stringify(headers)]);
+    };
     if (isRpc) {
       return await db.transaction(async (tx) => {
-        // Mirror the table path: server API key runs as service_role, a browser
-        // session runs as authenticated with its claim, everything else is anon.
-        const subject = (!server && headers.authorization?.endsWith(".fixture-signature"))
-          ? (() => { try { return JSON.parse(Buffer.from(headers.authorization.split(".")[1], "base64url").toString()).sub ?? ""; } catch { return ""; } })()
-          : "";
-        await tx.exec(`SET LOCAL ROLE ${server ? "service_role" : subject ? "authenticated" : "anon"}`);
-        if (subject) await tx.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [subject]);
+        await context(tx);
         const rows = await rpc(tx, table, body);
         const shape = await tx.query("SELECT proretset FROM pg_proc WHERE pronamespace='public'::regnamespace AND proname=$1", [table]);
         // Scalar JSONB/boolean RPCs are not SETOF rows. Keep legacy SETOF RPCs
@@ -147,13 +126,8 @@ export async function btbPostgrest(table, method, params, body, headers, isRpc) 
       });
     }
     if (!names.has(table)) return { status: 404, body: { code: "42P01", message: "Unknown fixture table" } };
-    let subject = "";
-    if (!server && headers.authorization?.endsWith(".fixture-signature")) {
-      try { subject = JSON.parse(Buffer.from(headers.authorization.split(".")[1], "base64url").toString()).sub ?? ""; } catch { /* Anonymous fixture request. */ }
-    }
     return await db.transaction(async (tx) => {
-    await tx.exec(`SET LOCAL ROLE ${server ? "service_role" : subject ? "authenticated" : "anon"}`);
-    if (subject) await tx.query("SELECT set_config('request.jwt.claim.sub', $1, true)", [subject]);
+    await context(tx);
     const values = [];
     let result;
     if (method === "POST") {
@@ -199,7 +173,7 @@ export async function btbPostgrest(table, method, params, body, headers, isRpc) 
       rows = rows.map((row) => Object.fromEntries(projection.split(",").map((column) => [column.trim(), row[column.trim()]])));
     }
     if (method === "HEAD") return { status: 200, body: null, headers: { "Content-Range": `*/${count}` } };
-    if (!["GET", "HEAD"].includes(method) && !headers.prefer?.includes("return=representation")) return { status: method === "DELETE" ? 204 : 201, body: null };
+    if (!["GET", "HEAD"].includes(method) && !headers.prefer?.includes("return=representation")) return { status: method === "POST" ? 201 : 204, body: null };
     if (headers.accept?.includes("application/vnd.pgrst.object+json")) return rows.length === 1 ? { status: 200, body: rows[0] } : { status: 406, body: { code: "PGRST116", message: "Cannot coerce the result to a single JSON object", details: `The result contains ${rows.length} rows` } };
     return { status: 200, body: rows, headers: { "Content-Range": `${offset}-${offset + rows.length - 1}/${count}` } };
     });

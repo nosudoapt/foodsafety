@@ -1,6 +1,5 @@
 import { test, expect, capture, signInBtb, signInFoodSafe, signInEmployee, east } from "./fixtures";
 import { apiSignIn, createEmployee } from "./btb-helpers";
-import { btbToday } from "../src/lib/btb-team";
 
 const owner = "10000000-0000-4000-8000-000000000098";
 const id = "91000000-0000-4000-8000-000000000001";
@@ -51,7 +50,9 @@ test("BTB temperature saves retain failures, survive reload and keep independent
   await expect(page.locator("#temperature-panel-history details[open]").getByText("8 °C", { exact: true })).toBeVisible();
   await capture(page, info, "temperature-desktop-history");
   await page.getByText("Looking for earlier Pholo records?", { exact: true }).click();
+  const legacyDocument = page.waitForResponse(response => new URL(response.url()).pathname === "/temperatures" && response.request().isNavigationRequest());
   await page.getByRole("link", { name: "Open Pholo temperature records" }).click();
+  expect((await legacyDocument).ok()).toBe(true);
   await expect(page.getByText("Cheese", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Temperature Monitoring" })).toBeVisible();
 });

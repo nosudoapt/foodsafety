@@ -1,11 +1,6 @@
-"use client";
-import BtbFeatureGate from "@/components/BtbFeatureGate";
-import InspectionForm from "@/components/InspectionForm";
-import { btbToday } from "@/lib/btb-team";
-export default function Page() {
-  return (
-    <BtbFeatureGate feature="franchise_inspection">
-      {(readOnly) => <InspectionForm type="franchisee" readOnly={readOnly} initialDate={btbToday()} />}
-    </BtbFeatureGate>
-  );
+import BtbServerPage from "@/components/btb/BtbServerPage";
+import View from "./view";
+
+export default async function Page() {
+  return await BtbServerPage({ page: "franchise-inspection", children: <View /> });
 }

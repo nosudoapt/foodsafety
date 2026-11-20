@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { apiFailure, btbIdentityFromSession, dbError, PRIVATE_HEADERS } from "@/lib/btb-api";
 import { BTB_RESTAURANT } from "@/lib/btb-roles";
 import { inventoryDb } from "@/lib/supabase-server";
+import { loadBtbEffectiveAccess } from "@/lib/btb-effective-access";
 import {
   BTB_ACCOUNTS,
   BTB_COOKIE,
@@ -43,7 +44,9 @@ export async function GET() {
     email: identity.email,
     name: identity.name,
     employeeId: identity.employeeId,
+    sessionVersion: identity.sessionVersion,
     restaurant: BTB_RESTAURANT,
+    access: await loadBtbEffectiveAccess(inventoryDb(), identity),
   }, { headers: PRIVATE_HEADERS });
   } catch (error) { return apiFailure(error); }
 }

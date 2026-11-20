@@ -1,10 +1,7 @@
 import "server-only";
-import { cookies } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { BtbApiError } from "./btb-api";
-import { BTB_COOKIE, employeeClaimsFromSession, roleFromSession } from "./btb-auth";
-import { isBtbRole, type BtbRole } from "./btb-roles";
-import { inventoryDb } from "./supabase-server";
+import { BtbApiError, requireBtbAccess } from "./btb-api";
+import type { BtbRole } from "./btb-roles";
 import { publicPlatformFailure } from "./api-errors";
 
 export interface PlatformActor {
@@ -25,13 +22,11 @@ export interface PlatformActor {
  * session version and location membership.
  */
 export async function platformActor(): Promise<PlatformActor> {
-  const value = (await cookies()).get(BTB_COOKIE)?.value;
-  const claims = employeeClaimsFromSession(value);
-  const role = roleFromSession(value);
-  if (!claims || !role || !isBtbRole(role)) {
+  const { db, identity } = await requireBtbAccess("platform", false, { allowLocationWorkspace: true });
+  if (!identity.employeeId || !identity.sessionVersion) {
     throw new BtbApiError("Sign in with your individual employee account to use the location workspace.", 401);
   }
-  return { db: inventoryDb(), employeeId: claims.id, sessionVersion: claims.version, role };
+  return { db, employeeId: identity.employeeId, sessionVersion: identity.sessionVersion, role: identity.role };
 }
 
 /**

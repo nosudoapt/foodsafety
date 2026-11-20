@@ -7,6 +7,10 @@ import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
 import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, parseCountSave, requireRole } from "@/lib/btb-inventory-api";
 import { requireEditableMonth } from "@/lib/inventory-server-guards";
 import { replaceRows } from "@/lib/persist-replace";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const GET = btbInventoryRoute(readCounts);
+export const POST = btbInventoryRoute(saveCounts);
 
 // Count sheet — previously read/saved DIRECTLY from the browser via the anon
 // key (month-end-inventory/page.tsx lines 79-93/232-249). Now server-side:
@@ -20,7 +24,7 @@ import { replaceRows } from "@/lib/persist-replace";
 const COUNT_COLS = "id, item_id, count_month, qty, counted_by, location_id";
 // Read a month's counts, the previous month's counts (variance column) and
 // the stored food-sales figure in one round trip.
-export async function GET(req: Request) {
+async function readCounts(req: Request) {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), INVENTORY_READ_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -47,7 +51,7 @@ export async function GET(req: Request) {
 }
 
 // Save the count sheet for a month (replace semantics, restore-on-failure).
-export async function POST(req: Request) {
+async function saveCounts(req: Request) {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });

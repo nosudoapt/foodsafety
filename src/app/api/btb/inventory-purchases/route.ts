@@ -2,6 +2,10 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const GET = btbInventoryRoute(readPurchases);
+export const POST = btbInventoryRoute(savePurchase);
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 import { isDateInMonth } from "@/lib/btb-inventory-api";
@@ -14,7 +18,7 @@ import { entryAmount, isDuplicateInvoice, type PurchaseEntry } from "@/lib/inven
 // browser is not trusted for month/date consistency, amounts, or duplicates.
 const PURCHASE_ROLES = ["manager", "supervisor", "corporate", "admin"];
 
-export async function POST(req: Request) {
+async function savePurchase(req: Request) {
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
@@ -94,7 +98,7 @@ export async function POST(req: Request) {
 }
 
 // List a month's purchases (any signed-in role — read-only).
-export async function GET(req: Request) {
+async function readPurchases(req: Request) {
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });

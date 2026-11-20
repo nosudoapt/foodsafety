@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ArrowRight, ClipboardCheck, Layers, Mail, ShieldCheck } from "lucide-react";
 import BtbWordmark from "@/components/BtbWordmark";
 import { Alert, Field, PasswordField } from "@/components/auth/AuthShell";
 import { BTB_ROLE_LABELS, isBtbRole } from "@/lib/btb-roles";
 import { safeNextPath } from "@/lib/auth-redirect";
 import { fetchJson, RequestError } from "@/lib/fetch-json";
+import { announceBtbSessionChange, clearBtbPublicCapabilities } from "@/lib/btb-public-fetch";
 import "@/app/auth.css";
 
 interface PublicInfo { authenticated?: boolean; accounts?: { role: string; email: string; name: string }[] }
@@ -21,7 +21,6 @@ export default function BtbLogin() {
   const [infoError, setInfoError] = useState(false);
   const [revision, setRevision] = useState(0);
   const [submitted, setSubmitted] = useState(false);
-  const router = useRouter();
   const emailError = submitted && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? "Enter your team account email." : undefined;
   const passwordError = submitted && !password ? "Enter your workspace password." : undefined;
 
@@ -38,12 +37,13 @@ export default function BtbLogin() {
     setSubmitted(true);
     if (loading || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) || !password) return;
     setLoading(true);
+    clearBtbPublicCapabilities();
     setError("");
     try {
       await fetchJson("/api/btb/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
+      announceBtbSessionChange();
       const next = new URLSearchParams(window.location.search).get("next");
-      router.replace(safeNextPath(next, "/btb/demo", "/btb/demo"));
-      router.refresh();
+      window.location.replace(safeNextPath(next, "/btb/demo", "/btb/demo"));
     } catch (cause) {
       setError(cause instanceof RequestError ? cause.status === 401 ? "Your email and password don’t match. Check your details and try again." : cause.message : "Couldn’t reach the workspace. Check your connection and try again.");
     } finally { setLoading(false); }

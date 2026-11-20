@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const POST = btbInventoryRoute(saveSummary);
 import { inventoryDb } from "@/lib/supabase-server";
 import { MONTH_END_EDIT_ROLES, parseSummarySave, requireRole } from "@/lib/btb-inventory-api";
 import { requireEditableMonth } from "@/lib/inventory-server-guards";
@@ -14,7 +17,7 @@ import { replaceRows } from "@/lib/persist-replace";
 // is hand-typed. Replace-with-restore, same non-atomicity disclosure as the
 // count sheet save.
 
-export async function POST(req: Request) {
+async function saveSummary(req: Request) {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });

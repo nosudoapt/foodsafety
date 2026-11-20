@@ -52,6 +52,19 @@
 .ui-form-stack > .btb-console__checkbox { display: flex; align-items: flex-start; gap: 12px; }
 .ui-form-stack > .btb-console__checkbox input { margin-top: 3px; width: 20px; height: 20px; flex-shrink: 0; }
 .btb-console__checkbox { min-height: 44px; padding-block: 10px; cursor: pointer; }
+.btb-console__grants { border-top: 1px solid var(--line); padding-top: 20px; }
+.btb-console__grants h3 { font-size: 1rem; font-weight: 700; }
+.btb-console__grant-search { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; margin-top: 12px; }
+.btb-console__grant-search input { min-width: 0; width: 100%; min-height: 44px; background: transparent; }
+.btb-console__grant-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 8px 16px; }
+.btb-console__grant-actions button { min-height: 44px; padding: 8px 12px; border-radius: 8px; color: var(--brand); font-weight: 600; cursor: pointer; }
+.btb-console__grants > fieldset { margin-block: 18px; }
+.btb-console__grants legend { font-size: .8125rem; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.btb-console__grant-grid { display: grid; gap: 8px; }
+.btb-console__grant-grid .btb-console__checkbox { display: flex; align-items: flex-start; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; font-size: .875rem; }
+.btb-console__grant-grid input { width: 20px; height: 20px; flex: 0 0 20px; margin-top: 2px; accent-color: var(--brand); }
+.btb-console__grant-grid small { display: block; color: var(--muted); line-height: 1.6; font-size: .75rem; margin-top: 4px; font-weight: 400; }
+@media (min-width: 768px) { .btb-console__grant-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .btb-console__person-email { display: flex; align-items: flex-start; gap: 8px; font-size: .875rem; overflow-wrap: anywhere; }
 .btb-console__person-email svg { margin-top: 3px; flex-shrink: 0; }
 .btb-console__person-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; }

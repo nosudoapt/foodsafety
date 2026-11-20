@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Clock, Flame } from "lucide-react";
+import type { ActivityWorkspace } from "@/lib/activity";
 
 type Recent = { path: string; title: string; at?: string };
 type Top = { path: string; title: string; visits: number };
@@ -10,29 +11,33 @@ type Top = { path: string; title: string; visits: number };
 /** "Recently used" and "Most used" chips for the signed-in person, fed by the
  * page-visit tracker. Rendered on the dashboards; empty when there's no
  * history yet. */
-export default function RecentlyUsed() {
-  const [recent, setRecent] = useState<Recent[]>([]);
-  const [top, setTop] = useState<Top[]>([]);
-  const [loaded, setLoaded] = useState(false);
+export default function RecentlyUsed({ workspace = "foodsafe", allowedPaths }: { workspace?: ActivityWorkspace; allowedPaths?: readonly string[] }) {
+  const allowedKey = allowedPaths ? [...allowedPaths].sort().join("\n") : "";
+  const key = `${workspace}:${allowedKey}`;
+  const [history, setHistory] = useState<{ key: string; recent: Recent[]; top: Top[] } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
+    const allowed = new Set(allowedKey.split("\n"));
     (async () => {
       try {
-        const res = await fetch("/api/activity", { signal: AbortSignal.timeout(8000) });
+        const res = await fetch(workspace === "btb" ? "/api/activity?workspace=btb" : "/api/activity", { credentials: "same-origin", cache: "no-store", signal: AbortSignal.any([controller.signal, AbortSignal.timeout(8000)]) });
         if (!res.ok) return;
         const data = (await res.json()) as { recent?: Recent[]; top?: Top[] };
-        if (!cancelled) { setRecent(data.recent ?? []); setTop(data.top ?? []); }
+        if (!cancelled) setHistory({ key: `${workspace}:${allowedKey}`,
+          recent: (data.recent ?? []).filter(item => !allowedKey || allowed.has(item.path)),
+          top: (data.top ?? []).filter(item => !allowedKey || allowed.has(item.path)),
+        });
       } catch {
         /* chips are a nice-to-have — stay silent */
-      } finally {
-        if (!cancelled) setLoaded(true);
       }
     })();
-    return () => { cancelled = true; };
-  }, []);
+    return () => { cancelled = true; controller.abort(); };
+  }, [workspace, allowedKey]);
 
-  if (!loaded || (!recent.length && !top.length)) return null;
+  if (history?.key !== key || (!history.recent.length && !history.top.length)) return null;
+  const { recent, top } = history;
   const chip = "inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-amber-300 hover:text-amber-800 transition-colors max-w-full";
 
   return (

@@ -16,6 +16,8 @@ async function seedTimeLocation(fixture: { configure: (options: object) => Promi
   await fixture.configure({ tables: {
     locations: [{ id: east, name: "BTB Hours" }],
     btb_location_settings: [{ location_id: east, timezone: "America/Regina", active: true, settings_confirmed: true, version: 1 }],
+    btb_superadmin_locations: [{ location_id: east }],
+    btb_location_page_access: [{ location_id: east, page: "platform", allowed: true }],
     btb_location_access: [
       { location_id: east, employee_id: people.manager.id },
       { location_id: east, employee_id: people.staff.id },

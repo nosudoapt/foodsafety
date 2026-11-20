@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, dbError, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const POST = btbInventoryRoute(finalizeMonth);
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth, toLines, totalValue, type InventoryCount, type InventoryItem } from "@/lib/month-end-inventory";
 import { computeAccounting } from "@/lib/inventory-accounting";
@@ -79,7 +82,7 @@ async function serverOpening(
   return { opening: Math.round(closing * 100) / 100, priorDraft: false };
 }
 
-export async function POST(req: Request) {
+async function finalizeMonth(req: Request) {
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });

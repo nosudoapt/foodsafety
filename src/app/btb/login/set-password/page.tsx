@@ -2,17 +2,16 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowRight, KeyRound } from "lucide-react";
 import BtbWordmark from "@/components/BtbWordmark";
 import { Alert, PasswordField } from "@/components/auth/AuthShell";
 import { jsonRequest } from "@/components/btb/Feedback";
 import { fetchJson, RequestError } from "@/lib/fetch-json";
 import type { BtbInvitationInfo } from "@/lib/btb-admin";
+import { announceBtbSessionChange, clearBtbPublicCapabilities } from "@/lib/btb-public-fetch";
 import "@/app/auth.css";
 
 export default function BtbInvitationPasswordPage() {
-  const router = useRouter();
   const [invitation, setInvitation] = useState<BtbInvitationInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState("");
@@ -36,9 +35,11 @@ export default function BtbInvitationPasswordPage() {
     event.preventDefault(); setSubmitted(true);
     if (busy || password.length < 10 || password.length > 128 || confirmation !== password) return;
     setBusy(true); setError("");
+    clearBtbPublicCapabilities();
     try {
       await fetchJson("/api/btb/invitations/accept", jsonRequest({ token: new URLSearchParams(window.location.search).get("token"), password }));
-      setPassword(""); setConfirmation(""); router.replace("/btb/demo"); router.refresh();
+      announceBtbSessionChange();
+      setPassword(""); setConfirmation(""); window.location.replace("/btb/demo");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Couldn’t finish setup. Check your connection, or try signing in with your new password."); setUnavailable(cause instanceof RequestError && cause.status === 410); }
     finally { setBusy(false); }
   }

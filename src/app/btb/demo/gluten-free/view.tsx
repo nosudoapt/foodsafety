@@ -1,0 +1,152 @@
+"use client";
+// Interactive view; page.tsx owns the request-time server gate.
+
+import BtbWordmark from "@/components/BtbWordmark";
+import PrintButton from "@/components/PrintButton";
+import ManualPdfSlot from "@/components/ManualPdfSlot";
+
+export default function GlutenFreeMenuPage() {
+  return (
+    // Same printable-surface pattern as the allergen chart: @media print hides
+    // everything else, so the menu + credits are exactly what hits the paper.
+    <div id="print-section" className="min-h-screen bg-[#fdf8e8]">
+      {/* Header — brand wordmark on cream, matching the printed sheet */}
+      <div className="max-w-2xl mx-auto px-4 pt-8 pb-4 text-center">
+        <BtbWordmark className="text-3xl sm:text-4xl justify-center" />
+        <h1 className="text-2xl font-bold text-gray-900 mt-3">Gluten Free Menu</h1>
+        <div className="mx-auto mt-2 h-1 w-20 rounded-full bg-[#b65a2e]" />
+        {/* The whole sheet is the printable content — only the control drops out. */}
+        <div className="mt-3 flex justify-center print:hidden">
+          <PrintButton />
+        </div>
+      </div>
+
+      <div className="max-w-2xl mx-auto px-4 pb-8 space-y-6">
+        {/* GREENS */}
+        <div>
+          <div className="bg-green-600 px-4 py-2 rounded-t-lg">
+            <h2 className="font-bold text-gray-900 uppercase tracking-wide">
+              Greens (No Bread)
+            </h2>
+          </div>
+          <div className="bg-white border border-gray-200 border-t-0 rounded-b-lg px-4 py-3">
+            <ul className="space-y-2">
+              <li className="flex items-start gap-2 text-sm text-gray-800">
+                <span className="text-green-600 font-bold">•</span>
+                Caesar Salad (no croutons)
+              </li>
+              <li className="flex items-start gap-2 text-sm text-gray-800">
+                <span className="text-green-600 font-bold">•</span>
+                Greek Salad
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* BURGERS */}
+        <div>
+          <div className="bg-orange-500 px-4 py-2 rounded-t-lg">
+            <h2 className="font-bold text-gray-900 uppercase tracking-wide">
+              Burgers
+            </h2>
+          </div>
+          <div className="bg-white border border-gray-200 border-t-0 rounded-b-lg px-4 py-3">
+            <ul className="space-y-2">
+              <li className="flex items-start gap-2 text-sm text-gray-800">
+                <span className="text-orange-500 font-bold">•</span>
+                <span>
+                  All burgers are gluten free <strong>except</strong> Chick N Licking, Aloo Tikki, and Fish N Chippy, Buffalo Crunch Burger
+                </span>
+              </li>
+              <li className="flex items-start gap-2 text-sm text-gray-800">
+                <span className="text-orange-500 font-bold">•</span>
+                No onion rings and pickles in So Satisfrying
+              </li>
+              <li className="flex items-start gap-2 text-sm text-gray-800">
+                <span className="text-orange-500 font-bold">•</span>
+                No mozza sticks in Mozza Madness
+              </li>
+              <li className="flex items-start gap-2 text-sm text-gray-800">
+                <span className="text-orange-500 font-bold">•</span>
+                All should be on a <strong>gluten free bun</strong>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Bottom 3 Columns */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* SIDES */}
+          <div>
+            <div className="bg-orange-500 px-4 py-2 rounded-t-lg">
+              <h3 className="font-bold text-gray-900 uppercase tracking-wide text-sm">
+                Sides
+              </h3>
+            </div>
+            <div className="bg-white border border-gray-200 border-t-0 rounded-b-lg px-4 py-3">
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2 text-xs text-gray-800">
+                  <span className="text-orange-500 font-bold">•</span>
+                  Caesar Salad (no croutons)
+                </li>
+                <li className="flex items-start gap-2 text-xs text-gray-800">
+                  <span className="text-orange-500 font-bold">•</span>
+                  Greek Salad
+                </li>
+                <li className="flex items-start gap-2 text-xs text-gray-800">
+                  <span className="text-orange-500 font-bold">•</span>
+                  Coleslaw
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* KIDS */}
+          <div>
+            <div className="bg-orange-500 px-4 py-2 rounded-t-lg">
+              <h3 className="font-bold text-gray-900 uppercase tracking-wide text-sm">
+                Kids
+              </h3>
+            </div>
+            <div className="bg-white border border-gray-200 border-t-0 rounded-b-lg px-4 py-3">
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2 text-xs text-gray-800">
+                  <span className="text-orange-500 font-bold">•</span>
+                  Cheeseburger (on gluten free bun)
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* DESSERT */}
+          <div>
+            <div className="bg-orange-500 px-4 py-2 rounded-t-lg">
+              <h3 className="font-bold text-gray-900 uppercase tracking-wide text-sm">
+                Dessert
+              </h3>
+            </div>
+            <div className="bg-white border border-gray-200 border-t-0 rounded-b-lg px-4 py-3">
+              <ul className="space-y-2">
+                <li className="flex items-start gap-2 text-xs text-gray-800">
+                  <span className="text-orange-500 font-bold">•</span>
+                  Chocolate Brownie
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center pt-4">
+          <p className="text-xs text-gray-500">
+            © Between the Buns — Gluten Free Menu
+          </p>
+          <p className="text-xs text-gray-400 mt-1">
+            Always confirm with staff before ordering if you have allergies
+          </p>
+        </div>
+      </div>
+      <ManualPdfSlot title="Gluten-free menu" category="operations" heading="Gluten-Free Menu (PDF)" accent="rust" />
+    </div>
+  );
+}

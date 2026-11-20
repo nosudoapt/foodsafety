@@ -1,10 +1,6 @@
-"use client";
-import BtbFeatureGate from "@/components/BtbFeatureGate";
-import OperationalProtocols from "@/components/OperationalProtocols";
-export default function Page() {
-  return (
-    <BtbFeatureGate feature="protocols">
-      {(readOnly) => <OperationalProtocols readOnly={readOnly} />}
-    </BtbFeatureGate>
-  );
+import BtbServerPage from "@/components/btb/BtbServerPage";
+import View from "./view";
+
+export default async function Page() {
+  return await BtbServerPage({ page: "protocols", children: <View /> });
 }

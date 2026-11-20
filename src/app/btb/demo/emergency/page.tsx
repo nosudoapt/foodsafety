@@ -1,10 +1,6 @@
-"use client";
-import BtbFeatureGate from "@/components/BtbFeatureGate";
-import EmergencyContacts from "@/components/EmergencyContacts";
-export default function Page() {
-  return (
-    <BtbFeatureGate feature="emergency">
-      {(readOnly) => <EmergencyContacts readOnly={readOnly} />}
-    </BtbFeatureGate>
-  );
+import BtbServerPage from "@/components/btb/BtbServerPage";
+import View from "./view";
+
+export default async function Page() {
+  return await BtbServerPage({ page: "emergency", children: <View /> });
 }

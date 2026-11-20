@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
-import { btbDatabaseState, btbPostgrest, configureBtbDatabase, isBtbDatabaseTable, resetBtbDatabase, sqlTableRows } from "./btb-postgrest.mjs";
+import { btbDatabaseState, btbPostgrest, configureBtbDatabase, isBtbDatabaseTable, resetBtbDatabase } from "./btb-postgrest.mjs";
 
 // Test-only PostgREST/Auth fixture. Binds loopback, stores everything in memory,
 // and never forwards a request to an external service.
@@ -57,18 +57,18 @@ function seed() {
     ],
     corrective_actions: [{ ...scope, id: "action1", issue_description: "Check the fridge seal", resolved: false }, { ...scope, id: "action2", location_id: west, issue_description: "Replace freezer gasket", resolved: false }],
     training_records: [{ ...scope, id: "training1", user_id: userId("staff"), expiry_date: today(), training_type: "Food safety" }],
-    compliance_documents: [{ ...personal, location_id: east, id: "compliance1", name: "Food premises licence", doc_type: "business_license", expiry_date: today(), file_name: null, notes: "Annual licence renewal." }, { ...personal, id: "compliance2", location_id: west, name: "Fire inspection", doc_type: "other", expiry_date: today(), notes: "Book the annual inspection.", file_name: null }, { ...btb, location_id: null, id: "60000000-0000-4000-8000-000000000001", name: "BTB food premises licence", doc_type: "business_license", expiry_date: btbDay, file_name: null, notes: "Company renewal." }],
+    compliance_documents: [{ ...personal, location_id: east, id: "60000000-0000-4000-8000-000000000011", name: "Food premises licence", doc_type: "business_license", expiry_date: today(), file_name: null, notes: "Annual licence renewal." }, { ...personal, id: "60000000-0000-4000-8000-000000000012", location_id: west, name: "Fire inspection", doc_type: "other", expiry_date: today(), notes: "Book the annual inspection.", file_name: null }, { ...btb, location_id: null, id: "60000000-0000-4000-8000-000000000001", name: "BTB food premises licence", doc_type: "business_license", expiry_date: btbDay, file_name: null, notes: "Company renewal." }],
     business_documents: [{ ...personal, ...document, user_id: userId("manager"), uploaded_by: userId("manager"), id: "70000000-0000-4000-8000-000000000001", name: "Kitchen opening procedure", file_name: "opening-procedure.pdf" }, { ...personal, ...document, user_id: userId("manager"), uploaded_by: userId("manager"), id: "70000000-0000-4000-8000-000000000002", name: "Supplier agreement", file_name: "supplier-agreement.pdf" }, { ...btb, ...document, user_id: btbUploader, uploaded_by: btbUploader, id: "70000000-0000-4000-8000-000000000003", name: "BTB service standards", file_name: "btb-service-standards.pdf" }],
-    staff_licenses: [{ ...scope, id: "licence1", staff_name: "Alex", expiry_date: today() }, { ...btb, id: "btb-licence1", staff_name: "Sam", expiry_date: btbDay }],
-    corporate_inspections: [{ ...scope, id: "inspection1", inspection_date: today() }, { ...btb, id: "btb-inspection1", inspection_date: btbDay }],
+    staff_licenses: [{ ...personal, user_id: userId("staff"), id: "61000000-0000-4000-8000-000000000011", staff_name: "Alex", license_type: "food_handler", file_name: "food-handler.pdf", file_url: document.file_url, expiry_date: today() }, { ...btb, user_id: btbUploader, id: "61000000-0000-4000-8000-000000000001", staff_name: "Sam", license_type: "food_handler", file_name: "food-handler.pdf", file_url: document.file_url, expiry_date: btbDay }],
+    corporate_inspections: [{ ...personal, user_id: userId("manager"), id: "62000000-0000-4000-8000-000000000011", inspector_name: "Alex", inspector_role: "Store Manager", inspection_date: today() }, { ...btb, user_id: btbUploader, id: "62000000-0000-4000-8000-000000000001", inspector_name: "Sam", inspector_role: "Corporate", inspection_date: btbDay }],
     inhouse_inspections: [],
     marketing_promotions: [{ ...scope, ...campaign, id: "71000000-0000-4000-8000-000000000001", title: "Autumn specials", status: "active", file_url: document.file_url, file_name: "autumn-specials.pdf", file_size: 1200 }, { ...scope, ...campaign, id: "71000000-0000-4000-8000-000000000002", title: "Winter menu launch", month: Number(monthAt(1).slice(5)), year: Number(monthAt(1).slice(0, 4)) }, { ...btb, ...campaign, user_id: btbUploader, location_id: null, id: "71000000-0000-4000-8000-000000000003", title: "Burger special", status: "active" }],
     social_media_calendar: [{ ...personal, user_id: userId("designer"), id: "72000000-0000-4000-8000-000000000001", post_date: today(), day: (new Date(`${today()}T12:00:00Z`).getUTCDay() + 6) % 7, channel: "Instagram", caption: "Seasonal menu" }],
-    corporate_dates: [{ id: "date1", title: "GST Return", category: "tax", due_date: today(), recurrence: "quarterly", notes: "Review the period before filing.", created_by: null, location_id: null, file_name: null, file_url: null, created_at: time }, { id: "date2", title: "FoodSafe site filing", category: "other", due_date: today(), recurrence: "none", notes: "Location-specific entry", created_by: null, location_id: east, file_name: null, file_url: null, created_at: time }],
+    corporate_dates: [{ id: "63000000-0000-4000-8000-000000000001", title: "GST Return", category: "tax", due_date: today(), recurrence: "quarterly", notes: "Review the period before filing.", created_by: null, location_id: null, file_name: null, file_url: null, created_at: time }, { id: "63000000-0000-4000-8000-000000000011", title: "FoodSafe site filing", category: "other", due_date: today(), recurrence: "none", notes: "Location-specific entry", created_by: null, location_id: east, file_name: null, file_url: null, created_at: time }],
     btb_checklists: [{ ...btb, id: "btb-check1", check_date: btbDay, completed: true }, { ...btb, id: "btb-check2", check_date: btbDay, completed: false }],
     prep_counts: [{ ...btb, id: "57000000-0000-4000-8000-000000000001", item_name: "Prep line one", count_date: btbDay }, { ...btb, id: "57000000-0000-4000-8000-000000000002", item_name: "Prep line two", count_date: btbDay }],
-    cleaning_logs: [{ ...btb, id: "btb-clean1", done_date: btbDay }],
-    order_sheets: [{ ...btb, id: "order1", order_date: btbDay }],
+    cleaning_logs: [{ ...btb, id: "64000000-0000-4000-8000-000000000001", task_name: "Sanitize the front counter", done_date: btbDay }],
+    order_sheets: [{ ...btb, id: "65000000-0000-4000-8000-000000000001", item_name: "White Bun - Not sliced", order_date: btbDay }],
     btb_order_sheets: [{ restaurant_name: "Between the Buns", id: "60000000-0000-4000-8000-000000000002", order_date: btbDay, lines: [{ item_name: "White Bun - Not sliced", par: 12, on_hand: 3 }], saved_by_name: "Manager (shared workspace)" }],
     role_page_access: [],
     inventory_items: [{ id: bun, name: "Sesame buns", unit: "ea", category: "Bakery", unit_cost: 2.5, position: 1, location_id: null }, { id: cheese, name: "Cheddar", unit: "kg", category: "Dairy", unit_cost: 4, position: 2, location_id: null }],
@@ -203,7 +203,10 @@ async function handleRequest(req, res) {
     emailDeliveries.set(key, { id, key, body });
     return failure === "accepted-then-500" ? send(res, 500, { message: "Accepted but response lost" }) : send(res, 200, { id });
   }
-  requestLog.push({ path: url.pathname, method: req.method, query: Object.fromEntries(url.searchParams), body });
+  requestLog.push({ path: url.pathname, method: req.method, query: Object.fromEntries(url.searchParams), body,
+    authorization: req.headers.apikey === "browser-test-service-key" ? "service_role" : req.headers.authorization?.endsWith(".fixture-signature") ? "authenticated" : "anon",
+    capability: !!req.headers["x-btb-public-token"],
+  });
 
   if (url.pathname.startsWith("/auth/v1/")) {
     if (url.pathname.startsWith("/auth/v1/admin/users/") && req.method === "GET") {
@@ -240,9 +243,6 @@ async function handleRequest(req, res) {
   if (isBtbDatabaseTable(table) || url.pathname.startsWith("/rest/v1/rpc/btb_")) {
     const result = await btbPostgrest(table, req.method, url.searchParams, body, req.headers, url.pathname.includes("/rpc/"));
     if (fail?.afterCommit && result.status < 400) return send(res, fail.status ?? 500, { message: "Saved, but the response was lost (test fixture)", code: "FIXTURE_ERROR" });
-    // The prep sheet's atomic replay RPC persists to SQL while its ordinary
-    // reads still use the legacy JavaScript fixture table.
-    if (table === "btb_replay_prep_save" && result.status < 400) tables.prep_counts = await sqlTableRows("prep_counts");
     return send(res, result.status, result.body, result.headers);
   }
   tables[table] ??= [];

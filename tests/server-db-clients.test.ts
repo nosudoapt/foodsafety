@@ -99,7 +99,7 @@ test("the privileged server client is imported ONLY by route files", () => {
 });
 
 test("the month-end inventory page no longer touches Supabase directly", () => {
-  const page = read(join(ROOT, "src", "app", "btb/demo", "month-end-inventory", "page.tsx"));
+  const page = read(join(ROOT, "src", "app", "btb/demo", "month-end-inventory", "view.tsx"));
   assert.ok(!page.includes('from "@/lib/supabase"'), "page must fetch via API routes, not the anon client");
   assert.ok(!page.includes("supabase.from("), "no direct table access from the browser");
 });
@@ -140,6 +140,7 @@ test("no client component directly accesses a protected inventory/access table",
     "btb_bank_accounts", "btb_bank_statements", "btb_bank_transactions", "btb_bank_allocations",
     "btb_gst_periods", "btb_finance_commands", "btb_time_entries", "btb_time_commands",
     "btb_super_admins", "btb_admin_login_limits", "btb_superadmin_locations", "btb_location_page_access", "btb_invitations",
+    "btb_public_tokens", "btb_page_permissions", "login_vault",
   ];
   for (const file of srcFiles) {
     const source = read(file);
@@ -151,4 +152,17 @@ test("no client component directly accesses a protected inventory/access table",
       );
     }
   }
+});
+
+test("only the shared handbook's FoodSafe branch accesses signatures directly", () => {
+  const shared = join(ROOT, "src/components/EmployeeHandbook.tsx");
+  for (const file of srcFiles) {
+    const source = read(file);
+    if (!source.startsWith('"use client"') || !/\.from\(["']handbook_signatures["']\)/.test(source)) continue;
+    assert.equal(file, shared, "BTB signatures require their verified server route");
+  }
+  const handbook = read(shared);
+  assert.ok(handbook.indexOf('if (application === "btb")') < handbook.indexOf('supabase.from("handbook_documents")'));
+  assert.ok(handbook.includes('return () => { cancelled = true; };'));
+  assert.match(handbook, /if \(application === "btb"\) \{[\s\S]*?\/api\/btb\/handbook[\s\S]*?\} else \{[\s\S]*?supabase\.from\("handbook_signatures"\)\.insert/);
 });

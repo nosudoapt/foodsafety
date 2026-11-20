@@ -57,7 +57,7 @@ test("legacy rows stay reachable and unknown values fall back", () => {
 });
 
 const page = readFileSync(
-  join(__dirname, "../../src/app/admin/vault/page.tsx"),
+  join(__dirname, "../../src/components/VaultManager.tsx"),
   "utf8"
 );
 

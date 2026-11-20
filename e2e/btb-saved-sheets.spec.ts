@@ -106,7 +106,7 @@ test("failed prep history and sheet reads offer retry and block saving an incomp
 test("cleaning history reopens saved names, dates and photos; new entries survive reload", async ({ page, fixture }, info) => {
   const older = dateAt(-14);
   const photo = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jR1cAAAAASUVORK5CYII=";
-  await fixture.configure({ tables: { cleaning_logs: [{ id: "earlier-cleaning", restaurant_name: "Between the Buns", location_id: null, task_name: cleaningTasks[0], done_by: "Taylor", done_date: older, done_time: "09:30", week_start: older, before_photo: JSON.stringify([photo]), after_photo: JSON.stringify([photo]), created_at: `${older}T16:00:00Z` }] } });
+  await fixture.configure({ tables: { cleaning_logs: [{ id: "64000000-0000-4000-8000-000000000021", restaurant_name: "Between the Buns", location_id: null, task_name: cleaningTasks[0], done_by: "Taylor", done_date: older, done_time: "09:30", week_start: older, before_photo: JSON.stringify([photo]), after_photo: JSON.stringify([photo]), created_at: `${older}T16:00:00Z` }] } });
   await signInBtb(page, "manager", "/btb/demo/cleaning-schedule");
   await page.getByRole("button", { name: "History (1)", exact: true }).click();
   await expect(page.getByText("1/11 tasks · 2 photos", { exact: true })).toBeVisible();

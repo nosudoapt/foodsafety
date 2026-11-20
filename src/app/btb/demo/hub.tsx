@@ -6,7 +6,7 @@ import { ArrowRight, CheckCheck, ChevronRight, CircleAlert, Eye, LayoutGrid, Ref
 import { NavCard } from "@/components/ui";
 import BtbIcon, { BTB_ICONS } from "@/components/BtbIcon";
 import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
-import { BTB_DASHBOARD_VIEWS, BTB_METRICS, btbCardGroup, btbMetricIds, btbAccessSummary, searchBtbCards, type BtbOverview } from "@/lib/btb-dashboard";
+import { BTB_DASHBOARD_VIEWS, BTB_METRICS, btbCardGroup, btbMetricIds, btbAccessSummary, searchBtbCards, type BtbMetricValues, type BtbOverview } from "@/lib/btb-dashboard";
 import { accessibleBtbCards, pageSlug, BTB_MANAGED_ROLES } from "@/lib/btb-page-access";
 import { BTB_ROLE_LABELS, BTB_ROLES, type BtbRole } from "@/lib/btb-roles";
 import { btbCanEdit } from "@/lib/btb-access";
@@ -15,32 +15,35 @@ import { fetchJson } from "@/lib/fetch-json";
 import RecentlyUsed from "@/components/RecentlyUsed";
 import TrainingDashboardPanel from "@/components/btb/TrainingProgress";
 
-export default function BtbHub({ role: initialRole }: { role: BtbRole }) {
+export default function BtbHub() {
   const { identity, rows } = useBtbWorkspace();
-  const role = identity?.role ?? initialRole;
+  if (!identity) return null;
+  const role = identity.role;
   return <HubBody key={role} role={role} rows={rows} />;
 }
 
 function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtbWorkspace>["rows"] }) {
+  const { identity, pageGrants, access } = useBtbWorkspace();
   const view = BTB_DASHBOARD_VIEWS[role];
-  const cards = accessibleBtbCards(role, rows).filter((card) => card.hub !== false);
+  const cards = accessibleBtbCards(role, rows, pageGrants).filter((card) => card.hub !== false && (card.feature !== "platform" || identity?.employeeId));
   const [query, setQuery] = useState("");
   const [revision, setRevision] = useState(0);
   const [snapshot, setSnapshot] = useState<{ revision: number; data: BtbOverview | null; error: string } | null>(null);
-  const recently = <RecentlyUsed />;
+  const recently = <RecentlyUsed key={`${identity?.employeeId ?? "shared"}:${role}:${identity?.sessionVersion ?? ""}`} workspace="btb" allowedPaths={["/btb/demo", "/btb/demo/account", ...(access?.pages ?? []).map(page => `/btb/demo/${page}`), ...(access?.pages.includes("platform") ? ["/btb/demo/platform/overview", "/btb/demo/platform/settings"] : [])]} />;
   const loaded = snapshot?.revision === revision;
   const result = loaded ? snapshot.data : null;
   const overviewDay = result?.day ?? btbToday();
   const error = loaded ? snapshot.error : "";
-  const availableIds = rows ? btbMetricIds(role, rows) : [];
-  const staticValues = rows ? btbAccessSummary(role, rows) : {};
+  const legacy = !access?.locationWorkspace || ["corporate", "owner"].includes(role);
+  const availableIds = rows ? btbMetricIds(role, rows, pageGrants, legacy) : [];
+  const staticValues: BtbMetricValues = rows ? { ...btbAccessSummary(role, rows, pageGrants), tools: cards.length } : {};
   const values = { ...result?.values, ...staticValues };
   const metricIds = view.metrics.filter((id) => availableIds.includes(id));
   const missing = loaded ? availableIds.filter((id) => values[id] == null) : [];
   const attention = view.attention.filter((id) => typeof values[id] === "number" && Number(values[id]) > 0);
   const quick = view.quick.flatMap((page) => cards.filter((card) => pageSlug(card) === page));
   const primary = quick[0];
-  const matches = searchBtbCards(role, rows, query);
+  const matches = searchBtbCards(role, rows, query, pageGrants).filter(card => cards.some(available => available.href === card.href));
   const groups = [...new Set(matches.map(btbCardGroup))];
 
   useEffect(() => {
@@ -57,7 +60,7 @@ function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtb
   return <div className="dash btb-overview" data-role={role}>
     {recently}
     <header className="dash__heading"><div><p className="dash__eyebrow">{BTB_ROLE_LABELS[role]} overview<span aria-hidden="true" /><time dateTime={overviewDay}>{new Date(`${overviewDay}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</time></p><h1>{view.title}</h1><p className="dash__intro">{view.subtitle}</p></div><div className="dash__heading-actions"><a className="ui-button ui-button--ghost" href="#btb-tools">Explore your tools</a>{primary && <Link className="ui-button" href={primary.href}>{primary.title}<ArrowRight size={16} aria-hidden="true" /></Link>}</div></header>
-    <div className="dash__toolbar"><span className="dash__scope"><span className="btb-subnav__dot" aria-hidden="true" />Between the Buns · saved workspace records</span><div className="dash__toolbar-right"><span className="dash__updated" role="status">{!loaded ? "Updating your overview…" : error || missing.length ? "Some records are unavailable" : `Updated ${new Date(result!.updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`}</span><button className="dash__refresh" aria-label="Refresh overview" aria-busy={!loaded} disabled={!loaded} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={17} aria-hidden="true" /></button></div></div>
+    <div className="dash__toolbar"><span className="dash__scope"><span className="btb-subnav__dot" aria-hidden="true" />Between the Buns · {access?.locations.length ? access.locations.map(site => `${site.name}${site.active ? "" : " (closed)"}`).join(" · ") : "saved workspace records"}</span><div className="dash__toolbar-right"><span className="dash__updated" role="status">{!loaded ? "Updating your overview…" : error || missing.length ? "Some records are unavailable" : `Updated ${new Date(result!.updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`}</span><button className="dash__refresh" aria-label="Refresh overview" aria-busy={!loaded} disabled={!loaded} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={17} aria-hidden="true" /></button></div></div>
     {(error || missing.length > 0) && <div className="ui-notice ui-notice--warning" role="status"><CircleAlert size={18} aria-hidden="true" /><div>{error || "Some counts are unavailable. Refresh to complete your overview."} <button onClick={() => setRevision((value) => value + 1)}>Try again</button></div></div>}
     {metricIds.length > 0 && <section className="dash__metrics" aria-label="Key figures" aria-busy={!loaded}>{metricIds.map((id) => {
       const metric = BTB_METRICS[id];
@@ -88,6 +91,6 @@ function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtb
       {!matches.length && <div className="ui-empty" role="status"><SearchX size={28} /><h3>{query ? `No tools match “${query}”` : "No tools are enabled yet"}</h3><p>{query ? "Try a different name or clear your search." : "Your administrator can review page availability for this role."}</p>{query && <button className="ui-button ui-button--ghost" onClick={() => setQuery("")}>Clear search</button>}</div>}
     </section>
     <details className="dash-roles"><summary>One workspace. A different focus for every role.</summary><div className="dash-roles__grid">{BTB_ROLES.map((item) => <div className="dash-roles__item" key={item} data-current={item === role}><strong>{BTB_ROLE_LABELS[item]}</strong>{item === role && <span>Your view</span>}<p>{BTB_DASHBOARD_VIEWS[item].responsibility}</p></div>)}</div></details>
-    <p className="dash__provenance">Figures reflect saved Between the Buns records and the pages enabled for your role. An unavailable figure appears as “—”. The inventory tile shows the previous calendar month’s saved status.</p>
+    <p className="dash__provenance">Figures reflect saved Between the Buns records and the pages enabled for your role and assigned locations. {legacy ? "An unavailable figure appears as “—”. The inventory tile shows the previous calendar month’s saved status." : "Open Location Workspace for assigned-location records; legacy restaurant-wide figures are not included."}</p>
   </div>;
 }

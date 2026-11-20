@@ -84,15 +84,20 @@ test("manuals endpoints keep FoodSafe and BTB sessions independent, including si
 });
 
 test("manuals enforce BTB role and page access while FoodSafe enforces its own management roles", async ({ page, request, fixture }) => {
+  await fixture.configure({ tables: library() });
   for (const role of ["staff", "supervisor", "manager", "corporate", "admin"] as const) {
     await apiSignIn(request, `${role}@btb.demo`);
     expect((await request.get(btbEndpoint)).status(), role).toBe(role === "admin" ? 403 : 200);
   }
   await apiSignIn(request);
-  for (const page of ["manuals", "training-guide"]) {
-    await fixture.configure({ tables: { role_page_access: [{ role: "manager", page, allowed: false }] } });
-    expect((await request.get(btbEndpoint)).status(), page).toBe(403);
-  }
+  await fixture.configure({ tables: { role_page_access: [{ role: "manager", page: "manuals", allowed: false }] } });
+  expect((await request.get(btbEndpoint)).status()).toBe(403);
+  await fixture.configure({ tables: { role_page_access: [{ role: "manager", page: "training-guide", allowed: false }] } });
+  const before = (await fixture.state()).requests.filter(row => /\/training_(topics|sections)$/.test(row.path)).length;
+  const manualsOnly = await request.get(btbEndpoint);
+  await expect(manualsOnly).toBeOK();
+  expect(await manualsOnly.json()).toEqual({ training: [] });
+  expect((await fixture.state()).requests.filter(row => /\/training_(topics|sections)$/.test(row.path))).toHaveLength(before);
   for (const role of ["staff", "designer"] as const) {
     await signInFoodSafe(page, role);
     expect((await page.request.get(foodSafeEndpoint)).status(), role).toBe(403);
@@ -137,7 +142,7 @@ test("training manuals include every ordered section beyond the old thousand-row
 });
 
 test("a failed stored PDF read blocks incomplete manuals printing and reports the file", async ({ page, fixture }) => {
-  await fixture.configure({ tables: { ...library(), print_manuals: [{ id: "manual1", title: "Operations handbook", file_name: "operations.pdf", file_size: 1200, category: "operations", created_at: "2026-01-01", file_url: "data:application/pdf;base64," }] } });
+  await fixture.configure({ tables: { ...library(), print_manuals: [{ id: randomUUID(), user_id: "10000000-0000-4000-8000-000000000099", restaurant_name: "Between the Buns", title: "Operations handbook", file_name: "operations.pdf", file_size: 1200, category: "operations", created_at: "2026-01-01T00:00:00Z", file_url: "data:application/pdf;base64," }] } });
   await page.addInitScript(() => { window.print = () => { document.documentElement.dataset.printed = "true"; }; });
   await signInBtb(page, "manager", "/btb/demo/manuals");
   await expect(page.getByRole("heading", { name: "Operations handbook" })).toBeVisible();

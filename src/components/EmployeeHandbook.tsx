@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, PageHeader, Button, Input, Badge } from "@/components/ui";
 import { PenLine, CheckCircle2, BookOpen } from "lucide-react";
+import { fetchJson } from "@/lib/fetch-json";
+import { jsonRequest } from "@/components/btb/Feedback";
 
 interface Handbook { id: string; title: string; version: string; body: string | null; }
 interface Sig { id: string; staff_name: string; signature: string; signed_at: string; }
@@ -18,15 +20,24 @@ const FALLBACK_BODY = `Welcome to Between the Buns.
 
 By signing below you confirm you have read and understood this handbook.`;
 
-export default function EmployeeHandbook({ readOnly = false }: { readOnly?: boolean }) {
+export default function EmployeeHandbook({ readOnly = false, application = "foodsafe", acknowledgerName = "" }: { readOnly?: boolean; application?: "btb" | "foodsafe"; acknowledgerName?: string }) {
   void readOnly; // handbook has no document edit controls; signing stays available in read-only mode
+  const fieldId = useId();
   const [book, setBook] = useState<Handbook | null>(null);
   const [sigs, setSigs] = useState<Sig[]>([]);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(acknowledgerName);
   const [signature, setSignature] = useState("");
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
+    if (application === "btb") {
+      let cancelled = false;
+      void fetchJson<{ book: Handbook | null; signatures: Sig[] }>("/api/btb/handbook", { signal: AbortSignal.timeout(12_000) }).then(result => {
+        if (!cancelled) { setBook(result.book ?? { id: "default", title: "Employee Handbook", version: "1.0", body: FALLBACK_BODY }); setSigs(result.signatures); }
+      }).catch(cause => { if (!cancelled) setError(cause instanceof Error ? cause.message : "The handbook could not be loaded."); });
+      return () => { cancelled = true; };
+    }
     supabase.from("handbook_documents").select("id, title, version, body").order("created_at", { ascending: false }).limit(1)
       .then(({ data }) => {
         const b = (data?.[0] as Handbook) ?? { id: "default", title: "Employee Handbook", version: "1.0", body: FALLBACK_BODY };
@@ -36,7 +47,7 @@ export default function EmployeeHandbook({ readOnly = false }: { readOnly?: bool
             .then(({ data: s }) => s && setSigs(s as Sig[]));
         }
       });
-  }, []);
+  }, [application]);
 
   async function sign(e: React.FormEvent) {
     e.preventDefault();
@@ -44,17 +55,26 @@ export default function EmployeeHandbook({ readOnly = false }: { readOnly?: bool
       alert("Type your full name in both fields to sign."); return;
     }
     setSaving(true);
+    setError("");
     const payload = { handbook_id: book.id === "default" ? null : book.id, staff_name: name.trim(), signature: signature.trim() };
-    const { data } = await supabase.from("handbook_signatures").insert(payload)
-      .select("id, staff_name, signature, signed_at").single();
-    setSigs((s) => [(data as Sig) ?? { id: crypto.randomUUID(), signed_at: new Date().toISOString(), ...payload } as Sig, ...s]);
-    setName(""); setSignature("");
-    setSaving(false);
+    try {
+      let saved: Sig;
+      if (application === "btb") {
+        saved = (await fetchJson<{ signature: Sig }>("/api/btb/handbook", jsonRequest(payload))).signature;
+      } else {
+        const { data, error } = await supabase.from("handbook_signatures").insert(payload).select("id, staff_name, signature, signed_at").single();
+        if (error || !data) throw new Error("Your acknowledgement was not saved. Please retry.");
+        saved = data as Sig;
+      }
+      setSigs(s => [saved, ...s]); setName(acknowledgerName); setSignature("");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Your acknowledgement was not saved."); }
+    finally { setSaving(false); }
   }
 
   return (
     <div className="space-y-6">
       <PageHeader title={book?.title ?? "Employee Handbook"} subtitle={`Version ${book?.version ?? "1.0"} · read & acknowledge`} action={<Badge accent="blue">{sigs.length} signed</Badge>} />
+      {error && <div className="ui-notice ui-notice--error" role="alert">{error}</div>}
 
       <Card className="p-6 animate-fade-in">
         <div className="flex items-center gap-2 text-slate-400 text-xs uppercase tracking-wide mb-3"><BookOpen className="w-4 h-4" /> Handbook</div>
@@ -65,15 +85,16 @@ export default function EmployeeHandbook({ readOnly = false }: { readOnly?: bool
         <div className="flex items-center gap-2 text-slate-900 font-semibold mb-3"><PenLine className="w-4 h-4" /> Sign acknowledgement</div>
         <form onSubmit={sign} className="grid sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
           <div>
-            <label className="text-xs font-medium text-slate-500">Full name</label>
-            <Input accent="blue" value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex Staff" />
+            <label htmlFor={`${fieldId}-name`} className="text-xs font-medium text-slate-500">Full name</label>
+            <Input id={`${fieldId}-name`} accent="blue" value={name} onChange={(e) => setName(e.target.value)} placeholder="Alex Staff" />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-500">Type name again to sign</label>
-            <Input accent="blue" value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="Alex Staff" />
+            <label htmlFor={`${fieldId}-signature`} className="text-xs font-medium text-slate-500">Type name again to sign</label>
+            <Input id={`${fieldId}-signature`} accent="blue" value={signature} onChange={(e) => setSignature(e.target.value)} placeholder="Alex Staff" />
           </div>
-          <Button type="submit" accent="blue" disabled={saving} className="h-[46px]">Sign</Button>
+          <Button type="submit" accent="blue" disabled={saving || application === "btb" && (!book || book.id === "default")} className="h-[46px]">{saving ? "Saving…" : "Sign"}</Button>
         </form>
+        {application === "btb" && book?.id === "default" && <p className="ops-meta">A saved handbook is needed before acknowledgements can be recorded.</p>}
       </Card>
 
       <div>

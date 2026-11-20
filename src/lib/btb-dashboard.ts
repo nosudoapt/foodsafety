@@ -73,13 +73,14 @@ export const BTB_DASHBOARD_VIEWS: Record<BtbRole, BtbView> = {
   },
 };
 
-export function btbMetricIds(role: BtbRole, rows: readonly BtbPageAccess[]): BtbMetricId[] {
+export function btbMetricIds(role: BtbRole, rows: readonly BtbPageAccess[], grants: readonly string[] | null = null, legacy = true): BtbMetricId[] {
   const view = BTB_DASHBOARD_VIEWS[role];
   return [...new Set([...view.metrics, ...view.attention])].filter((id) => {
     const page = BTB_METRICS[id].page;
     if (!page) return true;
+    if (!legacy) return false;
     const card = BTB_CARDS.find((item) => pageSlug(item) === page);
-    return !!card && btbPageAllowed(card, role, rows);
+    return !!card && btbPageAllowed(card, role, rows, grants);
   });
 }
 
@@ -114,9 +115,9 @@ export function btbCountQuery(id: BtbMetricId, day: string): { table: string; fi
   return { table, filters };
 }
 
-export function btbAccessSummary(role: BtbRole, rows: readonly BtbPageAccess[]): BtbMetricValues {
+export function btbAccessSummary(role: BtbRole, rows: readonly BtbPageAccess[], grants: readonly string[] | null = null): BtbMetricValues {
   return {
-    tools: accessibleBtbCards(role, rows).length,
+    tools: accessibleBtbCards(role, rows, grants).length,
     ...(role === "admin" ? {
       roles: BTB_MANAGED_ROLES.length,
       pages: BTB_CARDS.filter((card) => card.feature !== "admin_dashboard").length,
@@ -131,7 +132,7 @@ export function btbCardGroup(card: BtbCard): string {
   return "Business & standards";
 }
 
-export function searchBtbCards(role: BtbRole, rows: readonly BtbPageAccess[] | null, query: string): BtbCard[] {
+export function searchBtbCards(role: BtbRole, rows: readonly BtbPageAccess[] | null, query: string, grants: readonly string[] | null = null): BtbCard[] {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return accessibleBtbCards(role, rows).filter((card) => card.hub !== false && terms.every((term) => `${card.title} ${card.desc} ${btbCardGroup(card)}`.toLowerCase().includes(term)));
+  return accessibleBtbCards(role, rows, grants).filter((card) => card.hub !== false && terms.every((term) => `${card.title} ${card.desc} ${btbCardGroup(card)}`.toLowerCase().includes(term)));
 }

@@ -2,13 +2,16 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const GET = btbInventoryRoute(readSnapshot);
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 
 // Fetch a month's accounting snapshot (finalized, or reopened-draft). Any
 // signed-in role may read. The UI shows finalized snapshots as-is and marks
 // reopened months as draft so they can be corrected and re-finalized.
-export async function GET(req: Request) {
+async function readSnapshot(req: Request) {
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });

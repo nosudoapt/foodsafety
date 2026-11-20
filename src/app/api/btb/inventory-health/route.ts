@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const GET = btbInventoryRoute(readHealth);
 import { MONTH_END_EDIT_ROLES, requireRole } from "@/lib/btb-inventory-api";
 import { hasServiceRoleKey, inventoryDb } from "@/lib/supabase-server";
 
@@ -21,7 +24,7 @@ const REQUIRED_TABLES = [
  * every required table can be read through the privileged client. It returns
  * counts only — never credentials or row contents.
  */
-export async function GET() {
+async function readHealth() {
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });

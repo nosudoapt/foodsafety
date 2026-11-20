@@ -7,7 +7,7 @@ import { join } from "node:path";
 // pagination and complete text, including modules that are not selected.
 
 const ROOT = join(__dirname, "../..");
-const source = readFileSync(join(ROOT, "src/app/btb/demo/training-guide/page.tsx"), "utf8");
+const source = readFileSync(join(ROOT, "src/app/btb/demo/training-guide/view.tsx"), "utf8");
 const button = readFileSync(join(ROOT, "src/components/PrintButton.tsx"), "utf8");
 const styles = readFileSync(join(ROOT, "src/app/btb-operations.css"), "utf8");
 

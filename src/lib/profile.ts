@@ -24,6 +24,13 @@ export async function getSessionUser() {
  * surface that rather than writing rows that violate NOT NULL.
  */
 export async function getProfileContext(): Promise<ProfileContext | null> {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/btb/demo/")) {
+    // A simultaneous FoodSafe session is a different identity and tenant.
+    const page = window.location.pathname.slice("/btb/demo/".length);
+    const response = await fetch(`/api/btb/uploader?page=${encodeURIComponent(page)}`, { cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(12_000) });
+    if (!response.ok) return null;
+    return await response.json() as ProfileContext;
+  }
   const user = await getSessionUser();
   if (!user) return null;
 

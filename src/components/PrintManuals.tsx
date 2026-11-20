@@ -7,6 +7,8 @@ import { downloadDataUrl, fileToDataUrl, formatFileSize, printDataUrl } from "@/
 import { fetchJson } from "@/lib/fetch-json";
 import type { TrainingManual } from "@/lib/training";
 import PrintButton from "@/components/PrintButton";
+import { jsonRequest } from "@/components/btb/Feedback";
+import { BTB_UPLOAD_MAX_BYTES } from "@/lib/btb-uploads";
 
 interface Manual {
   id: string;
@@ -162,6 +164,18 @@ export default function PrintManuals({ application, readOnly = false }: { applic
     if (!selectedFile || !title || saving) return;
     setSaving(true);
     setError("");
+
+    if (application === "btb") {
+      try {
+        if (selectedFile.size > BTB_UPLOAD_MAX_BYTES) throw new Error("Choose a manual no larger than 3 MB.");
+        const { manual } = await fetchJson<{ manual: ManualRow }>("/api/btb/manuals", jsonRequest({ title, description, category, file: { name: selectedFile.name, url: await fileToDataUrl(selectedFile) } }));
+        setManuals(prev => [toManual(manual), ...prev]);
+        setShowUpload(false); setTitle(""); setDescription(""); setSelectedFile(null);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      } catch (cause) { setError(cause instanceof Error ? cause.message : "The manual could not be uploaded."); }
+      finally { setSaving(false); }
+      return;
+    }
 
     const ctx = await getProfileContext();
     if (!ctx) {

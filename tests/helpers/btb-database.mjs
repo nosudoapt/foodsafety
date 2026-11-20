@@ -20,7 +20,7 @@ export function identifier(value) {
 
 // Use the actual legacy table declarations so imports run against their real
 // columns, defaults and constraints. The small prelude supplies FK targets.
-function declaration(file, table) {
+export function declaration(file, table) {
   const source = readFileSync(new URL(file, schemaDirectory), "utf8");
   const match = source.match(new RegExp(`CREATE TABLE IF NOT EXISTS ${table} \\([\\s\\S]*?^\\);`, "m"));
   if (!match) throw new Error(`Missing legacy table ${table}`);

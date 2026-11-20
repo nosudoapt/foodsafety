@@ -89,6 +89,7 @@ are idempotent (safe to re-run).
 | 31 | `schema-compliance-second-attachment.sql` | Compliance renewals — second attachment slot (`other_file_name` / `other_file_url`) beside the renewal certificate. |
 | 32 | `schema-btb-superadmin.sql` | Separate BTB super-admin credentials and managed locations, 50 MiB storage cap, location page allow-lists. Requires the existing BTB team and location platform releases. |
 | 33 | `schema-btb-invitations.sql` | One-time person invitations, existing employee credential activation, request-time multi-location page grants. |
+| 34 | `fix-btb-page-capabilities.sql` | Live page-scoped browser capabilities, effective grants at RLS/RPC boundaries, server-only role restrictions and platform grant revalidation. |
 
 ## Role set — single source of truth
 

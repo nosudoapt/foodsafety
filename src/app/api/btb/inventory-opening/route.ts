@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const GET = btbInventoryRoute(readOpening);
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
 import { resolveOpening } from "@/lib/inventory-accounting";
@@ -10,7 +13,7 @@ import { resolveOpening } from "@/lib/inventory-accounting";
 // closing snapshot. A draft count, a missing month, or an unfinalised prior
 // month all yield `opening: null` (unavailable) — never zero, never a skipped
 // month, never a fabricated baseline. Any signed-in role may read.
-export async function GET(req: Request) {
+async function readOpening(req: Request) {
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });

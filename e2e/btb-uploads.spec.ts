@@ -132,7 +132,8 @@ test("uploader APIs enforce independent sessions, role/page permissions and same
   expect((await request.get("/api/btb/documents")).status()).toBe(403);
   expect((await request.get("/api/btb/marketing")).status()).toBe(403);
   const anon = await request.get(`${fixtureUrl}/rest/v1/business_documents?select=id`, { headers: { apikey: "browser-test-anon-key" } });
-  expect(anon.status()).toBe(403);
+  await expect(anon).toBeOK();
+  expect(await anon.json()).toEqual([]);
 });
 
 test("uploader scope and identity are server-owned and foreign records cannot be mutated or downloaded", async ({ request, fixture }) => {
@@ -144,7 +145,9 @@ test("uploader scope and identity are server-owned and foreign records cannot be
   const response = await request.post("/api/btb/documents", { headers: { Origin: appOrigin }, data: { name: "Scoped document", file, file_size: 999999, user_id: foreignDocument.user_id, uploaded_by: foreignDocument.user_id, restaurant_name: "Another restaurant", btb_created_by: randomUUID(), btb_created_by_name: "Forged actor", expiry_date: "2030-01-01", doc_type: "insurance" } });
   await expect(response).toBeOK();
   // An expiry date routes the upload to Renewals, not the plain document vault.
-  expect((await fixture.state()).tables.compliance_documents.find((row) => row.name === "Scoped document")).toMatchObject({ restaurant_name: "Between the Buns", uploaded_by: uploader, location_id: null, file_size: pdf.byteLength, expiry_date: "2030-01-01", doc_type: "insurance", notify: true });
+  const renewal = (await fixture.state()).tables.compliance_documents.find((row) => row.name === "Scoped document");
+  expect(renewal).toMatchObject({ restaurant_name: "Between the Buns", uploaded_by: uploader, location_id: null, file_name: file.name, file_url: file.url, expiry_date: "2030-01-01", doc_type: "insurance", notify: true });
+  expect(renewal).not.toHaveProperty("file_size");
   expect((await fixture.state()).tables.business_documents.find((row) => row.name === "Scoped document")).toBeUndefined();
   const documents = await request.get("/api/btb/documents?restaurant_name=Another%20restaurant");
   expect((await documents.json()).documents).toHaveLength(1);

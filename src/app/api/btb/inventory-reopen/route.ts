@@ -2,6 +2,9 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+
+export const POST = btbInventoryRoute(reopenMonth);
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey } from "@/lib/month-end-inventory";
 import { persistWithAudit, snapshotRestoreFields, type SnapshotRow } from "@/lib/inventory-audit-persist";
@@ -17,7 +20,7 @@ import { persistWithAudit, snapshotRestoreFields, type SnapshotRow } from "@/lib
 // reopened without its audit trail.
 const MANAGER_ROLES = ["manager", "admin"];
 
-export async function POST(req: Request) {
+async function reopenMonth(req: Request) {
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });

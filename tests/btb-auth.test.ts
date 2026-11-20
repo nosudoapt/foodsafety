@@ -262,7 +262,7 @@ test("BTB navigation and authentication stay independent, with an explicit legac
     const source = readFileSync(file, "utf8");
     const hrefs = [...source.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
     for (const href of hrefs) {
-      const legacyHistory = file === join(root, "temperatures/page.tsx") && href === "/temperatures";
+      const legacyHistory = file === join(root, "temperatures/view.tsx") && href === "/temperatures";
       assert.ok(
         href === "/btb/demo" || href.startsWith("/btb/demo/") || href.startsWith("#") || legacyHistory,
         `${file} must not link out to ${href}`

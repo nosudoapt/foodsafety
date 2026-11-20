@@ -12,8 +12,8 @@ import { checkDraftKey, parseCheckDraft, previewChecks } from "../src/lib/btb-ch
 // These tests pin the split: it lives at /btb/demo/checklists behind
 // its own gate, has its own hub card, and the prep sheet no longer carries it.
 
-const PAGE = join(process.cwd(), "src/app/btb/demo/checklists/page.tsx");
-const PREP = join(process.cwd(), "src/app/btb/demo/prep-list/page.tsx");
+const PAGE = join(process.cwd(), "src/app/btb/demo/checklists/view.tsx");
+const PREP = join(process.cwd(), "src/app/btb/demo/prep-list/view.tsx");
 
 const pageSource = readFileSync(PAGE, "utf8");
 const prepSource = readFileSync(PREP, "utf8");

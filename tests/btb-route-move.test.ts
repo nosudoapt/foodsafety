@@ -9,12 +9,17 @@ import { activeHref } from "../src/lib/admin-nav";
 
 const root = join(__dirname, "../..");
 
-test("src contains no old BTB route literals or module specifiers", () => {
+test("src contains no old BTB routing dependencies except audited history normalization", () => {
   const src = join(root, "src");
   const offenders = readdirSync(src, { recursive: true, encoding: "utf8" })
     .filter((file) => /\.(tsx?|jsx?|css)$/.test(file))
     .filter((file) => /["'`]\/between-the-buns(?:[\/"'`?#]|$)|@\/app\/between-the-buns/.test(readFileSync(join(src, file), "utf8")));
-  assert.deepEqual(offenders, []);
+  // This pure normalizer reads already-stored historical paths; it does not
+  // emit legacy navigation. Behaviour is covered by activity.test.ts.
+  assert.deepEqual(offenders, ["lib/activity.ts"]);
+  const normalizer = readFileSync(join(src, "lib/activity.ts"), "utf8");
+  assert.ok(normalizer.includes("function canonicalBtbActivityPath("));
+  assert.ok(!/\bhref\s*=|\bfetch\(|\bredirect\(|@\/app\/between-the-buns/.test(normalizer));
 });
 
 test("all moved cards preserve their persisted page slugs", () => {

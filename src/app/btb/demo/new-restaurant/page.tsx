@@ -1,10 +1,6 @@
-"use client";
-import BtbFeatureGate from "@/components/BtbFeatureGate";
-import FranchiseChecklist from "@/components/btb/FranchiseChecklist";
-export default function Page() {
-  return (
-    <BtbFeatureGate feature="new_restaurant">
-      {(readOnly) => <FranchiseChecklist readOnly={readOnly} />}
-    </BtbFeatureGate>
-  );
+import BtbServerPage from "@/components/btb/BtbServerPage";
+import View from "./view";
+
+export default async function Page() {
+  return await BtbServerPage({ page: "new-restaurant", children: <View /> });
 }

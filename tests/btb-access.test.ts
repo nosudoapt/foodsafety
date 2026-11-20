@@ -186,11 +186,8 @@ const ROUTE_FEATURE: Record<string, string> = {
   manuals: "manuals",
 };
 
-// Reference pages are all-view / no-edit for every role, so the gate would add
-// nothing; login is the auth screen itself.
-const UNGATED_ROUTES = new Set([
-  "login",
-  "account", // Authenticated by the workspace; the API requires an individual account.
+const SERVER_ONLY_GATED_ROUTES = new Set([
+  "account",
   "menu",
   "allergen-chart",
   "gluten-free",
@@ -198,7 +195,7 @@ const UNGATED_ROUTES = new Set([
   "fryer-timing",
 ]);
 
-test("every BTB route is either gated by its feature or explicitly ungated", () => {
+test("interactive BTB views preserve their existing feature gates", () => {
   const root = join(__dirname, "..", "..", "src", "app", "btb/demo");
   const slugs = readdirSync(root, { withFileTypes: true })
     .filter((d) => d.isDirectory())
@@ -208,16 +205,33 @@ test("every BTB route is either gated by its feature or explicitly ungated", () 
     const feature = ROUTE_FEATURE[slug];
     if (!feature) {
       assert.ok(
-        UNGATED_ROUTES.has(slug),
-        `route "/btb/demo/${slug}" maps to no feature — add it to ROUTE_FEATURE (with a btb-access row) or to UNGATED_ROUTES`,
+        SERVER_ONLY_GATED_ROUTES.has(slug),
+        `route "/btb/demo/${slug}" maps to no feature — add its client gate or explicitly audit its server-only gate`,
       );
       continue;
     }
-    const source = readFileSync(join(root, slug, "page.tsx"), "utf8");
-    assert.match(source, /BtbFeatureGate/, `${slug}/page.tsx must wrap its content in BtbFeatureGate`);
+    const source = readFileSync(join(root, slug, "view.tsx"), "utf8");
+    assert.match(source, /BtbFeatureGate/, `${slug}/view.tsx must wrap its content in BtbFeatureGate`);
     assert.ok(
       source.includes(`feature="${feature}"`),
-      `${slug}/page.tsx must gate feature "${feature}"`,
+      `${slug}/view.tsx must gate feature "${feature}"`,
     );
   }
+});
+
+test("all 37 BTB leaves await their exact server gate, including references, account and platform children", () => {
+  const root = join(__dirname, "..", "..", "src", "app", "btb/demo");
+  const pages = readdirSync(root, { recursive: true, encoding: "utf8" }).filter(file => file === "page.tsx" || file.endsWith("/page.tsx"));
+  assert.equal(pages.length, 37);
+  for (const file of pages) {
+    const slug = file === "page.tsx" ? "" : file.slice(0, -"/page.tsx".length);
+    const source = readFileSync(join(root, file), "utf8");
+    assert.ok(!source.includes('"use client"'), `${file} is a server entry, not a client-only gate`);
+    assert.match(source, /export default async function/, `${file} awaits authorization before returning content`);
+    assert.ok(source.includes(`return await BtbServerPage({ page: "${slug}"`), `${file} must await its exact server boundary`);
+  }
+  const boundary = readFileSync(join(root, "../../../components/btb/BtbServerPage.tsx"), "utf8");
+  assert.ok(boundary.includes("await requireBtbAccess("));
+  assert.ok(boundary.indexOf("if (failure) return") < boundary.indexOf("return <>{children}</>"), "denied/failed access cannot serialize protected children");
+  assert.ok(boundary.indexOf("if (failure?.status === 401) redirect") > boundary.indexOf("} catch (error)"), "Next redirects stay outside the authorization catch");
 });
