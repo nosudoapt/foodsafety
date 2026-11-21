@@ -106,6 +106,10 @@
 .btb-console__health-sub { display: block; color: var(--muted); font-size: .6875rem; }
 .btb-console__health-alert { color: var(--danger, #b3261e); font-weight: 600; }
 .btb-console__health-zero { color: var(--muted); }
+.btb-console__account { max-width: 720px; }
+.btb-console__account h2 { display: flex; align-items: center; gap: 8px; }
+.btb-console__account form { display: grid; gap: 16px; }
+.btb-console__account form small { color: var(--muted-2); font-size: .75rem; }
 @media (max-width: 540px) {
   .btb-console__window { width: 100%; justify-content: space-between; }
   .btb-console__metrics { grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); }

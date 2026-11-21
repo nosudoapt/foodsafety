@@ -84,6 +84,40 @@ test("console expiry, tampering, blocking and credential-version revocation fail
   await expectConsoleGate(page);
 });
 
+test("console password rotation keeps this session and revokes every other one", async ({ page, context, fixture }) => {
+  await fixture.configure({ tables: { btb_super_admins: [consoleAdmin] } });
+  await signInConsole(page);
+  const prior = (await context.cookies("http://127.0.0.1:5101")).find(cookie => cookie.name === "btb_admin_session")!.value;
+
+  await page.getByLabel("Current console password").fill(consolePassword);
+  await page.getByLabel("New password", { exact: true }).fill("RotatedConsole!234");
+  await page.getByLabel("Confirm new password").fill("RotatedConsole!234");
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.getByRole("status")).toContainText("Password updated");
+
+  const state = await fixture.state();
+  expect(state.tables.btb_super_admins[0].session_version).toBe(2);
+  // The pre-rotation cookie belongs to the retired version and is rejected.
+  await context.addCookies([{ name: "btb_admin_session", value: prior, url: "http://127.0.0.1:5101", httpOnly: true, sameSite: "Lax" }]);
+  await expectConsoleGate(page);
+
+  const origin = { Origin: "http://127.0.0.1:5101" };
+  expect((await page.request.post("/api/btb/admin/login", { headers: origin, data: { email: consoleEmail, password: consolePassword } })).status()).toBe(401);
+  expect((await page.request.post("/api/btb/admin/login", { headers: origin, data: { email: consoleEmail, password: "RotatedConsole!234" } })).status()).toBe(200);
+});
+
+test("console password rotation rejects a wrong current password and keeps the draft", async ({ page, fixture }) => {
+  await fixture.configure({ tables: { btb_super_admins: [consoleAdmin] } });
+  await signInConsole(page);
+  await page.getByLabel("Current console password").fill("not-the-current-password");
+  await page.getByLabel("New password", { exact: true }).fill("RotatedConsole!234");
+  await page.getByLabel("Confirm new password").fill("RotatedConsole!234");
+  await page.getByRole("button", { name: "Change password" }).click();
+  await expect(page.locator(".btb-console__account").getByRole("alert")).toContainText("current console password is incorrect");
+  await expect(page.getByLabel("New password", { exact: true })).toHaveValue("RotatedConsole!234");
+  expect((await fixture.state()).tables.btb_super_admins[0].session_version).toBe(1);
+});
+
 test("console sign-in retains failed entries, rejects CSRF and confines return paths", async ({ page, fixture }) => {
   await fixture.configure({ tables: { btb_super_admins: [consoleAdmin] } });
   const csrf = await page.request.post("/api/btb/admin/login", { headers: { Origin: "https://outside.example" }, data: { email: consoleEmail, password: consolePassword } });

@@ -65,12 +65,12 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
     assert.ok(
       src.includes("btbRoute(") || src.includes("btbIdentityFromSession(") || src.includes("verifiedBtbRole as roleFromSession") || src.includes("legacyBtbRole as roleFromSession")
         || src.includes("platformRoute(") || src.includes("requireBtbAccess(")
-        || src.includes("btbAdminRoute(") || src.includes("btbAdminIdentityFromSession("),
+        || src.includes("btbAdminRoute(") || src.includes("requireBtbAdmin(") || src.includes("btbAdminIdentityFromSession("),
       `${f} must verify individual account state, not just decode a cookie role`,
     );
     // platformRoute() resolves the personal employee session server-side (and
     // re-verifies the credential version in SQL), so it also reads the cookie.
-    if (!src.includes("btbRoute(") && !src.includes("platformRoute(") && !src.includes("requireBtbAccess(") && !src.includes("btbAdminRoute(")) {
+    if (!src.includes("btbRoute(") && !src.includes("platformRoute(") && !src.includes("requireBtbAccess(") && !src.includes("btbAdminRoute(") && !src.includes("requireBtbAdmin(")) {
       assert.ok(src.includes("btbAdminIdentityFromSession(") ? src.includes("BTB_ADMIN_COOKIE") : src.includes("BTB_COOKIE"), `${f} must read its own BTB cookie`);
     }
     if (src.includes("btbAdminRoute(")) {

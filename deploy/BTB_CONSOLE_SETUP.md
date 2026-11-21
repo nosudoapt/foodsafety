@@ -36,6 +36,11 @@ the exact insert plan, and requires confirmation. It writes one
 `btb_super_admins` row with a scrypt password hash and touches nothing else.
 Re-running it for an existing email is refused rather than overwriting.
 
+After signing in, rotate the console password from the **Console account**
+panel on `/btb/admin`: it requires the current password, stores a new scrypt
+hash and bumps `session_version`, which signs out every other console session
+while keeping the current tab signed in.
+
 ## 3. Sign in and create locations
 
 1. Open `/btb/admin/login` and use the console email/password.
