@@ -16,7 +16,8 @@ export async function PATCH(request: Request, route: Context) {
     const error = validateBtbAdminLocation(body, true);
     if (error) throw new BtbApiError(error);
     return btbAdminRpc(context, "btb_admin_update_location", { p_location: locationId, p_version: body.version, p_data: {
-      name: (body.name as string).trim(), address: (body.address as string).trim(), active: body.active, timezone: body.timezone,
+      name: (body.name as string).trim(), slug: typeof body.slug === "string" ? body.slug.trim() : "",
+      address: (body.address as string).trim(), active: body.active, timezone: body.timezone,
       ...("pages" in body ? { pages: body.pages } : {}),
     } }, "The location could not be saved.");
   })(request);

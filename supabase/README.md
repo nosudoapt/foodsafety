@@ -95,6 +95,7 @@ are idempotent (safe to re-run).
 | 38 | `schema-btb-training-audience.sql` | `training_topics.audience` — whole-team modules vs manager-only modules. Week 4 manager training is reviewed by an owner. |
 | 39 | `seed-btb-training-modules.sql` | The four-week onboarding programme (Weeks 1–3 all staff, Week 4 manager-only) as published topics and sections. Idempotent by fixed id. |
 | 40 | `schema-btb-manager-invites.sql` | Managers and supervisors invite their own team from the workspace: employee-issued single-use invitations, branded setup email, no console password required. |
+| 41 | `schema-btb-location-slugs.sql` | Unique location slugs (`/btb/drumheller`), backfilled from names; console create/update keeps them valid and reserved words (`demo`, `login`, `admin`, `api`, `btb`) are refused. |
 
 ## Role set — single source of truth
 

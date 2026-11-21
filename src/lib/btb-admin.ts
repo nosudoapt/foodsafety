@@ -16,7 +16,7 @@ export const isBtbInviteRole = (value: unknown): value is BtbInviteRole => BTB_I
 export const BTB_LOCATION_PAGES = BTB_CARDS.filter(card => card.feature !== "admin_dashboard");
 
 export interface BtbAdminLocation {
-  id: string; name: string; address: string | null; active: boolean; timezone: string | null;
+  id: string; name: string; slug: string; address: string | null; active: boolean; timezone: string | null;
   version: number; storage_limit_bytes: number; created_at: string; people: number; pages: string[];
 }
 export interface BtbAdminLocations { locations: BtbAdminLocation[] }
@@ -34,8 +34,23 @@ export interface BtbInvitationReceipt {
 }
 export interface BtbInvitationInfo { name: string; email: string; location: string; expires_at: string }
 
+export const BTB_RESERVED_SLUGS = ["demo", "login", "admin", "api", "btb"] as const;
+
+/** Lowercase letters, numbers and single hyphens; 1-40 characters. */
+export function validBtbSlug(value: unknown): value is string {
+  return typeof value === "string" && /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/.test(value)
+    && !(BTB_RESERVED_SLUGS as readonly string[]).includes(value);
+}
+
+export function btbSlugFromName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/g, "");
+}
+
 export function validateBtbAdminLocation(input: Record<string, unknown>, edit = false): string | null {
   if (typeof input.name !== "string" || !input.name.trim() || input.name.trim().length > 150) return "Enter a location name (up to 150 characters).";
+  if ("slug" in input && input.slug !== "" && input.slug != null && !validBtbSlug(input.slug)) {
+    return "Use a URL slug of lowercase letters, numbers and hyphens (not demo, login, admin, api or btb).";
+  }
   if (typeof input.address !== "string" || input.address.length > 300) return "Keep the address under 300 characters.";
   if (typeof input.timezone !== "string" || !input.timezone || input.timezone.length > 100) return "Choose an IANA timezone, such as America/Regina.";
   try { new Intl.DateTimeFormat("en-CA", { timeZone: input.timezone }).format(); }

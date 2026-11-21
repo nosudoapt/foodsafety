@@ -4,7 +4,7 @@ import { isBtbRole, type BtbRole } from "./btb-roles";
 
 export const BTB_MANAGED_ROLES = ["staff", "supervisor", "manager", "corporate"] as const;
 export interface BtbPageAccess { role: BtbRole; page: string; allowed: boolean }
-export interface BtbAssignedLocation { id: string; name: string; active: boolean }
+export interface BtbAssignedLocation { id: string; name: string; slug: string; active: boolean }
 export interface BtbEffectiveAccess {
   rows: BtbPageAccess[];
   /** Retained assignments, including closed sites; only active sites grant pages. */

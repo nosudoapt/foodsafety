@@ -26,13 +26,13 @@ export async function loadBtbEffectiveAccess(db: SupabaseClient, identity: BtbId
   const locations: BtbEffectiveAccess["locations"] = [];
   if (locationIds.length) {
     const [names, settings] = await Promise.all([
-      db.from("locations").select("id,name").in("id", locationIds),
+      db.from("locations").select("id,name,slug").in("id", locationIds),
       db.from("btb_location_settings").select("location_id,active").in("location_id", locationIds),
     ]);
     if (names.error || settings.error || names.data?.length !== locationIds.length || settings.data?.length !== locationIds.length) {
       throw new BtbApiError("Assigned locations could not be loaded. Please try again.", 503, names.error ?? settings.error);
     }
-    for (const site of names.data) locations.push({ id: site.id, name: site.name, active: settings.data.some(row => row.location_id === site.id && row.active) });
+    for (const site of names.data) locations.push({ id: site.id, name: site.name, slug: site.slug ?? "", active: settings.data.some(row => row.location_id === site.id && row.active) });
     locations.sort((a, b) => a.name.localeCompare(b.name));
   }
   return {

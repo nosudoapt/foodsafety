@@ -261,12 +261,15 @@ test("the signed-out response never enumerates shared or employee accounts", () 
 
 // --- 5. the proxy still gates every BTB page --------------------------------
 
-test("proxy cookie-gates BTB and leaves its login open", () => {
+test("proxy cookie-gates BTB, rewrites location slugs and hides the demo door", () => {
   const source = read("src/proxy.ts");
   assert.ok(source.includes('pathname === "/btb/login"'));
-  assert.ok(source.includes("tokenValid(request.cookies.get(BTB_COOKIE)"));
+  assert.ok(source.includes("tokenValid(session)"));
+  assert.ok(source.includes("btbDemoSlug"));
+  assert.ok(source.includes("x-btb-slug"), "the resolved location slug reaches the server layout");
+  assert.ok(source.includes("NextResponse.rewrite"), "location URLs render the existing pages without exposing /btb/demo");
   assert.ok(source.includes('url.pathname = "/btb/login"'));
-  assert.ok(source.includes('url.searchParams.set("next", pathname)'));
+  assert.ok(source.includes('url.searchParams.set("next", pathname'));
 });
 
 // --- 6. BTB stays decoupled from the green demo -----------------------------

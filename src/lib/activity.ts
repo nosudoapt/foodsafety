@@ -18,7 +18,17 @@ export function canonicalBtbActivityPath(value: unknown): string | null {
   if (!path) return null;
   if (path === "/between-the-buns" || path === "/btb") return "/btb/demo";
   if (path.startsWith("/between-the-buns/")) return `/btb/demo/${path.slice("/between-the-buns/".length)}`;
-  if (path.startsWith("/btb/") && !/^\/btb\/(demo|admin|login)(\/|$)/.test(path)) return `/btb/demo/${path.slice("/btb/".length)}`;
+  // Current URLs are /btb/<location-slug>/<page>. Store the stable page path so
+  // chips do not mix location slugs; the demo, sign-in and console are already
+  // canonical.
+  if (path.startsWith("/btb/") && !/^\/btb\/(demo|admin|login|demo-login)(\/|$)/.test(path)) {
+    const parts = path.split("/").filter(Boolean);
+    // Pre-move URLs were /btb/<page>. Only treat the second segment as a
+    // location when it is not a known page; otherwise keep it as the page.
+    if (btbCardForPath(`/btb/demo/${parts[1]}`)) return `/btb/demo/${parts.slice(1).join("/")}`;
+    const rest = parts.slice(2).join("/");
+    return rest ? `/btb/demo/${rest}` : "/btb/demo";
+  }
   return path;
 }
 

@@ -189,6 +189,11 @@
       "step": 40,
       "file": "schema-btb-manager-invites.sql",
       "description": "Managers and supervisors can invite their own team: employee-issued single-use invitations and new staff accounts without a console password."
+    },
+    {
+      "step": 41,
+      "file": "schema-btb-location-slugs.sql",
+      "description": "Unique human-readable location slugs (/btb/drumheller), backfilled from existing names, with slug-aware console create/update functions."
     }
   ]
 }

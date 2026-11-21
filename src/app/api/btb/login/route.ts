@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
+import { btbDemoSlug } from "@/lib/btb-demo";
 import { inventoryDb } from "@/lib/supabase-server";
 import { BTB_RESTAURANT, isEmail, type BtbEmployee } from "@/lib/btb-team";
 import { verifyEmployeePassword } from "@/lib/btb-passwords";
@@ -37,6 +38,7 @@ export async function POST(request: NextRequest) {
     let value: string;
     let role: string;
     let name: string;
+    let slug = "";
     let maxAge = BTB_COOKIE_MAX_AGE;
     if (BTB_ACCOUNTS.some((item) => item.email === email)) {
       // Live sign-in is individual-only. The shared store-tablet accounts are
@@ -49,6 +51,8 @@ export async function POST(request: NextRequest) {
       value = sessionValueFor(account.role);
       role = account.role;
       name = account.name;
+      // Test/local shared accounts live behind the hidden demo door.
+      slug = btbDemoSlug() ?? "";
     } else {
       const db = inventoryDb();
       const limit = await db.rpc("btb_consume_login_attempt", { p_key: createHash("sha256").update(email).digest("hex") });
@@ -65,9 +69,24 @@ export async function POST(request: NextRequest) {
       role = employee.role;
       name = employee.name;
       maxAge = BTB_EMPLOYEE_MAX_AGE;
+      // Send the person to their own location URL. Only active assignments
+      // count; the proxy still resolves the real slug on every request.
+      try {
+        const access = await db.from("btb_location_access").select("location_id").eq("employee_id", employee.id);
+        const ids = (access.data ?? []).map((row) => row.location_id as string);
+        if (ids.length) {
+          const [settings, names] = await Promise.all([
+            db.from("btb_location_settings").select("location_id").in("location_id", ids).eq("active", true),
+            db.from("locations").select("id,name,slug").in("id", ids).order("name"),
+          ]);
+          const active = new Set((settings.data ?? []).map((row) => row.location_id as string));
+          slug = (names.data ?? []).find((row) => active.has(row.id as string) && row.slug)?.slug as string ?? "";
+        }
+      } catch { slug = ""; }
     }
-    const response = NextResponse.json({ ok: true, role, name }, { headers: PRIVATE_HEADERS });
+    const response = NextResponse.json({ ok: true, role, name, slug }, { headers: PRIVATE_HEADERS });
     response.cookies.set(BTB_COOKIE, value, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge });
+    if (slug) response.cookies.set("btb_slug", slug, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge });
     return response;
   } catch (error) {
     if (error instanceof BtbConfigurationError) {

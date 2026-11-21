@@ -60,7 +60,8 @@ export async function POST(request: Request) {
   const actor = await resolveActor(workspace);
   if (!actor) return NextResponse.json({ ok: false }, { status: 401, headers: PRIVATE_HEADERS });
   const body = await readBody(request, 4096);
-  const path = activityPath(body.path);
+  const supplied = activityPath(body.path);
+  const path = supplied && workspace === "btb" ? canonicalBtbActivityPath(supplied) : supplied;
   if (!path) return NextResponse.json({ ok: false }, { status: 400, headers: PRIVATE_HEADERS });
   if (!activityPathInWorkspace(path, workspace) || actor.access && !btbActivityPathAllowed(path, actor.access)) {
     throw new BtbApiError("This page is not enabled in your workspace.", 403);

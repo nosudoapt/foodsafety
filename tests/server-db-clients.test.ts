@@ -49,7 +49,7 @@ test("no BTB API route imports the shared anon browser client", () => {
 // Session-lifecycle routes don't resolve an existing session — login CREATES
 // one from credentials, logout clears it. Every other BTB route must resolve
 // the role from the cookie server-side.
-const SESSION_LIFECYCLE_ROUTES = new Set(["login", "logout"]);
+const SESSION_LIFECYCLE_ROUTES = new Set(["login", "logout", "demo-login"]);
 
 test("every BTB API route resolves the role from the cookie server-side", () => {
   for (const f of btbRoutes) {
@@ -88,13 +88,16 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
   }
 });
 
-test("the privileged server client is imported ONLY by route files", () => {
+test("the privileged server client is imported only by server files", () => {
   for (const f of srcFiles) {
-    if (!read(f).includes('from "@/lib/supabase-server"')) continue;
-    assert.ok(
-      f.includes(`${sep}api${sep}`) && f.endsWith("route.ts"),
-      `${f} imports the privileged server client but is not an API route — it would leak to the browser`,
-    );
+    const src = read(f);
+    if (!src.includes('from "@/lib/supabase-server"')) continue;
+    const isRoute = f.includes(`${sep}api${sep}`) && f.endsWith("route.ts");
+    // Server Components (layouts/pages without "use client") never ship to the
+    // browser; a client component importing the privileged client would.
+    const isServerComponent = f.includes(`${sep}app${sep}`) && !/^["']use client["']/m.test(src);
+    assert.ok(isRoute || isServerComponent,
+      `${f} imports the privileged server client but is not an API route or Server Component — it would leak to the browser`);
   }
 });
 

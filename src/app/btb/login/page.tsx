@@ -39,10 +39,11 @@ export default function BtbLogin() {
     clearBtbPublicCapabilities();
     setError("");
     try {
-      await fetchJson("/api/btb/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
+      const result = await fetchJson<{ slug?: string }>("/api/btb/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email: email.trim(), password }) });
       announceBtbSessionChange();
       const next = new URLSearchParams(window.location.search).get("next");
-      window.location.replace(safeNextPath(next, "/btb/demo", "/btb/demo"));
+      const fallback = result.slug ? `/btb/${result.slug}` : "/btb/demo";
+      window.location.replace(safeNextPath(next, fallback, "/btb"));
     } catch (cause) {
       setError(cause instanceof RequestError ? cause.status === 401 ? "Your email and password don’t match. Check your details and try again." : cause.message : "Couldn’t reach the workspace. Check your connection and try again.");
     } finally { setLoading(false); }

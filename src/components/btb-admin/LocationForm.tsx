@@ -4,14 +4,14 @@ import { useId, useState } from "react";
 import { Button, Input } from "@/components/ui";
 import { jsonRequest, messageOf } from "@/components/btb/Feedback";
 import { fetchJson } from "@/lib/fetch-json";
-import { validateBtbAdminLocation, type BtbAdminLocation } from "@/lib/btb-admin";
+import { btbSlugFromName, validateBtbAdminLocation, type BtbAdminLocation } from "@/lib/btb-admin";
 import PageGrantPicker from "./PageGrantPicker";
 
 export default function LocationForm({ location, onSaved, onCancel, onBusyChange }: {
   location?: BtbAdminLocation; onSaved: (id: string) => void; onCancel?: () => void; onBusyChange?: (busy: boolean) => void;
 }) {
   const id = useId();
-  const [form, setForm] = useState({ name: location?.name ?? "", address: location?.address ?? "", timezone: location?.timezone ?? "", active: location?.active ?? true, pages: location?.pages ?? [] });
+  const [form, setForm] = useState({ name: location?.name ?? "", slug: location?.slug ?? "", address: location?.address ?? "", timezone: location?.timezone ?? "", active: location?.active ?? true, pages: location?.pages ?? [] });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   async function save(event: React.FormEvent) {
@@ -29,7 +29,8 @@ export default function LocationForm({ location, onSaved, onCancel, onBusyChange
   return <form onSubmit={save} aria-busy={saving}>
     {error && <p className="ui-notice ui-notice--error" role="alert">{error} Your draft is still here.</p>}
     <fieldset className="ui-form-stack" disabled={saving}>
-      <label>Location name<Input accent="red" data-modal-autofocus autoComplete="organization" required maxLength={150} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} /></label>
+      <label>Location name<Input accent="red" data-modal-autofocus autoComplete="organization" required maxLength={150} value={form.name} onChange={event => setForm({ ...form, name: event.target.value, ...(location ? {} : { slug: btbSlugFromName(event.target.value) }) })} /></label>
+      <label>URL slug<Input accent="red" required maxLength={40} pattern="[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?" value={form.slug} onChange={event => setForm({ ...form, slug: event.target.value.toLowerCase() })} placeholder="drumheller" /><small>The workspace lives at <strong>/btb/{form.slug || "your-location"}</strong>. Lowercase letters, numbers and hyphens; not demo, login, admin, api or btb.</small></label>
       <label>Address <span>optional</span><Input accent="red" autoComplete="street-address" maxLength={300} value={form.address} onChange={event => setForm({ ...form, address: event.target.value })} /></label>
       <label>IANA timezone<Input accent="red" required list={`${id}-timezones`} placeholder="America/Regina" maxLength={100} value={form.timezone} onChange={event => setForm({ ...form, timezone: event.target.value })} /><small>Used by location reports and operational days. Choose the actual location’s timezone.</small></label>
       <datalist id={`${id}-timezones`}>{["America/Regina", "America/Winnipeg", "America/Edmonton", "America/Vancouver", "America/Toronto", "America/Halifax", "America/St_Johns"].map(zone => <option key={zone} value={zone} />)}</datalist>
