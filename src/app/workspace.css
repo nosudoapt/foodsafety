@@ -461,6 +461,13 @@ a.dash-metric:hover { border-color: var(--brand); background: white; }
 .btb-auth__accounts button[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
 .btb-auth__accounts strong { display: block; font-size: 0.8125rem; font-weight: 600; }
 .btb-auth__accounts span { display: block; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+.btb-auth__branch { margin-top: 4px; margin-bottom: 22px; }
+.btb-auth__branch-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.btb-auth__branch-grid button { text-align: left; min-height: 64px; border-radius: var(--r-sm); padding: 11px 13px; border: 1px solid var(--line); background: var(--surface); }
+.btb-auth__branch-grid button[aria-pressed="true"] { border-color: var(--brand); background: var(--brand-soft); }
+.btb-auth__branch-grid strong { display: block; font-size: 0.875rem; font-weight: 600; }
+.btb-auth__branch-grid span { display: block; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+@media (max-width: 520px) { .btb-auth__branch-grid { grid-template-columns: 1fr; } }
 .btb-auth__accounts .btb-auth__hint { font-size: 0.75rem; margin-top: 12px; }
 .btb-auth__story h2 { font: 400 clamp(2.4rem, 4vw, 3.4rem)/1.12 var(--font-display); letter-spacing: -0.03em; margin-top: 30px; }
 .btb-auth__story h2 em { color: #d4b7c8; }

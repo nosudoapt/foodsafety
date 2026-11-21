@@ -56,6 +56,12 @@ test("every BTB API route resolves the role from the cookie server-side", () => 
     const routeName = f.split(sep).at(-2) ?? "";
     if (SESSION_LIFECYCLE_ROUTES.has(routeName)) continue;
     const src = read(f);
+    // Public branch cards: names and slugs only, no people or records.
+    if (routeName === "locations" && f.includes(`${sep}api${sep}btb${sep}locations${sep}`)) {
+      assert.ok(!src.includes("btb_employees") && !src.includes("credentials"), `${f} must not expose people or credentials`);
+      assert.ok(src.includes("active"), `${f} must omit closed locations`);
+      continue;
+    }
     if (f.includes(`${sep}btb${sep}invitations${sep}`)) {
       assert.ok(["lookup", "accept"].includes(routeName), `${f} must be an explicitly audited token-authorized setup route`);
       assert.ok(src.includes(routeName === "lookup" ? "lookupBtbInvitation(" : "acceptBtbInvitation("), `${f} must verify the single-use invitation token server-side`);

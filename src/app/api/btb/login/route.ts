@@ -24,11 +24,13 @@ import {
 export async function POST(request: NextRequest) {
   let email = "";
   let password = "";
+  let locationSlug = "";
   try {
     requireBtbOrigin(request, "Sign in from the BTB workspace.");
     const body = await readBody(request, 4096);
     email = String(body?.email ?? body?.username ?? "").trim().toLowerCase();
     password = String(body?.password ?? "");
+    locationSlug = String(body?.locationSlug ?? "").trim().toLowerCase();
   } catch (error) {
     return apiFailure(error);
   }
@@ -80,9 +82,22 @@ export async function POST(request: NextRequest) {
             db.from("locations").select("id,name,slug").in("id", ids).order("name"),
           ]);
           const active = new Set((settings.data ?? []).map((row) => row.location_id as string));
-          slug = (names.data ?? []).find((row) => active.has(row.id as string) && row.slug)?.slug as string ?? "";
+          const allowed = (names.data ?? []).filter((row) => active.has(row.id as string) && row.slug);
+          if (locationSlug) {
+            if (!allowed.some((row) => row.slug === locationSlug)) {
+              throw new BtbApiError("Your account is not assigned to that location.", 403);
+            }
+            slug = locationSlug;
+          } else {
+            slug = (allowed[0]?.slug as string) ?? "";
+          }
+        } else if (locationSlug) {
+          throw new BtbApiError("Your account is not assigned to that location.", 403);
         }
-      } catch { slug = ""; }
+      } catch (error) {
+        if (error instanceof BtbApiError) throw error;
+        slug = "";
+      }
     }
     const response = NextResponse.json({ ok: true, role, name, slug }, { headers: PRIVATE_HEADERS });
     response.cookies.set(BTB_COOKIE, value, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge });
