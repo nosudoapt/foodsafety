@@ -5,7 +5,7 @@ import { hashEmployeePassword, validEmployeePassword } from "@/lib/btb-passwords
 
 export const GET = btbRoute("employees", false, async ({ db }) => ({
   employees: await readAll<BtbEmployee>((from, to) => db.from("btb_employees").select(EMPLOYEE_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).order("name").order("id").range(from, to), "Employee records could not be loaded. Apply the BTB team schema if it has not been installed."),
-}));
+}), { allowLocationWorkspace: true });
 
 export const POST = btbRoute("employees", true, async ({ db, identity }, request) => {
   const body = await readBody(request);
@@ -43,4 +43,4 @@ export const POST = btbRoute("employees", true, async ({ db, identity }, request
   const employee = result.data?.[0] as BtbEmployee | undefined;
   if (!employee?.id) throw new BtbApiError("The employee save was not confirmed. Please reload before retrying.", 503);
   return { employee };
-});
+}, { allowLocationWorkspace: true });
