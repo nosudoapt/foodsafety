@@ -61,6 +61,7 @@ export async function createBtbDatabase(legacy = {}, options = {}) {
     ALTER TABLE prep_counts ADD COLUMN pull numeric NOT NULL DEFAULT 0;
     ALTER TABLE prep_counts ADD COLUMN urgent boolean NOT NULL DEFAULT false;
     ${declaration("schema-training.sql", "training_topics")}
+    ALTER TABLE training_topics ADD COLUMN IF NOT EXISTS audience text NOT NULL DEFAULT 'staff';
     ${declaration("schema-training.sql", "training_sections")}
     ${declaration("schema-compliance.sql", "new_restaurant_tasks")}
     ${declaration("schema-rbac.sql", "staff_licenses")}

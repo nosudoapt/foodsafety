@@ -6,6 +6,7 @@ import { isTrainingCategory } from "@/lib/training";
 export const POST = btbRoute("training_guide", true, async ({ db, identity }, request) => {
   const body = await readBody(request);
   if (body.id != null && !isUuid(body.id) || !isVersion(body.revision) || typeof body.title !== "string" || !body.title.trim() || body.title.length > 200 || !isTrainingCategory(body.category) || !Number.isInteger(body.est_minutes) || Number(body.est_minutes) < 1 || Number(body.est_minutes) > 480 || typeof body.published !== "boolean" || typeof body.video_url !== "string") throw new BtbApiError("Enter a title, category and reading time between 1 and 480 minutes.");
+  if (body.audience != null && body.audience !== "staff" && body.audience !== "manager") throw new BtbApiError("Choose who this module is for.");
   if (body.video_url && !/^https:\/\//i.test(body.video_url)) throw new BtbApiError("Use an HTTPS YouTube or video link.");
   if (body.video_url.length > 2000 || !Array.isArray(body.sections) || body.sections.length > 100) throw new BtbApiError("Keep the video link under 2,000 characters and the module under 100 sections.");
   const ids = new Set<string>();
@@ -20,5 +21,11 @@ export const POST = btbRoute("training_guide", true, async ({ db, identity }, re
   const result = await db.rpc("btb_save_training_topic", { p_id: body.id ?? null, p_revision: body.revision, p_title: body.title.trim(), p_category: body.category, p_minutes: body.est_minutes, p_published: body.published, p_video: body.video_url.trim(), p_sections: sections, p_actor: attributionName(identity) });
   dbError(result.error, "The module could not be saved. Your draft is still here.");
   if (!result.data?.[0]) throw new BtbApiError("The module save was not confirmed.", 503);
-  return { topic: result.data[0], sections: sections.map((section) => ({ ...section, topic_id: result.data[0].id })) };
+  const saved = result.data[0] as { id: string; audience?: "staff" | "manager" };
+  const audience = (body.audience ?? saved.audience ?? "staff") as "staff" | "manager";
+  if (saved.audience !== audience) {
+    const updated = await db.from("training_topics").update({ audience }).eq("id", saved.id);
+    dbError(updated.error, "The module audience could not be saved.");
+  }
+  return { topic: { ...saved, audience }, sections: sections.map((section) => ({ ...section, topic_id: saved.id })) };
 }, { allowLocationWorkspace: true });

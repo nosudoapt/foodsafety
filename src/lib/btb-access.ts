@@ -87,6 +87,8 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   // Deadlines are read-only for the team; managers own the calendar entries.
   tax_dates:         { view: ALL,    edit: MGR_ONLY },
   // SOP library: everyone reads published topics; only managers draft/publish.
+  // Owners review Week 4 through the read gate (see the review route), not by
+  // gaining store-level edit rights.
   training_guide:    { view: ALL,    edit: MGR_ONLY },
   // Closing counts: everyone reads the sheet, managers type the numbers.
   month_end_inventory: { view: ALL,  edit: MGR_ONLY },

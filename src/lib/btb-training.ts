@@ -1,9 +1,28 @@
 import type { TrainingSection, TrainingTopic } from "./training";
 import type { TeamMember } from "./btb-team";
 
-export type BtbTrainingTopic = TrainingTopic & { revision: number };
+export type TrainingAudience = "staff" | "manager";
+export type BtbTrainingTopic = TrainingTopic & { revision: number; audience: TrainingAudience };
 export type TrainingStatus = "in_progress" | "pending" | "approved" | "changes_requested";
 export type DisplayTrainingStatus = TrainingStatus | "not_started" | "needs_update";
+
+/** Manager training is only shown to leadership, and only managers complete it.
+ * Owners and corporate can read it (owners review it), but staff and supervisors
+ * never see Week 4 at all. */
+export function trainingAudienceVisible(audience: TrainingAudience, role: string | null | undefined): boolean {
+  return audience !== "manager" || !!role && ["manager", "corporate", "owner"].includes(role);
+}
+export function trainingCompletionAllowed(audience: TrainingAudience, role: string | null | undefined): boolean {
+  return audience !== "manager" || role === "manager";
+}
+/** Week 4 (manager training) is signed off by the owner; team modules by a manager. */
+export function trainingReviewerRole(audience: TrainingAudience): "manager" | "owner" {
+  return audience === "manager" ? "owner" : "manager";
+}
+export const TRAINING_AUDIENCE_LABELS: Record<TrainingAudience, string> = {
+  staff: "All team",
+  manager: "Managers · owner approval",
+};
 export interface TrainingRecord {
   id: string; employee_id: string; topic_id: string; topic_revision: number;
   completed_sections: string[]; reviewed: boolean; status: TrainingStatus; notes: string;

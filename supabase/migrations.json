@@ -174,6 +174,16 @@
       "step": 37,
       "file": "fix-btb-page-capabilities.sql",
       "description": "Live role/location page grants, read/write browser capabilities, restrictive RLS and checked atomic prep replay. Ordered after step 36 because it wraps btb_replay_prep_save."
+    },
+    {
+      "step": 38,
+      "file": "schema-btb-training-audience.sql",
+      "description": "Training audience (whole team vs managers only) so Week 4 manager training is reviewed by an owner."
+    },
+    {
+      "step": 39,
+      "file": "seed-btb-training-modules.sql",
+      "description": "The four-week onboarding programme (Weeks 1-3 staff, Week 4 manager-only), seeded as published training topics and sections."
     }
   ]
 }

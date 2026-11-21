@@ -1,3 +1,4 @@
+import { scryptSync } from "node:crypto";
 import { test, expect, capture, password, signInBtb, signInEmployee } from "./fixtures";
 import { apiSignIn, createEmployee, createTrainingModule } from "./btb-helpers";
 import { btbToday } from "../src/lib/btb-team";
@@ -306,7 +307,7 @@ test("training moves through personal progress, manager feedback and approval, w
   await page.getByRole("button", { name: "Review training", exact: true }).click();
   const review = page.getByRole("dialog", { name: "Review employee training" });
   await expect(review).toContainText("Sanitizer check demonstrated.");
-  await review.getByText("Previous manager reviews (1)", { exact: true }).click();
+  await review.getByText("Previous reviews (1)", { exact: true }).click();
   await expect(review).toContainText("Please demonstrate the sanitizer check.");
   await review.getByLabel("Feedback").fill("Demonstrated safely.");
   await review.getByRole("button", { name: "Approve training" }).click();
@@ -353,4 +354,57 @@ test("managers cannot approve their own training, and editing an approved module
   expect((await fixture.state()).tables.btb_training_reviews).toHaveLength(1);
   const selfDeactivate = await page.request.post("/api/btb/employees", { data: { ...manager, active: false, password: "" } });
   expect(selfDeactivate.status()).toBe(400);
+});
+
+test("week 4 manager training is invisible to staff and signed off by the owner", async ({ page, request, fixture }) => {
+  test.setTimeout(90_000);
+  const salt = "e".repeat(32);
+  const hash = `scrypt:${salt}:${scryptSync(password, salt, 64).toString("hex")}`;
+  const people = [
+    { id: "5a000000-0000-4000-8000-000000000001", name: "Sam Staff", email: "sam@team.test", role: "staff" },
+    { id: "5a000000-0000-4000-8000-000000000002", name: "Morgan Manager", email: "morgan@team.test", role: "manager" },
+    { id: "5a000000-0000-4000-8000-000000000003", name: "Mia Manager", email: "mia@team.test", role: "manager" },
+    { id: "5a000000-0000-4000-8000-000000000004", name: "Olivia Owner", email: "olivia@team.test", role: "owner" },
+  ] as const;
+  await fixture.configure({ tables: {
+    btb_employees: people.map(({ id, name, email, role }) => ({ id, name, email, role, active: true, login_enabled: true })),
+    btb_employee_credentials: people.map(({ id }) => ({ employee_id: id, password_hash: hash, session_version: 1 })),
+  } });
+  await apiSignIn(request);
+  const created = await request.post("/api/btb/training/topics", { data: {
+    id: null, revision: 0, title: "Week 4 — Management Training", category: "service", est_minutes: 30,
+    video_url: "", published: true, audience: "manager",
+    sections: [{ heading: "Inventory Management", body: "- Conduct inventory checks." }],
+  } });
+  expect(created.ok()).toBeTruthy();
+  const module = (await created.json()).topic;
+
+  await signInEmployee(page, "sam@team.test", "/btb/demo/training-guide");
+  await expect(page.getByRole("button", { name: "Week 4 — Management Training" })).toHaveCount(0);
+  expect(await (await page.request.get("/api/btb/training")).text()).not.toContain("Week 4 — Management Training");
+  expect((await page.request.post("/api/btb/training", { data: { topic_id: module.id, topic_revision: module.revision, version: 0, completed_sections: [], reviewed: false, notes: "", status: "in_progress" } })).status()).toBe(403);
+
+  await signInEmployee(page, "morgan@team.test", "/btb/demo/training-guide");
+  await page.getByRole("button", { name: "Week 4 — Management Training" }).click();
+  await expect(page.getByText("Managers · owner approval")).toBeVisible();
+  await page.getByRole("checkbox", { name: "I completed “Inventory Management”", exact: true }).check();
+  await page.getByRole("checkbox", { name: /^I have reviewed all/ }).check();
+  await page.getByRole("button", { name: "Submit for owner approval" }).click();
+  await expect(page.getByRole("status")).toContainText("The owner will review");
+
+  await signInEmployee(page, "mia@team.test", "/btb/demo/training-guide");
+  await page.getByRole("tab", { name: "Team progress", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Owner approval required" })).toBeDisabled();
+
+  await signInEmployee(page, "olivia@team.test", "/btb/demo/training-guide");
+  await page.getByRole("tab", { name: "Team progress", exact: true }).click();
+  await page.getByRole("button", { name: "Review training", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Review manager training" });
+  await expect(dialog.getByLabel("Owner decision")).toBeVisible();
+  await dialog.getByLabel("Feedback").fill("Signed off by the owner.");
+  await dialog.getByRole("button", { name: "Approve training" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Training approved" })).toBeVisible();
+
+  await signInEmployee(page, "morgan@team.test", "/btb/demo/training-guide");
+  await expect(page.getByText(/Approved by Olivia Owner/)).toBeVisible();
 });

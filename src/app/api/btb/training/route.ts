@@ -1,18 +1,19 @@
 import { btbRoute, BtbApiError, dbError, readAll, readBody, TEAM_COLUMNS } from "@/lib/btb-api";
 import { BTB_RESTAURANT, isUuid, isVersion, type TeamMember } from "@/lib/btb-team";
-import { validTrainingSelection, type BtbTrainingTopic, type TrainingRecord, type TrainingReview } from "@/lib/btb-training";
+import { validTrainingSelection, trainingAudienceVisible, trainingCompletionAllowed, type BtbTrainingTopic, type TrainingRecord, type TrainingReview } from "@/lib/btb-training";
 import type { TrainingSection } from "@/lib/training";
 
-const TOPIC_COLUMNS = "id,title,category,est_minutes,published,position,video_url,revision";
+const TOPIC_COLUMNS = "id,title,category,est_minutes,published,position,video_url,revision,audience";
 const RECORD_COLUMNS = "id,employee_id,topic_id,topic_revision,completed_sections,reviewed,status,notes,submitted_at,reviewed_at,reviewed_by_name,review_notes,version,updated_at";
 export const GET = btbRoute("training_guide", false, async ({ db, identity }, request) => {
   const summary = new URL(request.url).searchParams.get("summary") === "1";
-  const teamView = ["manager", "supervisor", "corporate"].includes(identity.role);
-  const topics = await readAll<BtbTrainingTopic>((from, to) => {
+  const teamView = ["manager", "supervisor", "corporate", "owner"].includes(identity.role);
+  const loadedTopics = await readAll<BtbTrainingTopic>((from, to) => {
     let query = db.from("training_topics").select(TOPIC_COLUMNS).is("location_id", null);
     if (identity.role !== "manager") query = query.eq("published", true);
     return query.order("position").order("id").range(from, to);
   }, "Training modules could not be loaded.");
+  const topics = loadedTopics.filter((topic) => trainingAudienceVisible(topic.audience, identity.role));
   const ids = topics.map((topic) => topic.id);
   const [sections, records, employees, reviews] = await Promise.all([
     ids.length && !summary ? readAll<TrainingSection>((from, to) => db.from("training_sections").select("id,topic_id,position,heading,body").in("topic_id", ids).order("position").order("id").range(from, to), "Training sections could not be loaded.") : [],
@@ -38,6 +39,7 @@ export const POST = btbRoute("training_guide", false, async ({ db, identity }, r
   const topic = await db.from("training_topics").select(TOPIC_COLUMNS).eq("id", body.topic_id).is("location_id", null).eq("published", true).maybeSingle();
   dbError(topic.error, "This module could not be verified.");
   if (!topic.data) throw new BtbApiError("This module is no longer published.", 404);
+  if (!trainingCompletionAllowed(topic.data.audience, identity.role)) throw new BtbApiError("Manager training is completed by managers and approved by the owner.", 403);
   const sections = await readAll<TrainingSection>((from, to) => db.from("training_sections").select("id,topic_id,position,heading,body").eq("topic_id", body.topic_id).order("id").range(from, to), "The module’s sections could not be verified.");
   if (!validTrainingSelection(body.completed_sections, sections)) throw new BtbApiError("The module changed. Reload its sections before submitting.", 409);
   if (body.status === "pending" && (!body.reviewed || body.completed_sections.length !== sections.length || (!sections.length && !topic.data.video_url))) throw new BtbApiError("Complete every section and confirm you reviewed the material before submitting.");
