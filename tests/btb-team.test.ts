@@ -73,7 +73,7 @@ test("order quantities reject invalid numbers and duplicates rather than storing
 });
 
 test("training percentages count only manager-approved current published revisions", () => {
-  const topic = (id: string, revision = 1, published = true): BtbTrainingTopic => ({ id, revision, published, title: id, category: "food_safety", est_minutes: 5, position: 1 });
+  const topic = (id: string, revision = 1, published = true): BtbTrainingTopic => ({ id, revision, audience: "staff", published, title: id, category: "food_safety", est_minutes: 5, position: 1 });
   const record = (id: string, status: TrainingRecord["status"], topic_revision = 1): TrainingRecord => ({ id, employee_id: employeeId, topic_id: id, status, topic_revision, completed_sections: [], reviewed: true, notes: "", submitted_at: null, reviewed_at: null, reviewed_by_name: null, review_notes: null, version: 1, updated_at: "" });
   const progress = employeeTrainingProgress(employeeId, [topic("approved"), topic("pending"), topic("updated", 2), topic("draft", 1, false)], [record("approved", "approved"), record("pending", "pending"), record("updated", "approved"), record("draft", "approved")]);
   assert.deepEqual(progress, { total: 3, approved: 1, pending: 1, inProgress: 0, needsUpdate: 1, changesRequested: 0, percent: 33 });

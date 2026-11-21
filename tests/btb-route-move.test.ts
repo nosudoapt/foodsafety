@@ -31,11 +31,20 @@ test("all moved cards preserve their persisted page slugs", () => {
   }
 });
 
-test("BTB titles omit the demo segment without changing other products", () => {
-  assert.equal(friendlyPathTitle("/btb/demo"), "Between the Buns");
-  assert.equal(friendlyPathTitle("/btb/demo/cleaning-schedule"), "Between the Buns · Cleaning schedule");
-  assert.equal(friendlyPathTitle("/btb/admin"), "Between the Buns · Admin");
+test("BTB titles omit the demo segment, the product prefix and truncation", () => {
+  // Chips sit inside the BTB workspace, so naming the workspace on every pill
+  // is noise and pushes the real page name into an ellipsis.
+  assert.equal(friendlyPathTitle("/btb/demo"), "Overview");
+  assert.equal(friendlyPathTitle("/btb/demo/cleaning-schedule"), "Cleaning");
+  assert.equal(friendlyPathTitle("/btb/demo/training-guide"), "Training");
+  assert.equal(friendlyPathTitle("/btb/demo/temperatures"), "Temperatures");
+  assert.equal(friendlyPathTitle("/btb/admin"), "Admin");
+  // Other products keep their prefix — their chips can sit beside BTB ones.
   assert.equal(friendlyPathTitle("/admin/demo"), "FoodSafe admin · Demo");
+  // No BTB label is long enough to truncate in a pill.
+  for (const page of ["prep-list", "month-end-inventory", "franchise-inspection", "new-restaurant", "staff-licenses"]) {
+    assert.ok(friendlyPathTitle(`/btb/demo/${page}`).length <= 20, `${page} label fits a chip`);
+  }
 });
 
 test("connected-workspace roots are not active on unrelated nested pages", () => {

@@ -38,13 +38,14 @@ export default function RecentlyUsed({ workspace = "foodsafe", allowedPaths }: {
 
   if (history?.key !== key || (!history.recent.length && !history.top.length)) return null;
   const { recent, top } = history;
-  const chip = "inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-amber-300 hover:text-amber-800 transition-colors max-w-full";
+  const chip = "group inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 transition-colors max-w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400";
+  const heading = "inline-flex shrink-0 items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-slate-400";
 
   return (
     <div className="space-y-2 mb-4">
       {recent.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-slate-400"><Clock size={12} aria-hidden="true" />Recently used</span>
+          <span className={heading}><Clock size={12} aria-hidden="true" />Recently used</span>
           {recent.map((item) => (
             <Link key={item.path} href={item.path} className={chip} title={item.title}>
               <span className="truncate max-w-[14rem]">{item.title}</span>
@@ -54,11 +55,11 @@ export default function RecentlyUsed({ workspace = "foodsafe", allowedPaths }: {
       )}
       {top.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-wide text-slate-400"><Flame size={12} aria-hidden="true" />Most used · 30 days</span>
+          <span className={heading}><Flame size={12} aria-hidden="true" />Most used · 30 days</span>
           {top.map((item) => (
-            <Link key={item.path} href={item.path} className={chip} title={`${item.visits} visits`}>
+            <Link key={item.path} href={item.path} className={chip} title={`${item.title} — ${item.visits} ${item.visits === 1 ? "visit" : "visits"} in the last 30 days`}>
               <span className="truncate max-w-[12rem]">{item.title}</span>
-              <span className="text-slate-400">{item.visits}</span>
+              <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-slate-500 group-hover:bg-amber-100 group-hover:text-amber-800" aria-label={`${item.visits} visits`}>{item.visits}</span>
             </Link>
           ))}
         </div>
