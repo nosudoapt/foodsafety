@@ -14,4 +14,4 @@ export const POST = btbRoute("training_guide", true, async ({ db, identity }, re
   dbError(result.error, "The review could not be saved. Your feedback is still here.");
   if (!result.data?.[0]) throw new BtbApiError("The review save was not confirmed.", 503);
   return { record: result.data[0] };
-});
+}, { allowLocationWorkspace: true });

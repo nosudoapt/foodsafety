@@ -2,7 +2,7 @@
 // Interactive view; page.tsx owns the request-time server gate.
 
 import { useMemo, useState } from "react";
-import { Plus, Printer, RefreshCw, Thermometer } from "lucide-react";
+import { CircleAlert, Plus, Printer, RefreshCw, Thermometer } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import Modal from "@/components/Modal";
 import { Badge, Button, Card, Input, PageHeader, TabList } from "@/components/ui";
@@ -46,6 +46,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
   const [historyDay, setHistoryDay] = useState("");
   const today = data?.today ?? btbToday();
   const records = data?.records ?? [];
+  const standards = data?.standards ?? [];
 
   // Sheet rows are keyed by (business_date, equipment_name, slot). Rows without
   // a business_date are the older free-form readings — they stay in history.
@@ -103,6 +104,10 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
     </span>} />
     {notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
     {readOnly && <p className="ops-meta">Read-only overview. Your restaurant team fills the sheet from their workspace.</p>}
+    {/* Off-form readings post against an operator-approved standard, and none
+        are seeded on purpose (a guessed food-safety limit is a real risk).
+        Say so plainly instead of leaving a silently disabled button. */}
+    {data && !standards.length && !readOnly && <div className="ui-notice ui-notice--warning" role="status"><CircleAlert size={18} aria-hidden="true" /><div><strong>Off-form readings are not set up yet.</strong><p>The daily sheet below works and saves normally. To record probe/delivery readings between sheets, a manager must first approve the temperature standards in the Location Workspace. Nothing is guessed on your behalf.</p></div></div>}
     <div className="ops-tabs-row"><TabList id="temperature" label="Temperature records" value={tab} onChange={setTab} tabs={[{ id: "sheet", label: "Daily sheet" }, { id: "history", label: "History (90 days)" }]} /><Button variant="ghost" disabled={loading} onClick={reload}><RefreshCw size={16} aria-hidden="true" />Refresh</Button></div>
     <LoadState loading={loading} error={error} onRetry={reload} />
     {data && !error && tab === "sheet" && <section id="temperature-panel-sheet" role="tabpanel" aria-labelledby="temperature-tab-sheet" className="temperature-sheet-wrap">
@@ -129,8 +134,11 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
           if (readOnly) return { saved: false, text: "" };
           const text = drafts[`${label}|${slot}`] ?? "";
           const value = Number(text);
-          const alert = kind && text.trim() !== "" && Number.isFinite(value) ? temperatureAlert(value, kind) : "ok";
-          return { saved: false, text, draft: true, unsafe: alert === "unsafe", warn: alert === "warn" };
+          // An in-range draft shows the same green as a saved reading, so the
+          // operator can see a box is good before committing the sheet.
+          const rated = kind && text.trim() !== "" && Number.isFinite(value);
+          const alert = rated ? temperatureAlert(value, kind) : "ok";
+          return { saved: false, text, draft: true, ok: rated && alert === "ok", unsafe: alert === "unsafe", warn: alert === "warn" };
         }}
         onDraft={(label, slot, value) => setDraft(`${label}|${slot}`, value)}
       />
@@ -154,7 +162,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
           <details open={date === historyDay}>
             <summary className="temperature-history__summary">
               <div>
-                <Badge accent={worst === "unsafe" ? "red" : worst === "warn" ? "amber" : worst === "ok" ? "purple" : "amber"}>{worst === "unsafe" ? "Out of range" : worst === "warn" ? "Watch" : worst === "ok" ? "All in range" : "No readings"}</Badge>
+                <Badge accent={worst === "unsafe" ? "red" : worst === "warn" ? "amber" : worst === "ok" ? "green" : "amber"}>{worst === "unsafe" ? "Out of range" : worst === "warn" ? "Watch" : worst === "ok" ? "All in range" : "No readings"}</Badge>
                 <strong>{date === today ? "Today" : new Date(`${date}T12:00:00Z`).toLocaleDateString("en-CA", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" })}</strong>
                 <span className="temperature-history__meta">{date} · {dayRecords.length ? `${dayRecords.length} reading${dayRecords.length === 1 ? "" : "s"} saved` : "nothing recorded"}</span>
               </div>
@@ -200,7 +208,7 @@ function SheetTable({ date, onDateChange, maxDate, static: isStatic, cells, onDr
   onDateChange?: (date: string) => void;
   maxDate?: string;
   static?: boolean;
-  cells: (label: string, slot: TemperatureSheetSlot) => { saved: boolean; text: string; unsafe?: boolean; warn?: boolean; draft?: boolean };
+  cells: (label: string, slot: TemperatureSheetSlot) => { saved: boolean; text: string; unsafe?: boolean; warn?: boolean; ok?: boolean; draft?: boolean };
   onDraft?: (label: string, slot: TemperatureSheetSlot, value: string) => void;
 }) {
   return <div className="temperature-sheet-scroll">
@@ -220,7 +228,7 @@ function SheetTable({ date, onDateChange, maxDate, static: isStatic, cells, onDr
             : TEMPERATURE_SHEET_SLOTS.map((slot) => {
               const state = cells(row.label, slot);
               const unit = row.kind === "sanitizer" ? "PPM" : "°C";
-              return <td key={slot} className={state.unsafe ? "temperature-sheet__unsafe" : state.warn ? "temperature-sheet__warn" : state.saved ? "temperature-sheet__ok" : undefined}>
+              return <td key={slot} className={state.unsafe ? "temperature-sheet__unsafe" : state.warn ? "temperature-sheet__warn" : state.saved || state.ok ? "temperature-sheet__ok" : undefined}>
                 {state.saved || isStatic
                   ? <span className="temperature-sheet__value">{state.text}</span>
                   : <span className="temperature-sheet__field">

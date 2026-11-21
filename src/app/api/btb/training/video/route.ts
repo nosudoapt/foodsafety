@@ -9,4 +9,4 @@ export const POST = btbRoute("training_guide", true, async ({ db }, request) => 
   const result = await db.storage.from("training-videos").upload(path, file, { contentType: file.type, upsert: false });
   dbError(result.error, "The video could not be uploaded. Keep your module draft and try again.");
   return { url: db.storage.from("training-videos").getPublicUrl(path).data.publicUrl };
-});
+}, { allowLocationWorkspace: true });

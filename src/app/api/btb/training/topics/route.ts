@@ -21,4 +21,4 @@ export const POST = btbRoute("training_guide", true, async ({ db, identity }, re
   dbError(result.error, "The module could not be saved. Your draft is still here.");
   if (!result.data?.[0]) throw new BtbApiError("The module save was not confirmed.", 503);
   return { topic: result.data[0], sections: sections.map((section) => ({ ...section, topic_id: result.data[0].id })) };
-});
+}, { allowLocationWorkspace: true });

@@ -29,7 +29,7 @@ export const GET = btbRoute("training_guide", false, async ({ db, identity }, re
     }, "Training review history could not be loaded."),
   ]);
   return { topics, sections, records, employees, reviews };
-});
+}, { allowLocationWorkspace: true });
 
 export const POST = btbRoute("training_guide", false, async ({ db, identity }, request) => {
   if (!identity.employeeId) throw new BtbApiError("Sign in with your individual employee account to submit training.", 403);
@@ -45,4 +45,4 @@ export const POST = btbRoute("training_guide", false, async ({ db, identity }, r
   dbError(result.error, "Your training could not be saved. Your draft is still here.");
   if (!result.data?.[0]) throw new BtbApiError("The training save was not confirmed.", 503);
   return { record: result.data[0] };
-});
+}, { allowLocationWorkspace: true });
