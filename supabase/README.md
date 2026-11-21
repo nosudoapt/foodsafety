@@ -96,6 +96,7 @@ are idempotent (safe to re-run).
 | 39 | `seed-btb-training-modules.sql` | The four-week onboarding programme (Weeks 1–3 all staff, Week 4 manager-only) as published topics and sections. Idempotent by fixed id. |
 | 40 | `schema-btb-manager-invites.sql` | Managers and supervisors invite their own team from the workspace: employee-issued single-use invitations, branded setup email, no console password required. |
 | 41 | `schema-btb-location-slugs.sql` | Unique location slugs (`/btb/drumheller`), backfilled from names; console create/update keeps them valid and reserved words (`demo`, `login`, `admin`, `api`, `btb`) are refused. |
+| 42 | `schema-btb-admin-password-reset.sql` | Console super-admin password reset without email: salted hash, session revocation, invitation cancellation, and an audit event. |
 
 ## Role set — single source of truth
 

@@ -2,6 +2,7 @@ import { btbAdminRoute, btbAdminRpc } from "@/lib/btb-admin-api";
 import { consoleUuid } from "@/lib/btb-admin-locations";
 import { issueBtbAdminInvitation } from "@/lib/btb-admin-invitations";
 import { BtbApiError, readBody } from "@/lib/btb-api";
+import { hashEmployeePassword, validEmployeePassword } from "@/lib/btb-passwords";
 
 type Context = { params: Promise<{ locationId: string; employeeId: string }> };
 
@@ -11,7 +12,14 @@ export async function PATCH(request: Request, route: Context) {
     const locationId = consoleUuid(params.locationId), employeeId = consoleUuid(params.employeeId);
     const body = await readBody(req, 4096);
     if (body.action === "reinvite") return issueBtbAdminInvitation(context, req, locationId, { id: employeeId });
-    if (body.action !== "block") throw new BtbApiError("Choose block or re-invite.");
+    if (body.action === "password") {
+      if (!validEmployeePassword(body.password)) throw new BtbApiError("Set a password of 10–128 characters.");
+      await btbAdminRpc(context, "btb_admin_reset_password", {
+        p_location: locationId, p_employee: employeeId, p_password_hash: await hashEmployeePassword(body.password),
+      }, "The password could not be reset.");
+      return { ok: true };
+    }
+    if (body.action !== "block") throw new BtbApiError("Choose block, re-invite or set password.");
     await btbAdminRpc(context, "btb_admin_block_person", { p_location: locationId, p_employee: employeeId }, "This person could not be blocked.");
     return { ok: true };
   })(request);

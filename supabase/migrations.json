@@ -194,6 +194,11 @@
       "step": 41,
       "file": "schema-btb-location-slugs.sql",
       "description": "Unique human-readable location slugs (/btb/drumheller), backfilled from existing names, with slug-aware console create/update functions."
+    },
+    {
+      "step": 42,
+      "file": "schema-btb-admin-password-reset.sql",
+      "description": "Console super-admin password reset for a locked-out person, without email: salted hash, session revocation and invitation cancellation."
     }
   ]
 }
