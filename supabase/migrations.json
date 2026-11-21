@@ -161,9 +161,19 @@
       "description": "Transactional person invitations, one-time password setup, existing employee credentials and unioned location page grants."
     },
     {
-      "step": 34,
+      "step": 35,
+      "file": "schema-btb-admin-monitoring.sql",
+      "description": "Console monitoring RPC over managed locations (counts, storage, activity heatmap, recent events, operational health) plus the atomic per-location aggregate storage cap on platform file uploads."
+    },
+    {
+      "step": 36,
+      "file": "fix-offline-replay-keys.sql",
+      "description": "OFF-06 offline replay keys — temperature/prep replay receipts and btb_replay_prep_save. Prerequisite for the page-capabilities release."
+    },
+    {
+      "step": 37,
       "file": "fix-btb-page-capabilities.sql",
-      "description": "Live role/location page grants, read/write browser capabilities, restrictive RLS and checked atomic prep replay."
+      "description": "Live role/location page grants, read/write browser capabilities, restrictive RLS and checked atomic prep replay. Ordered after step 36 because it wraps btb_replay_prep_save."
     }
   ]
 }

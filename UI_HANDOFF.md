@@ -10,19 +10,19 @@ Warm porcelain surfaces, plum primary actions, self-hosted DM Sans and DM Serif 
 | Shared controls, accessible tabs and dialogs | `src/components/ui.tsx`, `src/components/Modal.tsx` |
 | FoodSafe shell and navigation | `src/components/AppShell.tsx`, `src/lib/workspace-nav.ts`, `src/lib/admin-nav.ts` |
 | FoodSafe role dashboards | `src/components/dashboard/`, `src/lib/dashboard.ts`, `src/lib/dashboard-data.ts` |
-| BTB shell, role overview and permissions | `src/app/between-the-buns/`, `src/contexts/BtbWorkspaceContext.tsx`, `src/lib/btb-page-access.ts` |
+| BTB shell, role overview and permissions | `src/app/btb/demo/`, `src/contexts/BtbWorkspaceContext.tsx`, `src/lib/btb-page-access.ts` |
 | Documents and campaign planning | `src/components/DocumentVault.tsx`, `src/components/MarketingBoard.tsx` |
 | BTB upload authorization and profile connection | `src/app/api/btb/{documents,marketing,social-posts}/`, `src/lib/btb-uploader.ts`, `scripts/provision-btb-uploader.mjs` |
 | Renewals and filing dates | `src/components/ComplianceRegister.tsx`, `src/components/TaxDatesPanel.tsx` |
-| Shift checks and inventory | `src/app/checks/page.tsx`, `src/app/between-the-buns/month-end-inventory/page.tsx` |
+| Shift checks and inventory | `src/app/checks/page.tsx`, `src/app/btb/demo/month-end-inventory/page.tsx` |
 | Authentication | `src/app/auth/`, `src/components/auth/`, `src/contexts/AuthContext.tsx` |
-| BTB employee accounts and verified API access | `src/app/between-the-buns/employees/`, `src/app/between-the-buns/account/`, `src/lib/btb-auth.ts`, `src/lib/btb-api.ts`, `src/lib/btb-passwords.ts` |
-| BTB checks, schedules, orders and printing | `src/app/between-the-buns/checklists/`, `src/app/between-the-buns/staff-schedule/`, `src/app/between-the-buns/order-sheet/`, `src/components/btb/OnePagePrint.tsx` |
-| BTB temperatures and saved prep sheets | `src/app/between-the-buns/temperatures/`, `src/app/api/btb/temperatures/`, `src/lib/btb-temperature-store.ts`, `src/lib/btb-temperatures.ts`, `src/app/between-the-buns/prep-list/` |
-| Training progress and manager review | `src/app/between-the-buns/training-guide/`, `src/components/btb/TrainingProgress.tsx`, `src/app/api/btb/training/` |
+| BTB employee accounts and verified API access | `src/app/btb/demo/employees/`, `src/app/btb/demo/account/`, `src/lib/btb-auth.ts`, `src/lib/btb-api.ts`, `src/lib/btb-passwords.ts` |
+| BTB checks, schedules, orders and printing | `src/app/btb/demo/checklists/`, `src/app/btb/demo/staff-schedule/`, `src/app/btb/demo/order-sheet/`, `src/components/btb/OnePagePrint.tsx` |
+| BTB temperatures and saved prep sheets | `src/app/btb/demo/temperatures/`, `src/app/api/btb/temperatures/`, `src/lib/btb-temperature-store.ts`, `src/lib/btb-temperatures.ts`, `src/app/btb/demo/prep-list/` |
+| Training progress and manager review | `src/app/btb/demo/training-guide/`, `src/components/btb/TrainingProgress.tsx`, `src/app/api/btb/training/` |
 | Published training in manuals | `src/components/PrintManuals.tsx`, `src/lib/training-manuals.ts`, `src/app/api/btb/training/print/`, `src/app/api/manuals/training/` |
-| Certificates and licence emails | `src/app/between-the-buns/staff-licenses/`, `src/app/between-the-buns/licence-reminders/`, `src/lib/btb-reminder-service.ts`, `src/app/api/cron/btb-licence-reminders/` |
-| Franchise and loyalty guides | `src/lib/btb-franchise.ts`, `src/lib/btb-loyalty.ts`, `src/app/between-the-buns/new-restaurant/`, `src/app/between-the-buns/loyalty-rewards/` |
+| Certificates and licence emails | `src/app/btb/demo/staff-licenses/`, `src/app/btb/demo/licence-reminders/`, `src/lib/btb-reminder-service.ts`, `src/app/api/cron/btb-licence-reminders/` |
+| Franchise and loyalty guides | `src/lib/btb-franchise.ts`, `src/lib/btb-loyalty.ts`, `src/app/btb/demo/new-restaurant/`, `src/app/btb/demo/loyalty-rewards/` |
 | BTB persistence and release setup | `supabase/schema-btb-team-operations.sql`, `supabase/schema-btb-uploads.sql`, `deploy/BTB_DASHBOARD_SETUP.md`, `deploy/05-btb-release-check.sql`, `.env.example`, `vercel.json` |
 
 ## Interaction contracts
@@ -47,7 +47,7 @@ Warm porcelain surfaces, plum primary actions, self-hosted DM Sans and DM Serif 
 ## Content and print delivery
 
 - **Branding Requests:** “T-shirt” replaces the Uniform label, with S, M, L, XL, XXL and XXXL. Existing stored `uniform` values remain compatible.
-- **Franchise Opening Checklist:** the existing corporate-only card and `/between-the-buns/new-restaurant` route contain all 16 supplied sections and every task. Additional/imported tasks and their progress are retained; failed updates can be retried.
+- **Franchise Opening Checklist:** the existing corporate-only card and `/btb/demo/new-restaurant` route contain all 16 supplied sections and every task. Additional/imported tasks and their progress are retained; failed updates can be retried.
 - **Loyalty Rewards:** one card exposes employee and customer guides to staff, supervisors and managers. The employee sequence is **ASK → SCAN → VIEW OFFERS → ENTER ORDER → PAY LAST**. Both guides include the approved reward, channel and expiry rules. Staff also have reward/points redemption flows, the approved $0.05 purchase-requirement workaround and Kamal’s escalation number.
 - **Staff certificates:** optional employee linking or manual names, certificate dates and notes, PDF/image attachments, saved downloads and versioned editing.
 - **Licence emails:** manager and corporate recipient groups, editable reminder windows, delivery history, manual sending and the authenticated daily cron. Default windows are 30, 7, 1 and 0 days; each job permits three total claims with five-minute leases and frozen retry content/provider keys. Uncertain delivery retries stop after 23 hours.

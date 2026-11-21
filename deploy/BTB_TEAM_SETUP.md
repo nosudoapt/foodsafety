@@ -112,7 +112,7 @@ training tables; both applications now read this content through the server.
 
 ## 3. Set up individual accounts
 
-1. Open `/between-the-buns/login`. Bootstrap through the existing shared manager
+1. Open `/btb/login`. Bootstrap through the existing shared manager
    address, `* using the backend workspace password (`admin1234`).
 2. Open **Employees** and add the manager's personal record: name, unique email,
    phone, optional position, **Manager** role and an initial 10–128-character
@@ -175,7 +175,7 @@ The administrator workspace is limited to access management.
 1. Verify a sender/domain in Resend and configure `RESEND_API_KEY` and
    `BTB_EMAIL_FROM` on the application server.
 2. As manager or corporate, open **Licence Email Reminders** at
-   `/between-the-buns/licence-reminders`. Enter actual recipient addresses in
+   `/btb/demo/licence-reminders`. Enter actual recipient addresses in
    **both** the manager and corporate groups (1–10 per group). Employee login
    emails and the shared demo role addresses do not populate these groups.
 3. Set reminder windows, enable reminders and **Save reminder settings**. The
@@ -186,9 +186,12 @@ The administrator workspace is limited to access management.
    Delivery history records recipient, attempt count, provider ID and any error.
    “Sent” means accepted by Resend; confirm real inbox delivery/bounces there.
 5. Configure `CRON_SECRET` and deploy `vercel.json`. It requests
-   `/api/cron/btb-licence-reminders` daily at **15:00 UTC / 09:00 America/Regina**.
-   Vercel sends `Authorization: Bearer <CRON_SECRET>`. The endpoint needs a Node
-   runtime with a 300-second maximum duration.
+   `/api/cron/btb-licence-reminders` daily at **15:00 UTC / 09:00 America/Regina**
+   and `/api/cron/btb-daily-reports` daily at **14:00 UTC / 08:00 America/Regina**.
+   Vercel sends `Authorization: Bearer <CRON_SECRET>`. Both endpoints need a Node
+   runtime with a 300-second maximum duration. The second run drains the shared
+   `btb_email_jobs` outbox, including person invitations sent from the BTB
+   console at `/btb/admin`; without it, invites stay **pending** forever.
 
 For another host, arrange the same authenticated GET request from its scheduler:
 

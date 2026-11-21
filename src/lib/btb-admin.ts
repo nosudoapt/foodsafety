@@ -60,3 +60,50 @@ export function btbInvitationDeliveryLabel(invitation: BtbAdminPerson["invitatio
   if (new Date(invitation.expires_at).getTime() <= now) return "Link expired";
   return ({ pending: "Email queued", sending: "Email sending", accepted: "Email provider accepted", failed: "Email failed · retry pending", cancelled: "Email cancelled" } as const)[invitation.email_status ?? "cancelled"];
 }
+
+export const BTB_MONITORING_MIN_DAYS = 7;
+export const BTB_MONITORING_MAX_DAYS = 31;
+export const BTB_MONITORING_WINDOWS = [7, 14, 30] as const;
+
+export interface BtbAdminMonitoringProblem {
+  failed_emails: number; failed_imports: number; changes_requested: number; total: number;
+}
+export interface BtbAdminMonitoringFeature { type: string; count: number }
+export interface BtbAdminMonitoringLocation {
+  id: string; name: string; active: boolean; timezone: string | null;
+  people: number; pages: number;
+  files: number; storage_bytes: number; storage_limit_bytes: number;
+  file_purposes: Record<string, { files: number; bytes: number }>;
+  views: number; events: number; last_seen: string | null;
+  ai_used: number; ai_daily_limit: number;
+  last_activity: string | null; busiest_hour: number | null;
+  features: BtbAdminMonitoringFeature[];
+  open_entries: number;
+  checks_complete: number; temperature_readings: number; sanitizer_readings: number;
+  problems: BtbAdminMonitoringProblem;
+  latest_email_error: string | null; email_pending: number;
+}
+export interface BtbAdminMonitoringEvent {
+  created_at: string; location_id: string; location: string;
+  entity_type: string; action: string; actor_name: string;
+}
+export interface BtbAdminMonitoring {
+  days: number; generated_at: string; day_labels: string[];
+  heatmap: number[][];
+  totals: {
+    locations: number; active_locations: number; people: number;
+    files: number; storage_bytes: number; storage_limit_bytes: number;
+    views: number; events: number; ai_used: number;
+    problems: number; open_entries: number; email_pending: number;
+  };
+  locations: BtbAdminMonitoringLocation[];
+  recent: BtbAdminMonitoringEvent[];
+}
+
+/** The overview's activity window: integer days, bounded to the SQL contract. */
+export function btbAdminMonitoringDays(input: string | null): number | null {
+  if (input === null || input === "") return 30;
+  if (!/^\d{1,2}$/.test(input)) return null;
+  const value = Number(input);
+  return value >= BTB_MONITORING_MIN_DAYS && value <= BTB_MONITORING_MAX_DAYS ? value : null;
+}

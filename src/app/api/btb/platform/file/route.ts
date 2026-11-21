@@ -43,11 +43,27 @@ export const POST = platformRoute(["POST"], async ({ db, employeeId, sessionVers
   }
   const id = randomUUID();
   const sha256 = createHash("sha256").update(bytes).digest("hex");
-  const saved = await platformRpc(db, "btb_platform_file_put", {
-    p_actor: employeeId,
-    p_session: sessionVersion,
-    p_location: location,
-    p_data: { id, purpose, name, mime, byte_size: bytes.byteLength, sha256, content_base64: body.content_base64 },
-  }, "This file could not be saved.");
+  let saved: { id: string };
+  try {
+    saved = await platformRpc<{ id: string }>(db, "btb_platform_file_put", {
+      p_actor: employeeId,
+      p_session: sessionVersion,
+      p_location: location,
+      p_data: { id, purpose, name, mime, byte_size: bytes.byteLength, sha256, content_base64: body.content_base64 },
+    }, "This file could not be saved.");
+  } catch (error) {
+    // The SQL cap is authoritative. A validation-class failure after this
+    // route's own checks is the location's aggregate storage limit; confirm
+    // with the location's usage so the person knows what to do next.
+    if (error instanceof BtbApiError && error.status === 400) {
+      const usage = await platformRpc<{ used: number; limit_bytes: number }>(db, "btb_platform_storage_usage",
+        { p_actor: employeeId, p_session: sessionVersion, p_location: location }, "This file could not be saved.");
+      if (usage.used >= usage.limit_bytes) {
+        const limitMb = Math.max(1, Math.ceil(usage.limit_bytes / 1_048_576));
+        throw new BtbApiError(`This location is at its ${limitMb} MB storage limit. Remove files or ask the console administrator to raise the limit, then retry.`, 400, error);
+      }
+    }
+    throw error;
+  }
   return { file: saved };
 });

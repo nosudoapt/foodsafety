@@ -1,5 +1,6 @@
 {
   "crons": [
-    { "path": "/api/cron/btb-licence-reminders", "schedule": "0 15 * * *" }
+    { "path": "/api/cron/btb-licence-reminders", "schedule": "0 15 * * *" },
+    { "path": "/api/cron/btb-daily-reports", "schedule": "0 14 * * *" }
   ]
 }

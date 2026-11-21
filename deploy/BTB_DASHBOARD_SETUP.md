@@ -83,7 +83,7 @@ in [`deploy/README.md`](README.md).
 
 ## 3. Confirm BTB access and uploads
 
-1. Open `<production-url>/between-the-buns/login`.
+1. Open `<production-url>/btb/login`.
 2. Sign in as `* with the backend workspace password (`admin1234`).
 3. Open **Employees** and create the manager's personal account. Sign in with it.
 4. Open **Business documents**, upload a small PDF, refresh and download it.
@@ -115,8 +115,9 @@ When the sender and recipient addresses are ready:
    Ask both recipient groups to confirm arrival, including their spam/junk folders.
    Record the subject/time and receipt confirmation. App **Sent** means Resend
    accepted the message; inbox confirmation completes the live test.
-5. In Vercel's **Cron Jobs** view, confirm the deployed schedule from `vercel.json`:
-   `/api/cron/btb-licence-reminders` at **`0 15 * * *`**. Vercel supplies the
+5. In Vercel's **Cron Jobs** view, confirm the deployed schedules from `vercel.json`:
+   `/api/cron/btb-licence-reminders` at **`0 15 * * *`** and
+   `/api/cron/btb-daily-reports` at **`0 14 * * *`**. Vercel supplies the
    `CRON_SECRET` bearer header. Check the next recorded **Last run** in BTB.
 
 The schedule targets **15:00 UTC / 09:00 America/Regina** daily; actual start

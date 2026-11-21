@@ -7,6 +7,10 @@ are separate deployment steps from this inventory runbook.
 For Vercel dashboard and Supabase SQL Editor instructions, use
 [BTB dashboard setup](BTB_DASHBOARD_SETUP.md).
 
+For the separate super-admin console (`/btb/admin`), its migrations 32–35,
+first-admin bootstrap and invitation flow, use
+[BTB console setup](BTB_CONSOLE_SETUP.md).
+
 Production schema creation and verification (`01b` → `02` → `03`) have been
 reported complete. `_migrations` remains absent **by design**: do not run or
 baseline the migration runner against production.

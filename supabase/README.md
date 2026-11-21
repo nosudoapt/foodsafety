@@ -89,7 +89,9 @@ are idempotent (safe to re-run).
 | 31 | `schema-compliance-second-attachment.sql` | Compliance renewals — second attachment slot (`other_file_name` / `other_file_url`) beside the renewal certificate. |
 | 32 | `schema-btb-superadmin.sql` | Separate BTB super-admin credentials and managed locations, 50 MiB storage cap, location page allow-lists. Requires the existing BTB team and location platform releases. |
 | 33 | `schema-btb-invitations.sql` | One-time person invitations, existing employee credential activation, request-time multi-location page grants. |
-| 34 | `fix-btb-page-capabilities.sql` | Live page-scoped browser capabilities, effective grants at RLS/RPC boundaries, server-only role restrictions and platform grant revalidation. |
+| 35 | `schema-btb-admin-monitoring.sql` | Console monitoring RPC over managed locations (counts, storage, activity heatmap, recent events, operational health: open shifts, problems, today's checks/readings, AI use) plus the atomic per-location aggregate storage cap on platform file uploads. |
+| 36 | `fix-offline-replay-keys.sql` | OFF-06 offline replay keys — `btb_offline_receipts`, `btb_insert_temp_record` and `btb_replay_prep_save`. Prerequisite for step 37. |
+| 37 | `fix-btb-page-capabilities.sql` | Live page-scoped browser capabilities, effective grants at RLS/RPC boundaries, server-only role restrictions and platform grant revalidation. Runs after 36 because it wraps `btb_replay_prep_save`. |
 
 ## Role set — single source of truth
 

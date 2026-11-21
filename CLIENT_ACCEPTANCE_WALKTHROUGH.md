@@ -227,7 +227,7 @@ here, its daily report cannot be enqueued and its compliance reminders have no r
 ### 1.1 What "Settings" controls
 
 One row per location in `btb_location_settings`, edited on
-`/between-the-buns/platform/settings`:
+`/btb/demo/platform/settings`:
 
 - timezone and the business-day start time
 - report time, and `reports_enabled` (turns the daily emailed report on or off)
@@ -555,10 +555,10 @@ our seeded demo material, not the client's real history; say so out loud when th
 
 ### Before you start (once, 3 minutes)
 
-1. Open a browser and go to `https://foodsafety-sigma.vercel.app/between-the-buns/login`.
+1. Open a browser and go to `https://foodsafety-sigma.vercel.app/btb/login`.
 2. Sign in with the owner email and the password from your protected credentials file.
    Do not read the password aloud, and do not type it on a shared screen.
-3. Leave a second tab open on `/between-the-buns/platform`. You will return to it constantly.
+3. Leave a second tab open on `/btb/demo/platform`. You will return to it constantly.
 4. Close every other tab, notification and chat window. The client notices banners.
 
 **If sign-in fails:** the screen shows an inline error, not a blank page. Do not retry more
@@ -567,7 +567,7 @@ manager demo account. Do not debug in front of the client.
 
 ### 0:00 — the hub (45 seconds)
 
-1. Land on `/between-the-buns`. It renders the card grid and a daily strip.
+1. Land on `/btb/demo`. It renders the card grid and a daily strip.
 2. Say: **"One sign-in, and every role gets a different workspace. Nothing here is a mock-up;
    these cards are the pages your team would actually use."**
 3. Point at the **Location workspace** card. Do not open a legacy card yet.
@@ -603,7 +603,7 @@ manager demo account. Do not debug in front of the client.
 
 ### 4:00 — inventory and food cost (2 minutes)
 
-15. Return to `/between-the-buns/platform`, choose **Inventory & food cost**, location
+15. Return to `/btb/demo/platform`, choose **Inventory & food cost**, location
     **The Grill House**, month **November 2026**.
 16. Say, before they ask: **"This month is TEST DATA, seeded in the approved demo session so the
     maths could be proven end to end. Your real October sheet is the one we converted. Note the
@@ -639,7 +639,7 @@ manager demo account. Do not debug in front of the client.
 
 ### 7:30 — corporate overview (45 seconds)
 
-26. Open `/between-the-buns/platform/overview`.
+26. Open `/btb/demo/platform/overview`.
 27. Say: **"This is the head-office view: every site on one line. A site manager sees one line,
     their own. That is enforced in the database, not hidden in the browser."**
 28. Point at the blank food-cost cell for the three empty sites and say: **"Blank, not zero,
@@ -647,7 +647,7 @@ manager demo account. Do not debug in front of the client.
 
 ### 8:15 — settings: present it honestly (45 seconds)
 
-29. Open `/between-the-buns/platform/settings`. The four locations and the team list render.
+29. Open `/btb/demo/platform/settings`. The four locations and the team list render.
 30. **Do not** try to save from the manager account in front of them: it will be refused (see §1).
    Instead say: **"This screen is where each site's timezone, report time and recipients will
    be set. The list is live; the save path is the next thing we fix, and it is small."**
