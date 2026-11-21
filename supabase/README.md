@@ -97,6 +97,10 @@ are idempotent (safe to re-run).
 | 40 | `schema-btb-manager-invites.sql` | Managers and supervisors invite their own team from the workspace: employee-issued single-use invitations, branded setup email, no console password required. |
 | 41 | `schema-btb-location-slugs.sql` | Unique location slugs (`/btb/drumheller`), backfilled from names; console create/update keeps them valid and reserved words (`demo`, `login`, `admin`, `api`, `btb`) are refused. |
 | 42 | `schema-btb-admin-password-reset.sql` | Console super-admin password reset without email: salted hash, session revocation, invitation cancellation, and an audit event. |
+| 43 | `schema-btb-platform-time.sql` | Location time clock: shifts, punches, corrections, manager approval and approved-hours export. |
+| 44 | `schema-btb-platform-finance.sql` | Location finance: invoices, stock receipts, supplier price history, bank reconciliation and GST periods. |
+| 45 | `schema-btb-platform-ai.sql` | AI document extraction settings and usage metering; the extractor only prefills the review queue. |
+| 46 | `schema-btb-manager-settings.sql` | A branch manager may configure their own location settings, including the AI extraction key; corporate/owner keep organization-wide reach. |
 
 ## Role set — single source of truth
 

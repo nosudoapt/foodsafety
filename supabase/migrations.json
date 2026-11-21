@@ -199,6 +199,26 @@
       "step": 42,
       "file": "schema-btb-admin-password-reset.sql",
       "description": "Console super-admin password reset for a locked-out person, without email: salted hash, session revocation and invitation cancellation."
+    },
+    {
+      "step": 43,
+      "file": "schema-btb-platform-time.sql",
+      "description": "Location time clock: shifts, punches, corrections, manager approval and approved-hours export (btb_platform_time_read and friends)."
+    },
+    {
+      "step": 44,
+      "file": "schema-btb-platform-finance.sql",
+      "description": "Location finance: invoices, stock receipts and supplier price history, bank statements and allocations, GST periods and commands."
+    },
+    {
+      "step": 45,
+      "file": "schema-btb-platform-ai.sql",
+      "description": "AI document extraction settings and usage metering. The extractor only prefills the existing review queue."
+    },
+    {
+      "step": 46,
+      "file": "schema-btb-manager-settings.sql",
+      "description": "A branch manager may configure their own location settings (including the AI extraction key); corporate/owner keep organization-wide reach."
     }
   ]
 }

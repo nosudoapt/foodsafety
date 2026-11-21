@@ -40,9 +40,12 @@ function lastDays(today: string, count = 90): string[] {
 
 function TemperatureLog({ readOnly }: { readOnly: boolean }) {
   const { data, loading, error, reload, update } = useBtbData<{ records: BtbTemperatureRecord[]; standards: TemperatureStandard[]; today: string }>("/api/btb/temperatures");
+  const { identity } = useBtbWorkspace();
   const [tab, setTab] = useState<"sheet" | "history">("sheet");
   const [editing, setEditing] = useState(false);
+  const [managing, setManaging] = useState(false);
   const [notice, setNotice] = useState("");
+  const canManage = !!identity && ["manager", "owner", "corporate"].includes(identity.role);
   const [historyDay, setHistoryDay] = useState("");
   const today = data?.today ?? btbToday();
   const records = data?.records ?? [];
@@ -100,6 +103,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
   return <div className="ops-workspace">
     <PageHeader title="Temperature Log" subtitle="The daily temp-check sheet, exactly as printed — freezers, coolers, line and sanitizer at 11:00 AM, 4:00 PM and 8:00 PM, with a saved 90-day rolling record." action={<span className="ops-toolbar-actions">
       <Button variant="ghost" onClick={() => window.print()}><Printer size={16} aria-hidden="true" />Print sheet</Button>
+      {canManage && <Button variant="ghost" onClick={() => setManaging(true)}>Manage standards</Button>}
       {!readOnly && <Button disabled={!data || !!error} onClick={() => setEditing(true)}><Plus size={18} aria-hidden="true" />Add off-form reading</Button>}
     </span>} />
     {notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
@@ -107,7 +111,8 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
     {/* Off-form readings post against an operator-approved standard, and none
         are seeded on purpose (a guessed food-safety limit is a real risk).
         Say so plainly instead of leaving a silently disabled button. */}
-    {data && !standards.length && !readOnly && <div className="ui-notice ui-notice--warning" role="status"><CircleAlert size={18} aria-hidden="true" /><div><strong>Off-form readings are not set up yet.</strong><p>The daily sheet below works and saves normally. To record probe/delivery readings between sheets, a manager must first approve the temperature standards in the Location Workspace. Nothing is guessed on your behalf.</p></div></div>}
+    {data && !standards.length && !readOnly && <div className="ui-notice ui-notice--warning" role="status"><CircleAlert size={18} aria-hidden="true" /><div><strong>Off-form readings are not set up yet.</strong><p>The daily sheet below works and saves normally. {canManage ? <button className="link" onClick={() => setManaging(true)}>Approve your equipment standards</button> : "Ask your manager to approve the equipment standards"} before recording probe or delivery readings. Nothing is guessed on your behalf.</p></div></div>}
+    {standards.length > 0 && <details className="temperature-legacy"><summary>{standards.length} approved temperature standard{standards.length === 1 ? "" : "s"}</summary><p className="ops-meta">{standards.map((standard) => `${standard.equipment_name} · ${TEMPERATURE_TYPES.find((item) => item.value === standard.record_type)?.label ?? standard.record_type} · ${standard.min_safe_temp} to ${standard.max_safe_temp} °C`).join(" · ")}</p></details>}
     <div className="ops-tabs-row"><TabList id="temperature" label="Temperature records" value={tab} onChange={setTab} tabs={[{ id: "sheet", label: "Daily sheet" }, { id: "history", label: "History (90 days)" }]} /><Button variant="ghost" disabled={loading} onClick={reload}><RefreshCw size={16} aria-hidden="true" />Refresh</Button></div>
     <LoadState loading={loading} error={error} onRetry={reload} />
     {data && !error && tab === "sheet" && <section id="temperature-panel-sheet" role="tabpanel" aria-labelledby="temperature-tab-sheet" className="temperature-sheet-wrap">
@@ -188,6 +193,7 @@ function TemperatureLog({ readOnly }: { readOnly: boolean }) {
     {/* Cross product boundaries with a fresh document: BTB capabilities and a
         failed background FoodSafe profile load must not follow this link. */}
     <details className="temperature-legacy"><summary>Looking for earlier Pholo records?</summary><p>Readings created under a Pholo account are available in that account’s Temperature Monitoring page.</p><a href="/temperatures" className="ops-text-link">Open Pholo temperature records</a><p className="ops-meta">Use the Pholo login that originally recorded them.</p></details>
+    {managing && <StandardsForm onClose={() => setManaging(false)} onSaved={() => { setManaging(false); setNotice("Temperature standard approved. Staff can now record readings against it."); void reload(); }} />}
     {editing && <ReadingForm standards={data?.standards ?? []} onClose={() => setEditing(false)} onSaved={(record) => {
       update((current) => ({ ...current, records: [record, ...current.records.filter((item) => item.id !== record.id)] }));
       setEditing(false); setNotice("Temperature reading saved.");
@@ -251,6 +257,40 @@ function SheetTable({ date, onDateChange, maxDate, static: isStatic, cells, onDr
       </tbody>
     </table>
   </div>;
+}
+
+function StandardsForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState({ record_type: "cold_storage", equipment_name: "", min_safe_temp: "", max_safe_temp: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (saving) return;
+    const min = Number(form.min_safe_temp), max = Number(form.max_safe_temp);
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) { setError("Enter a valid safe range: the maximum must be at or above the minimum."); return; }
+    setSaving(true); setError("");
+    try {
+      await fetchJson("/api/btb/temperature-standards", jsonRequest({
+        record_type: form.record_type, equipment_name: form.equipment_name.trim(),
+        min_safe_temp: min, max_safe_temp: max,
+      }));
+      onSaved();
+    } catch (cause) { setError(messageOf(cause)); }
+    finally { setSaving(false); }
+  };
+  return <Modal open title="Approve a temperature standard" description="These limits become the only values staff can use for off-form readings. Saving the same equipment again updates its range." busy={saving} onClose={onClose}><form onSubmit={submit}>
+    {error && <p className="ui-notice ui-notice--error" role="alert">{error}</p>}
+    <fieldset className="ui-form-stack" disabled={saving}>
+      <label>Record type<select className="ui-input" data-modal-autofocus value={form.record_type} onChange={(event) => setForm({ ...form, record_type: event.target.value })}>{TEMPERATURE_TYPES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+      <label>Equipment / item<Input required maxLength={150} placeholder="Walk-in cooler, freezer, probe…" value={form.equipment_name} onChange={(event) => setForm({ ...form, equipment_name: event.target.value })} /></label>
+      <div className="ops-form-grid">
+        <label>Safe minimum °C<Input required type="number" step="0.01" value={form.min_safe_temp} onChange={(event) => setForm({ ...form, min_safe_temp: event.target.value })} /></label>
+        <label>Safe maximum °C<Input required type="number" step="0.01" value={form.max_safe_temp} onChange={(event) => setForm({ ...form, max_safe_temp: event.target.value })} /></label>
+      </div>
+      <p className="ops-meta">Radius: every reading is green inside this range. Do not guess a food-safety limit — copy the approved local standard.</p>
+    </fieldset>
+    <div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving}>{saving ? "Approving…" : "Approve standard"}</Button></div>
+  </form></Modal>;
 }
 
 function ReadingForm({ standards, onClose, onSaved }: { standards: TemperatureStandard[]; onClose: () => void; onSaved: (record: BtbTemperatureRecord) => void }) {

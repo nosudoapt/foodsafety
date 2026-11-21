@@ -85,7 +85,9 @@ export async function btbUsesLocationWorkspace(identity: BtbIdentity, db = inven
 export async function legacyBtbRole(value: string | undefined | null) {
   const identity = await btbIdentityFromSession(value);
   if (!identity) return null;
-  if (!["corporate", "owner"].includes(identity.role) && await btbUsesLocationWorkspace(identity)) return null;
+  // The workspace is unified now: a location-workspace employee still uses the
+  // older inventory screens for their branch. requireBtbAccess already verified
+  // the credential version and page grant before this helper is called.
   return identity.role;
 }
 

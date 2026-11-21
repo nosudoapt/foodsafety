@@ -9,7 +9,7 @@ export function btbInventoryRoute(handler: (request: Request) => Promise<NextRes
     try {
       const edit = !["GET", "HEAD"].includes(request.method);
       if (edit) requireBtbOrigin(request);
-      await requireBtbAccess("month_end_inventory", edit);
+      await requireBtbAccess("month_end_inventory", edit, { allowLocationWorkspace: true });
       return await handler(request);
     } catch (error) { return apiFailure(error, request); }
   };
