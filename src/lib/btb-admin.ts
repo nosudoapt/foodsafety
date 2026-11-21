@@ -30,7 +30,7 @@ export interface BtbAdminPerson {
 export interface BtbAdminPeople { people: BtbAdminPerson[]; emailService: BtbConsoleEmailService }
 export interface BtbInvitationReceipt {
   employee_id: string; invitation_id: string; expires_at: string; email_status: BtbConsoleEmailStatus;
-  emailService: BtbConsoleEmailService; manualLink?: string;
+  email_error?: string; emailService: BtbConsoleEmailService; manualLink?: string;
 }
 export interface BtbInvitationInfo { name: string; email: string; location: string; expires_at: string }
 

@@ -26,7 +26,7 @@ export default function BtbAdminPeople({ location }: { location: BtbAdminLocatio
     <div className="btb-console__sectionhead"><div><p className="btb-console__eyebrow">Named access</p><h2 id="console-people-heading">People at this location</h2><p className="btb-console__hint">An employee’s name, role and password are shared across their assigned locations.</p></div><Button accent="red" disabled={!location.active || loading || !!error} onClick={() => setAdding(true)}><UserPlus size={18} aria-hidden="true" />Invite person</Button></div>
     {!location.active && <p className="ui-notice">This location is closed. Activate it before inviting or accepting invitations.</p>}
     {data && !data.emailService.senderConfigured && <p className="ui-notice">Email is not configured. New invitations provide a one-time manual link; share it privately with the intended person.</p>}
-    {data?.emailService.senderConfigured && !data.emailService.schedulerConfigured && <p className="ui-notice">Invitations queue in the existing email outbox. Configure the scheduler before expecting email delivery.</p>}
+    {data?.emailService.senderConfigured && <p className="ui-notice">Invitations are emailed the moment you click invite. The daily outbox retries any delivery that fails.</p>}
     {notice && <p className="ui-notice ui-notice--success" role="status">{notice}</p>}
     {receipt && <InvitationReceipt receipt={receipt} onDismiss={() => setReceipt(null)} />}
     <div className="btb-console__toolbar"><label className="btb-console__search"><Search size={18} aria-hidden="true" /><span className="sr-only">Search people</span><input type="search" placeholder="Name, email, role or status" value={query} onChange={event => setQuery(event.target.value)} /></label><Button accent="red" variant="ghost" disabled={loading} onClick={reload}>Refresh people</Button></div>
@@ -44,7 +44,15 @@ function InvitationReceipt({ receipt, onDismiss }: { receipt: BtbInvitationRecei
     try { await navigator.clipboard.writeText(receipt.manualLink!); setCopied("Link copied. Share it privately."); }
     catch { setCopied("Copy wasn’t available. Select the link below and copy it manually."); }
   }
-  return <Card className="btb-console__receipt"><div className="btb-console__sectionhead"><h3>{receipt.manualLink ? "Invitation created · manual link" : "Invitation queued"}</h3><Button accent="red" variant="ghost" onClick={onDismiss}>Dismiss</Button></div><p>{receipt.manualLink ? "Email is unavailable. This link is shown only now and is not saved in your browser." : "The email worker will send the setup link. Queued is not a delivery confirmation; refresh people to check its status."}</p><p className="btb-console__hint">Single use · expires {dateLabel(receipt.expires_at)}. Previous unused links for this person no longer work.</p>{receipt.manualLink && <><label className="ui-form-stack">Private setup link<Input accent="red" readOnly value={receipt.manualLink} onFocus={event => event.target.select()} /></label><Button accent="red" variant="ghost" onClick={copy}><Copy size={16} aria-hidden="true" />Copy private link</Button>{copied && <p role="status" className="btb-console__hint">{copied}</p>}</>}</Card>;
+  const heading = receipt.manualLink ? "Invitation created · manual link"
+    : receipt.email_status === "accepted" ? "Invitation sent"
+      : receipt.email_status === "failed" ? "Invitation created · email failed"
+        : "Invitation queued";
+  const message = receipt.manualLink ? "Email is unavailable. This link is shown only now and is not saved in your browser."
+    : receipt.email_status === "accepted" ? "Resend accepted the branded setup email. The person should receive it shortly."
+      : receipt.email_status === "failed" ? `The setup email could not be delivered${receipt.email_error ? ` — ${receipt.email_error}` : ""}. The daily outbox will retry; you can also re-invite.`
+        : "The email worker will send the setup link. Queued is not a delivery confirmation; refresh people to check its status.";
+  return <Card className="btb-console__receipt"><div className="btb-console__sectionhead"><h3>{heading}</h3><Button accent="red" variant="ghost" onClick={onDismiss}>Dismiss</Button></div><p>{message}</p><p className="btb-console__hint">Single use · expires {dateLabel(receipt.expires_at)}. Previous unused links for this person no longer work.</p>{receipt.manualLink && <><label className="ui-form-stack">Private setup link<Input accent="red" readOnly value={receipt.manualLink} onFocus={event => event.target.select()} /></label><Button accent="red" variant="ghost" onClick={copy}><Copy size={16} aria-hidden="true" />Copy private link</Button>{copied && <p role="status" className="btb-console__hint">{copied}</p>}</>}</Card>;
 }
 
 function InviteForm({ endpoint, onClose, onInvited }: { endpoint: string; onClose: () => void; onInvited: (receipt: BtbInvitationReceipt) => void }) {

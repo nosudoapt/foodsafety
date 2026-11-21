@@ -41,6 +41,9 @@ export default defineConfig({
         CRON_SECRET: emailMode === "missing-scheduler" ? "" : "browser-test-cron-secret",
         BTB_PASSWORD: "browser-test-shared-password",
         BTB_SHARED_LOGIN: "1",
+        // Keep the sandbox offline: the invitation stays queued instead of
+        // calling the real Resend API with a synthetic key.
+        BTB_INVITE_SEND_NOW: "0",
         PLATFORM_ADMIN_BOOTSTRAP_TOKEN: "browser-test-bootstrap-token",
         DEMO_PLACEHOLDER: undefined as unknown as string,
         NEXT_TELEMETRY_DISABLED: "1",

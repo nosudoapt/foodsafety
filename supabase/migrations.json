@@ -184,6 +184,11 @@
       "step": 39,
       "file": "seed-btb-training-modules.sql",
       "description": "The four-week onboarding programme (Weeks 1-3 staff, Week 4 manager-only), seeded as published training topics and sections."
+    },
+    {
+      "step": 40,
+      "file": "schema-btb-manager-invites.sql",
+      "description": "Managers and supervisors can invite their own team: employee-issued single-use invitations and new staff accounts without a console password."
     }
   ]
 }

@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dbError } from "./btb-api";
 import { EmailDeliveryError, reminderServiceStatus } from "./btb-email";
+import { invitationEmailHtml } from "./btb-invite-email";
 import { renderDailyReportPdf } from "./btb-daily-pdf";
 import type { DailyReportData } from "./btb-daily-report";
 
@@ -49,7 +50,7 @@ function jobPayload(job: EmailJobRow): DailyReportData {
   return (job.payload && typeof job.payload === "object" ? job.payload : {}) as DailyReportData;
 }
 
-async function sendResend(from: string, job: EmailJobRow, attachment?: { filename: string; content: string }): Promise<string> {
+async function sendResend(from: string, job: EmailJobRow, attachment?: { filename: string; content: string }, html?: string): Promise<string> {
   const status = reminderServiceStatus();
   if (!status.senderConfigured) {
     throw new EmailDeliveryError("Email delivery is not configured. Set RESEND_API_KEY and BTB_EMAIL_FROM on the server.", false);
@@ -70,6 +71,7 @@ async function sendResend(from: string, job: EmailJobRow, attachment?: { filenam
         to: [job.recipient],
         subject: job.subject,
         text: job.body,
+        ...(html ? { html } : {}),
         ...(attachment ? { attachments: [attachment] } : {}),
       }),
     });
@@ -154,7 +156,8 @@ async function deliverOne(db: SupabaseClient, current: EmailJobRow): Promise<boo
     dbError(preparedText.error, "The email payload could not be prepared.");
     const job = preparedText.data as EmailJobRow | null;
     if (!job) return false; // Lease lost or superseded - skip gracefully.
-    const provider = await sendResend(job.frozen_from ?? process.env.BTB_EMAIL_FROM!.trim(), job);
+    const provider = await sendResend(job.frozen_from ?? process.env.BTB_EMAIL_FROM!.trim(), job, undefined,
+      job.kind === "invite" ? invitationEmailHtml(job.body) : undefined);
     await finish(db, job, provider, null, false);
     return true;
   }

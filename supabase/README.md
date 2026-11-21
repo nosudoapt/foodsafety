@@ -94,6 +94,7 @@ are idempotent (safe to re-run).
 | 37 | `fix-btb-page-capabilities.sql` | Live page-scoped browser capabilities, effective grants at RLS/RPC boundaries, server-only role restrictions and platform grant revalidation. Runs after 36 because it wraps `btb_replay_prep_save`. |
 | 38 | `schema-btb-training-audience.sql` | `training_topics.audience` — whole-team modules vs manager-only modules. Week 4 manager training is reviewed by an owner. |
 | 39 | `seed-btb-training-modules.sql` | The four-week onboarding programme (Weeks 1–3 all staff, Week 4 manager-only) as published topics and sections. Idempotent by fixed id. |
+| 40 | `schema-btb-manager-invites.sql` | Managers and supervisors invite their own team from the workspace: employee-issued single-use invitations, branded setup email, no console password required. |
 
 ## Role set — single source of truth
 
