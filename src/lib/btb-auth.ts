@@ -43,6 +43,15 @@ export function btbAccountFor(role: string): BtbAccount | undefined {
   return BTB_ACCOUNTS.find((a) => a.role === role);
 }
 
+// Shared role accounts are switched off for the live team sign-in. They remain
+// available only where an operator explicitly opts in with BTB_SHARED_LOGIN=1
+// (local QA and the Playwright sandbox). Production omits the flag, so
+// /btb/login accepts individual employee accounts only — the addresses in
+// BTB_ACCOUNTS are never a way in.
+export function sharedWorkspaceLoginEnabled(): boolean {
+  return process.env.BTB_SHARED_LOGIN === "1";
+}
+
 // Backend-owned credentials for the five shared role workspaces. The shared
 // password is deployed as the BTB_PASSWORD environment variable; there is
 // deliberately no built-in value, so a leaked copy of this file cannot unlock

@@ -23,15 +23,19 @@ Sign-in URLs: demo at `/btb/login`, console at `/btb/admin/login`.
 | A4 | Visit `/between-the-buns/temperatures?x=1` | Redirects with `?x=1` kept |
 | A5 | Click every card on `/btb/demo` | Loads, no 404 |
 
-## B. Demo door (shared accounts)
+## B. Team sign-in (individual employees only)
 
 | # | Do this | Expect |
 |---|---|---|
-| B1 | `/btb/login` → `manager@btb.demo` + `BTB_PASSWORD` | Lands on `/btb/demo` |
-| B2 | Sign out | Back to `/btb/login` |
+| B1 | `/btb/login` → an individual employee email + their own password | Lands on `/btb/demo` |
+| B2 | `/btb/login` → `manager@btb.demo` + `BTB_PASSWORD` | Refused: “Shared workspace accounts can’t sign in here.” |
+| B3 | Sign out | Back to `/btb/login` |
 
-> Demo accounts show the **whole** demo. They never see real location data.
-> You need `BTB_PASSWORD` in `.env.local` or B1 fails closed.
+> Live sign-in is individual-only. Employee accounts are created in the console
+> (`/btb/admin` → location → People) or by manager invitation; the employee sets
+> their own password from the invitation link. Shared role accounts work only
+> when the server sets `BTB_SHARED_LOGIN=1` — a local QA/Playwright convenience
+> that must never be set in production.
 
 ## C. Console (super-admin)
 

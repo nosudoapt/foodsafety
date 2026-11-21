@@ -76,15 +76,19 @@ test("expired confirmation and recovery links offer a usable next step", async (
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeEnabled();
 });
 
-test("BTB backend login recovers old cookies and loads account shortcuts without login env settings", async ({ page, context }) => {
+test("BTB backend login recovers old cookies and never lists account shortcuts", async ({ page, context }) => {
   await context.addCookies([{ name: "btb_session", value: "manager.btb-dev-session-token", url: "http://127.0.0.1:5101", httpOnly: true, sameSite: "Lax" }]);
   const response = await page.request.get("/api/btb/me");
   await expect(response).toBeOK();
   const info = await response.json();
   expect(info.authenticated).toBe(false);
   expect("passwordHint" in info).toBe(false);
-  expect(info.accounts).toHaveLength(5);
-  expect(JSON.stringify(info)).not.toContain(workspacePassword);
+  // The live sign-in is individual-only: no shared role or employee emails may
+  // be enumerated for signed-out visitors.
+  expect(info.accounts).toBeUndefined();
+  expect(JSON.stringify(info)).not.toContain("@btb.demo");
+  expect("password" in info).toBe(false);
+  if (workspacePassword) expect(JSON.stringify(info)).not.toContain(workspacePassword);
   await signInBtb(page, "manager");
   await expect(page.getByRole("heading", { name: "Your restaurant, in focus." })).toBeVisible();
   await expect(page.locator('a[href="/btb/demo/cleaning-schedule"]').first()).toBeVisible();

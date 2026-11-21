@@ -4,13 +4,12 @@ import { useEffect, useState } from "react";
 import { ArrowRight, ClipboardCheck, Layers, Mail, ShieldCheck } from "lucide-react";
 import BtbWordmark from "@/components/BtbWordmark";
 import { Alert, Field, PasswordField } from "@/components/auth/AuthShell";
-import { BTB_ROLE_LABELS, isBtbRole } from "@/lib/btb-roles";
 import { safeNextPath } from "@/lib/auth-redirect";
 import { fetchJson, RequestError } from "@/lib/fetch-json";
 import { announceBtbSessionChange, clearBtbPublicCapabilities } from "@/lib/btb-public-fetch";
 import "@/app/auth.css";
 
-interface PublicInfo { authenticated?: boolean; accounts?: { role: string; email: string; name: string }[] }
+interface PublicInfo { authenticated?: boolean }
 
 export default function BtbLogin() {
   const [email, setEmail] = useState("");
@@ -51,7 +50,7 @@ export default function BtbLogin() {
 
   return <div className="ax btb-auth">
     <main className="ax__main"><div className="ax__top"><div className="btb-auth__brand"><BtbWordmark className="text-xl" /><span>Team workspace · powered by Pholo</span></div></div><div className="ax__body"><div className="ax__card">
-      <p className="ax__eyebrow">Between the Buns</p><h1 className="ax__title">A good day starts here.</h1><p className="ax__sub">Use your individual employee email and password. Your shift checks and training are saved under your name.</p>
+      <p className="ax__eyebrow">Between the Buns</p><h1 className="ax__title">A good day starts here.</h1><p className="ax__sub">Sign in with the individual employee email and password your restaurant manager set up for you. Your shift checks and training are saved under your name.</p>
       <form className="ax__form" onSubmit={handleSubmit} noValidate>
         {error && <Alert kind="error">{error}</Alert>}
         <Field label="Team email" error={emailError} icon={<Mail size={16} aria-hidden="true" />}>{(props) => <input {...props} type="email" autoComplete="username" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@restaurant.com" />}</Field>
@@ -59,9 +58,8 @@ export default function BtbLogin() {
         <button className="btn btn--primary" type="submit" disabled={loading}>{loading ? <><span className="btn__spinner" aria-hidden="true" />Signing in…</> : <>Open my workspace<ArrowRight size={17} aria-hidden="true" /></>}</button>
       </form>
       {info.authenticated && <p className="foot"><a href="/btb/demo">Continue with your current session</a></p>}
-      {!!info.accounts?.length && <details className="btb-auth__accounts"><summary>Shared workspace accounts</summary><p>Individual employee sign-in is required to record daily checks and training.</p><div>{info.accounts.map((account) => <button key={account.role} type="button" aria-pressed={email === account.email} onClick={() => setEmail(account.email)}><strong>{isBtbRole(account.role) ? BTB_ROLE_LABELS[account.role] : account.role}</strong><span>{account.name}</span></button>)}</div></details>}
-      {infoError && <p className="foot" role="status">Account shortcuts couldn’t load. You can enter your email above. <button className="link" onClick={() => setRevision((value) => value + 1)}>Try again</button></p>}
-      <p className="foot">Need your account details? Ask your restaurant manager.</p>
+      {infoError && <p className="foot" role="status">We couldn’t check your current session. You can still enter your email above. <button className="link" onClick={() => setRevision((value) => value + 1)}>Try again</button></p>}
+      <p className="foot">Need your account details? Ask your restaurant manager. Only individual employee accounts can sign in here.</p>
     </div></div></main>
     <aside className="ax__aside"><div className="ax__aside-inner btb-auth__story"><p className="dash-focus__label">One team. A little more clarity.</p><h2>Everything for the shift.<br /><em>Room to focus.</em></h2><p>A workspace that follows your responsibilities, from the first opening check to the month-end close.</p><ul><li><ClipboardCheck size={21} aria-hidden="true" /><span><strong>Start with the essentials</strong>Prep, checklists and cleaning, ready for the day.</span></li><li><Layers size={21} aria-hidden="true" /><span><strong>Keep the bigger picture close</strong>Stock, people, records and renewals in one place.</span></li><li><ShieldCheck size={21} aria-hidden="true" /><span><strong>A view that fits your role</strong>Clear tools and access for every member of the team.</span></li></ul></div></aside>
   </div>;

@@ -13,10 +13,13 @@ import {
   accountForCredentials,
   employeeSessionValueFor,
   sessionValueFor,
+  sharedWorkspaceLoginEnabled,
 } from "@/lib/btb-auth";
 
-// BTB sign-in: { email, password } against a shared workspace or an individual
-// employee's credential hash. This flow is independent of Supabase Auth.
+// BTB sign-in: { email, password } against an individual employee's credential
+// hash. Shared role accounts are rejected unless an operator explicitly turns
+// them on for local QA (BTB_SHARED_LOGIN=1); the live team sign-in is
+// employee-only. This flow is independent of Supabase Auth.
 export async function POST(request: NextRequest) {
   let email = "";
   let password = "";
@@ -36,6 +39,11 @@ export async function POST(request: NextRequest) {
     let name: string;
     let maxAge = BTB_COOKIE_MAX_AGE;
     if (BTB_ACCOUNTS.some((item) => item.email === email)) {
+      // Live sign-in is individual-only. The shared store-tablet accounts are
+      // an opt-in QA convenience, never a production credential.
+      if (!sharedWorkspaceLoginEnabled()) {
+        throw new BtbApiError("Shared workspace accounts can’t sign in here. Use the individual employee email and password your restaurant manager set up.", 403);
+      }
       const account = accountForCredentials(email, password);
       if (!account) throw new BtbApiError("Invalid email or password", 401);
       value = sessionValueFor(account.role);

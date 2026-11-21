@@ -40,6 +40,7 @@ export default defineConfig({
         BTB_EMAIL_FROM: "BTB Tests <btb@example.test>",
         CRON_SECRET: emailMode === "missing-scheduler" ? "" : "browser-test-cron-secret",
         BTB_PASSWORD: "browser-test-shared-password",
+        BTB_SHARED_LOGIN: "1",
         PLATFORM_ADMIN_BOOTSTRAP_TOKEN: "browser-test-bootstrap-token",
         DEMO_PLACEHOLDER: undefined as unknown as string,
         NEXT_TELEMETRY_DISABLED: "1",

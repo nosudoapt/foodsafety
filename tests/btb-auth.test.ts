@@ -12,6 +12,7 @@ import {
   isBtbRole,
   roleFromSession,
   sessionValueFor,
+  sharedWorkspaceLoginEnabled,
   tokenValid,
 } from "../src/lib/btb-auth";
 import { cardsForRole, hiddenCardsForRole, BTB_CARDS } from "../src/lib/btb-hub";
@@ -226,14 +227,33 @@ test("no client component imports the module holding BTB's password", () => {
   assert.deepEqual(offenders, [], `client files must import ./btb-roles, not ./btb-auth: ${offenders.join(", ")}`);
 });
 
-test("the anonymous account list never exposes a password", () => {
+test("shared workspace sign-in is opt-in and off unless BTB_SHARED_LOGIN=1", () => {
+  const saved = process.env.BTB_SHARED_LOGIN;
+  try {
+    delete process.env.BTB_SHARED_LOGIN;
+    assert.equal(sharedWorkspaceLoginEnabled(), false, "live sign-in must be employee-only by default");
+    process.env.BTB_SHARED_LOGIN = "0";
+    assert.equal(sharedWorkspaceLoginEnabled(), false);
+    process.env.BTB_SHARED_LOGIN = "true";
+    assert.equal(sharedWorkspaceLoginEnabled(), false, "only the explicit value 1 opts in");
+    process.env.BTB_SHARED_LOGIN = "1";
+    assert.equal(sharedWorkspaceLoginEnabled(), true);
+  } finally {
+    if (saved === undefined) delete process.env.BTB_SHARED_LOGIN; else process.env.BTB_SHARED_LOGIN = saved;
+  }
+});
+
+test("the signed-out response never enumerates shared or employee accounts", () => {
   const me = read("src/app/api/btb/me/route.ts");
   assert.ok(!me.includes("passwordHint"), "no password hint may be returned to anonymous callers");
   assert.ok(!me.includes("btbPassword"), "the password module must not be consulted by the anonymous response");
-  assert.ok(me.includes("authenticated: false"), "signed-out response must expose the account list");
+  assert.ok(!me.includes("BTB_ACCOUNTS"), "the shared account list must not be returned to anonymous callers");
+  assert.ok(!me.includes("btb_employees"), "anonymous callers must not enumerate employee emails");
+  assert.ok(me.includes("authenticated: false"), "signed-out response must identify itself");
 
   const login = read("src/app/api/btb/login/route.ts");
-  assert.ok(login.includes("accountForCredentials"), "route must check BTB's own list");
+  assert.ok(login.includes("sharedWorkspaceLoginEnabled"), "shared sign-in must be an explicit, off-by-default opt-in");
+  assert.ok(login.includes("accountForCredentials"), "the opted-in QA path still checks BTB's own list");
   assert.ok(login.includes("httpOnly: true"));
   assert.ok(login.includes("sessionValueFor"), "cookie must carry the role");
   assert.ok(login.includes("BTB_COOKIE"), "cookie name must come from btb-auth");
