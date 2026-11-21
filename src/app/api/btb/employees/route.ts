@@ -1,13 +1,37 @@
-import { btbRoute, BtbApiError, btbEmployeeIsLocationManaged, dbError, EMPLOYEE_COLUMNS, readAll, readBody } from "@/lib/btb-api";
+import { cookies } from "next/headers";
+import { btbRoute, BtbApiError, btbEmployeeIsLocationManaged, dbError, EMPLOYEE_COLUMNS, readAll, readBody, type BtbApiContext } from "@/lib/btb-api";
 import { BTB_RESTAURANT, employeeEditableBy, isUuid, isVersion, validateEmployee, type BtbEmployee } from "@/lib/btb-team";
 import { BTB_ACCOUNTS } from "@/lib/btb-auth";
 import { hashEmployeePassword, validEmployeePassword } from "@/lib/btb-passwords";
 
-export const GET = btbRoute("employees", false, async ({ db }) => ({
-  employees: await readAll<BtbEmployee>((from, to) => db.from("btb_employees").select(EMPLOYEE_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).order("name").order("id").range(from, to), "Employee records could not be loaded. Apply the BTB team schema if it has not been installed."),
-}), { allowLocationWorkspace: true });
+/** The branch chosen on the sign-in cards (or the person's first active one).
+ *  Corporate/owner and the shared demo keep the restaurant-wide view. */
+async function activeLocation(context: BtbApiContext): Promise<string | null> {
+  const { identity, access } = context;
+  if (!identity.employeeId || ["corporate", "owner"].includes(identity.role)) return null;
+  const slug = (await cookies()).get("btb_slug")?.value;
+  const site = access.locations.find((item) => item.slug === slug) ?? access.locations.find((item) => item.active);
+  return site?.id ?? null;
+}
 
-export const POST = btbRoute("employees", true, async ({ db, identity }, request) => {
+export const GET = btbRoute("employees", false, async (context) => {
+  const { db } = context;
+  const locationId = await activeLocation(context);
+  if (!locationId) return {
+    employees: await readAll<BtbEmployee>((from, to) => db.from("btb_employees").select(EMPLOYEE_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).order("name").order("id").range(from, to), "Employee records could not be loaded. Apply the BTB team schema if it has not been installed."),
+  };
+  const memberships = await db.from("btb_location_access").select("employee_id").eq("location_id", locationId);
+  dbError(memberships.error, "This branch’s team could not be loaded. Please retry.");
+  const ids = (memberships.data ?? []).map((row) => row.employee_id as string);
+  if (!ids.length) return { employees: [] };
+  return {
+    employees: await readAll<BtbEmployee>((from, to) => db.from("btb_employees").select(EMPLOYEE_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).in("id", ids).order("name").order("id").range(from, to), "Employee records could not be loaded. Apply the BTB team schema if it has not been installed."),
+  };
+}, { allowLocationWorkspace: true });
+
+export const POST = btbRoute("employees", true, async (context, request) => {
+  const { db, identity } = context;
+  const locationId = await activeLocation(context);
   const body = await readBody(request);
   const error = validateEmployee(body);
   if (error) throw new BtbApiError(error);
@@ -20,11 +44,20 @@ export const POST = btbRoute("employees", true, async ({ db, identity }, request
     dbError(result.error, "The employee record could not be verified.");
     existing = result.data as BtbEmployee | null;
     if (!existing) throw new BtbApiError("This employee could not be found.", 404);
+    if (locationId) {
+      const membership = await db.from("btb_location_access").select("employee_id")
+        .eq("location_id", locationId).eq("employee_id", existing.id).maybeSingle();
+      dbError(membership.error, "This employee’s branch could not be verified.");
+      if (!membership.data) throw new BtbApiError("This employee belongs to another branch.", 403);
+    }
     if (!employeeEditableBy(identity.role, existing.role)) throw new BtbApiError("A manager manages this employee account.", 403);
     // An unassigned legacy manager must not be able to touch a person who is
     // governed by the location platform (reset their password, change their
     // role or deactivate them). Corporate/owner retain organization-wide reach.
-    if (!["corporate", "owner"].includes(identity.role) && await btbEmployeeIsLocationManaged(db, existing.id)) {
+    // A branch manager who has just proved this person belongs to their branch
+    // may edit them here. The legacy guard remains for unassigned managers so
+    // they cannot reach into a location-governed account.
+    if (!locationId && !["corporate", "owner"].includes(identity.role) && await btbEmployeeIsLocationManaged(db, existing.id)) {
       throw new BtbApiError("This employee belongs to the location platform. Ask their location manager or corporate to update the account.", 403);
     }
     if (existing.id === identity.employeeId && (body.active !== true || role !== existing.role)) throw new BtbApiError("Ask another manager to change your own access.");
@@ -42,5 +75,11 @@ export const POST = btbRoute("employees", true, async ({ db, identity }, request
   dbError(result.error, "The employee could not be saved. Your form is still here; please retry.");
   const employee = result.data?.[0] as BtbEmployee | undefined;
   if (!employee?.id) throw new BtbApiError("The employee save was not confirmed. Please reload before retrying.", 503);
+  // A person created/edited from this branch must belong to this branch.
+  if (locationId) {
+    const membership = await db.from("btb_location_access")
+      .upsert({ location_id: locationId, employee_id: employee.id }, { onConflict: "location_id,employee_id" });
+    dbError(membership.error, "The employee was saved, but their branch membership could not be recorded. Retry the save.");
+  }
   return { employee };
 }, { allowLocationWorkspace: true });
