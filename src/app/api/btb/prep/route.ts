@@ -1,6 +1,6 @@
 import { btbRequestLocation, btbRoute, BtbApiError, dbError, readBody } from "@/lib/btb-api";
 import {
-  canSeePrepPar, isPrepCategory, parWeekStart, PREP_HISTORY_DAYS, prepCategoryMode,
+  canSeePrepPar, isPrepCategory, parSetIsCurrent, parWeekStart, PREP_HISTORY_DAYS, prepCategoryMode,
   prepSubmitState, prepSubmissionNotice, visiblePrepCategories,
 } from "@/lib/btb-prep";
 import { btbToday, isIsoDate, isUuid } from "@/lib/btb-team";
@@ -80,9 +80,15 @@ export const GET = btbRoute("prep_list", false, async (context, request) => {
       }),
   }));
 
+  const mark = await db.from("btb_par_weeks").select("set_at")
+    .eq("location_id", location.id).eq("area", "prep").eq("week_start", weekStart).maybeSingle();
+  dbError(mark.error, "The week's PAR status could not be checked. Please retry.");
+  const setAt = (mark.data?.set_at as string | undefined) ?? null;
+
   return {
     date, weekStart, historyDays: PREP_HISTORY_DAYS, canManage, canSeePar,
-    parSet: canManage ? ((levels.data ?? []) as unknown[]).length > 0 : null,
+    parSet: canManage ? parSetIsCurrent(setAt) : null,
+    parSetAt: setAt,
     categories: sheet,
     team: (staff.data ?? []).map((row) => ({ id: row.id, name: row.name, role: row.role })),
     comments: comments.data ?? [], notices: notices.data ?? [], submissions: submissions.data ?? [],
@@ -247,6 +253,32 @@ export const POST = btbRoute("prep_list", true, async (context, request) => {
       dbError(inserted.error, "The assignments could not be saved. Please retry.");
     }
     return { ok: true, weekStart: week, assignments: rows.length };
+  }
+
+  if (action === "add-item") {
+    if (!MANAGE_ROLES.includes(identity.role)) throw new BtbApiError("Only a manager can add an item.", 403);
+    if (!isIsoDate(body.weekStart) || body.weekStart !== parWeekStart(body.weekStart as string)) {
+      throw new BtbApiError(`PAR levels are set per week starting Friday (${parWeekStart(String(body.weekStart))}).`);
+    }
+    const week = body.weekStart as string;
+    const category = str(body.category, 60);
+    const name = str(body.name, 160);
+    const par = num(body.par);
+    if (!isPrepCategory(category)) throw new BtbApiError("Choose a valid prep section.");
+    if (!name) throw new BtbApiError("Name the item you are adding.");
+    if (Number.isNaN(par)) throw new BtbApiError("Enter PAR as a number of 0 or more.");
+    const saved = await db.from("btb_prep_par_levels").upsert({
+      location_id: location.id, week_start: week, item_key: name, item_name: name, category,
+      unit: str(body.unit, 24), par, urgent: body.urgent === true, custom: true,
+      set_by: identity.employeeId, set_by_name: identity.name, set_at: new Date().toISOString(),
+    }, { onConflict: "location_id,week_start,item_key" });
+    dbError(saved.error, "The item could not be added. Please retry.");
+    const marker = await db.from("btb_par_weeks").upsert({
+      location_id: location.id, area: "prep", week_start: week,
+      set_by: identity.employeeId, set_by_name: identity.name, set_at: new Date().toISOString(),
+    }, { onConflict: "location_id,area,week_start" });
+    dbError(marker.error, "The week could not be marked as set up.");
+    return { ok: true, item: name, weekStart: week };
   }
 
   if (action === "comment") {

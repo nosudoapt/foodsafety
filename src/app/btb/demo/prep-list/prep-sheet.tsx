@@ -38,6 +38,7 @@ export default function PrepSheet() {
   const [levels, setLevels] = useState<Level[]>([]);
   const [assign, setAssign] = useState<Record<string, string[]>>({});
   const [showHistory, setShowHistory] = useState(false);
+  const [adding, setAdding] = useState<{ category: string; name: string; unit: string; par: string; urgent: boolean } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abort = useRef<AbortController | null>(null);
 
@@ -168,6 +169,29 @@ export default function PrepSheet() {
     try { await fetchJson("/api/btb/prep", jsonRequest({ action: "notices-read" })); } catch { /* banner is already gone */ }
   };
 
+  const toggleUrgent = async (category: string, item: Item) => {
+    if (!sheet) return;
+    try {
+      await fetchJson("/api/btb/prep", jsonRequest({
+        action: "add-item", weekStart: sheet.weekStart, category, name: item.name,
+        unit: item.unit, par: item.par ?? 0, urgent: !item.urgent,
+      }));
+      await load(sheet.date);
+    } catch (caught) { setNotice(caught instanceof Error ? caught.message : "Urgent could not be changed."); }
+  };
+
+  const addItem = async () => {
+    if (!sheet || !adding) return;
+    try {
+      await fetchJson("/api/btb/prep", jsonRequest({
+        action: "add-item", weekStart: sheet.weekStart, category: adding.category,
+        name: adding.name.trim(), unit: adding.unit.trim(), par: Number(adding.par || 0), urgent: adding.urgent,
+      }));
+      setAdding(null);
+      await load(sheet.date);
+    } catch (caught) { setNotice(caught instanceof Error ? caught.message : "The item could not be added."); }
+  };
+
   const togglePerson = (category: string, id: string) => {
     setAssign((current) => {
       const list = current[category] ?? [];
@@ -237,7 +261,9 @@ export default function PrepSheet() {
                     <tr key={item.key} className={item.done ? "prep-done" : ""}>
                       <th scope="row" className="text-left font-medium">{item.name}{item.custom ? " *" : ""}</th>
                       <td>{item.unit || "—"}</td>
-                      <td>{item.urgent ? "Urgent" : ""}</td>
+                      <td className="text-center">{sheet.canManage
+                        ? <input type="checkbox" aria-label={`${item.name} urgent`} checked={item.urgent} onChange={() => void toggleUrgent(section.category, item)} />
+                        : (item.urgent ? "Urgent" : "")}</td>
                       {sheet.canSeePar && <td className="tabular-nums">{item.par ?? "—"}</td>}
                       <td>
                         {sheet.canManage
@@ -257,6 +283,22 @@ export default function PrepSheet() {
                   {!section.items.length && <tr><td colSpan={7} className="text-slate-500">No items yet — the manager sets the PAR levels for this section.</td></tr>}
                 </tbody>
               </table>
+              {sheet.canManage && (
+                <div className="no-print border-t border-slate-200 p-1 text-[11px]">
+                  {adding?.category === section.category ? (
+                    <div className="flex flex-wrap items-center gap-1">
+                      <input placeholder="Item name" className="w-32 rounded border px-1" value={adding.name} onChange={(event) => setAdding({ ...adding, name: event.target.value })} />
+                      <input placeholder="Unit" className="w-16 rounded border px-1" value={adding.unit} onChange={(event) => setAdding({ ...adding, unit: event.target.value })} />
+                      <input placeholder="PAR" inputMode="decimal" className="w-14 rounded border px-1" value={adding.par} onChange={(event) => setAdding({ ...adding, par: event.target.value })} />
+                      <label className="flex items-center gap-1"><input type="checkbox" checked={adding.urgent} onChange={(event) => setAdding({ ...adding, urgent: event.target.checked })} />Urgent</label>
+                      <button type="button" className="rounded border px-2 py-0.5" onClick={() => void addItem()}>Add</button>
+                      <button type="button" className="underline" onClick={() => setAdding(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button type="button" className="ops-text-link" onClick={() => setAdding({ category: section.category, name: "", unit: "", par: "", urgent: false })}>+ Add additional item</button>
+                  )}
+                </div>
+              )}
             </section>
           ))}
         </div>
@@ -343,7 +385,7 @@ export default function PrepSheet() {
                       {person.name}
                     </label>
                   ))}
-                  {!sheet.team.length && <span className="text-slate-500">No staff at this branch yet.</span>}
+                  {!sheet.team.length && <span className="text-slate-500">None</span>}
                 </fieldset>
               </section>
             ))}

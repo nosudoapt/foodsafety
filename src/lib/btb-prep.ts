@@ -70,6 +70,13 @@ export function prepSubmitState(rows: readonly PrepSubmitRow[]): { complete: boo
 export function prepSubmissionNotice(name: string, categories: readonly string[], missing: number): string {
   const where = categories.length ? categories.join(", ") : "no sections";
   return missing === 0
-    ? `${name} submitted ${where}: everything is complete.`
+    ? `${name} submitted ${where} (Complete — all items done)`
     : `${name} submitted ${where} with ${missing} item${missing === 1 ? "" : "s"} not ticked.`;
+}
+
+/** A PAR set-up is good for seven full days from the moment it was saved. */
+export function parSetIsCurrent(setAt: string | null | undefined, now = Date.now()): boolean {
+  if (!setAt) return false;
+  const saved = new Date(setAt).getTime();
+  return Number.isFinite(saved) && now - saved < 7 * 86_400_000 && now >= saved - 60_000;
 }

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   canSeePrepPar, isPrepCategory, parWeekStart, PREP_CATEGORIES, PREP_HISTORY_DAYS,
-  prepCategoryItems, prepCategoryMode, prepSubmitState, prepSubmissionNotice, visiblePrepCategories,
+  parSetIsCurrent, prepCategoryItems, prepCategoryMode, prepSubmitState, prepSubmissionNotice, visiblePrepCategories,
 } from "../src/lib/btb-prep";
 
 test("the six printed sections are the only prep categories", () => {
@@ -49,7 +49,17 @@ test("a submission is complete only when every visible row is ticked", () => {
 });
 
 test("the manager notice names the person, the sections and what is missing", () => {
-  assert.equal(prepSubmissionNotice("Kapil", ["Produce"], 0), "Kapil submitted Produce: everything is complete.");
+  assert.equal(prepSubmissionNotice("Kapil", ["Produce"], 0), "Kapil submitted Produce (Complete — all items done)");
   assert.equal(prepSubmissionNotice("Micky", ["Produce", "Dairy"], 1), "Micky submitted Produce, Dairy with 1 item not ticked.");
   assert.equal(prepSubmissionNotice("Micky", [], 2), "Micky submitted no sections with 2 items not ticked.");
+});
+
+test("a PAR set-up is valid for seven full days and then expires", () => {
+  const saved = "2026-11-20T10:00:00.000Z";
+  const at = (hours: number) => new Date(Date.parse(saved) + hours * 3_600_000).getTime();
+  assert.equal(parSetIsCurrent(saved, at(0)), true);
+  assert.equal(parSetIsCurrent(saved, at(167)), true);
+  assert.equal(parSetIsCurrent(saved, at(169)), false);
+  assert.equal(parSetIsCurrent(null, at(1)), false);
+  assert.equal(parSetIsCurrent("not a date", at(1)), false);
 });
