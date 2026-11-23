@@ -188,6 +188,25 @@ const ROUTE_FEATURE: Record<string, string> = {
 
 const SERVER_GATED_CLIENT_ISLANDS = new Set(["prep-list"]);
 
+// Views that no longer touch PostgREST at all: every read and write goes
+// through their server endpoint, which resolves the branch from the session.
+const SERVER_API_VIEWS: Record<string, string> = {
+  "cleaning-schedule": "/api/btb/cleaning",
+  "cash-out": "/api/btb/cash-out",
+};
+
+test("cleaning schedule and cash-out are server-backed: no browser table access at all", () => {
+  const root = join(__dirname, "..", "..", "src", "app", "btb/demo");
+  for (const [slug, endpoint] of Object.entries(SERVER_API_VIEWS)) {
+    const source = readFileSync(join(root, slug, "view.tsx"), "utf8");
+    assert.ok(source.includes(endpoint), `/${slug} must read and write through ${endpoint}`);
+    assert.ok(!source.includes('from "@/lib/supabase"'), `/${slug} must not import the browser Supabase client`);
+    assert.ok(!/\.from\("(cleaning_logs|cash_outs)"\)/.test(source), `/${slug} must not name a table directly`);
+    // The feature gate still decides read-only (corporate/owner are view-only).
+    assert.match(source, /BtbFeatureGate/);
+  }
+});
+
 const SERVER_ONLY_GATED_ROUTES = new Set([
   "account",
   "menu",

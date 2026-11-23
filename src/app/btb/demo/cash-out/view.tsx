@@ -4,8 +4,8 @@
 import { useEffect, useState } from "react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
 import { Badge, Button, Card, Input, PageHeader } from "@/components/ui";
-import { supabase } from "@/lib/supabase";
-import { activeLocationId, locationScope } from "@/lib/locations";
+import { fetchJson } from "@/lib/fetch-json";
+import { jsonRequest } from "@/components/btb/Feedback";
 import {
   CASH_OUT_RETENTION_DAYS,
   cleanStaffMeals,
@@ -24,10 +24,23 @@ import {
 import { compressImage, uploadToSupabase } from "@/lib/files";
 import { parsePhotoList, photoSrc, removePhotos } from "@/lib/photos";
 
-const HISTORY_COLS =
-  "id, count_date, till_amount, cash_sale, delivery_fees, driver_tips, cash_out, safe_drop, local_purchase, single_trays, large_trays, review_cards, open_tickets, local_receipts, wastage, staff_meals, created_by, created_at";
-
 const today = () => new Date().toISOString().slice(0, 10);
+
+/** Numeric columns arrive as strings from PostgREST; the maths wants numbers. */
+const normalise = (r: CashOutRow): CashOutRow => ({
+  ...r,
+  till_amount: Number(r.till_amount) || 0,
+  cash_sale: Number(r.cash_sale) || 0,
+  delivery_fees: Number(r.delivery_fees) || 0,
+  driver_tips: Number(r.driver_tips) || 0,
+  cash_out: Number(r.cash_out) || 0,
+  safe_drop: Number(r.safe_drop) || 0,
+  local_purchase: Number(r.local_purchase) || 0,
+  single_trays: Number(r.single_trays) || 0,
+  large_trays: Number(r.large_trays) || 0,
+  review_cards: Number(r.review_cards) || 0,
+  open_tickets: Number(r.open_tickets) || 0,
+});
 
 // Counts print without trailing ".00"; money always shows cents.
 const fmtCount = (n: number): string => (Number.isInteger(n) ? String(n) : n.toFixed(2));
@@ -63,7 +76,6 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [createdBy, setCreatedBy] = useState<string | null>(null);
   // Local-purchase receipt photos (ops-photos object paths) for the open day.
   const [receipts, setReceipts] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -72,49 +84,19 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
   const [wastage, setWastage] = useState([{ item_name: "", quantity: "" }]);
   const [staffMeals, setStaffMeals] = useState([{ staff_name: "", item: "", quantity: "" }]);
 
-  // Who is at the tablet — stored on the row as created_by.
-  useEffect(() => {
-    fetch("/api/btb/me")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { name?: string } | null) => setCreatedBy(d?.name ?? null))
-      .catch(() => undefined);
-  }, []);
+  // Attribution is stamped by the server from the signed-in session — the page
+  // never sends a name, and never talks to a table directly.
 
   const loadHistory = async () => {
-    const cutoff = retentionCutoff(today());
-    const scope = locationScope();
-    let q = supabase
-      .from("cash_outs")
-      .select(HISTORY_COLS)
-      .gte("count_date", cutoff)
-      .order("count_date", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (scope) q = q.or(scope);
-    const { data, error: err } = await q;
-    if (err) {
-      setError("Couldn't load history — run supabase/schema-cash-out.sql, then reload.");
+    try {
+      const { rows } = await fetchJson<{ rows: CashOutRow[] }>("/api/btb/cash-out?history=1");
+      setHistory((rows ?? []).map(normalise));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't load history. Please retry.");
+    } finally {
       setLoading(false);
-      return;
     }
-    setHistory(
-      ((data ?? []) as CashOutRow[]).map((r) => ({
-        ...r,
-        till_amount: Number(r.till_amount) || 0,
-        cash_sale: Number(r.cash_sale) || 0,
-        delivery_fees: Number(r.delivery_fees) || 0,
-        driver_tips: Number(r.driver_tips) || 0,
-        cash_out: Number(r.cash_out) || 0,
-        safe_drop: Number(r.safe_drop) || 0,
-        local_purchase: Number(r.local_purchase) || 0,
-        single_trays: Number(r.single_trays) || 0,
-        large_trays: Number(r.large_trays) || 0,
-        review_cards: Number(r.review_cards) || 0,
-        open_tickets: Number(r.open_tickets) || 0,
-      })),
-    );
-    setError(null);
-    setLoading(false);
   };
 
   // Seed the form with the selected day so re-opening yesterday's count edits it.
@@ -122,48 +104,42 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      const scope = locationScope();
-      let q = supabase
-        .from("cash_outs")
-        .select(HISTORY_COLS)
-        .eq("count_date", date)
-        .limit(1);
-      if (scope) q = q.or(scope);
-      const { data, error: err } = await q;
-      if (cancelled) return;
-      if (err) {
-        setError("Couldn't load this day — run supabase/schema-cash-out.sql, then reload.");
+      try {
+        const { row } = await fetchJson<{ row: CashOutRow | null }>(
+          `/api/btb/cash-out?date=${encodeURIComponent(date)}`);
+        if (cancelled) return;
+        setForm(
+          row
+            ? {
+                till_amount: String(Number(row.till_amount) || 0),
+                cash_sale: String(Number(row.cash_sale) || 0),
+                delivery_fees: String(Number(row.delivery_fees) || 0),
+                driver_tips: String(Number(row.driver_tips) || 0),
+                cash_out: String(Number(row.cash_out) || 0),
+                safe_drop: String(Number(row.safe_drop) || 0),
+                local_purchase: String(Number(row.local_purchase) || 0),
+                single_trays: String(Number(row.single_trays) || 0),
+                large_trays: String(Number(row.large_trays) || 0),
+                review_cards: String(Number(row.review_cards) || 0),
+                open_tickets: String(Number(row.open_tickets) || 0),
+              }
+            : { till_amount: "", cash_sale: "", delivery_fees: "", driver_tips: "", cash_out: "", safe_drop: "", local_purchase: "", single_trays: "", large_trays: "", review_cards: "", open_tickets: "" },
+        );
+        setReceipts(parsePhotoList(row?.local_receipts));
+        const savedWastage = parseWastage(row?.wastage);
+        const savedMeals = parseStaffMeals(row?.staff_meals);
+        setWastage(savedWastage.length ? savedWastage.map((line) => ({ item_name: line.item_name, quantity: String(line.quantity) })) : [{ item_name: "", quantity: "" }]);
+        setStaffMeals(savedMeals.length ? savedMeals.map((line) => ({ staff_name: line.staff_name, item: line.item, quantity: String(line.quantity) })) : [{ staff_name: "", item: "", quantity: "" }]);
+        setError(null);
+        setSavedAt(null);
         setLoading(false);
-        return;
+        // History rides along with the day that just loaded (same effect, async).
+        void loadHistory();
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "Couldn't load this day. Please retry.");
+        setLoading(false);
       }
-      const row = (data?.[0] as CashOutRow | undefined) ?? null;
-      setForm(
-        row
-          ? {
-              till_amount: String(Number(row.till_amount) || 0),
-              cash_sale: String(Number(row.cash_sale) || 0),
-              delivery_fees: String(Number(row.delivery_fees) || 0),
-              driver_tips: String(Number(row.driver_tips) || 0),
-              cash_out: String(Number(row.cash_out) || 0),
-              safe_drop: String(Number(row.safe_drop) || 0),
-              local_purchase: String(Number(row.local_purchase) || 0),
-              single_trays: String(Number(row.single_trays) || 0),
-              large_trays: String(Number(row.large_trays) || 0),
-              review_cards: String(Number(row.review_cards) || 0),
-              open_tickets: String(Number(row.open_tickets) || 0),
-            }
-          : { till_amount: "", cash_sale: "", delivery_fees: "", driver_tips: "", cash_out: "", safe_drop: "", local_purchase: "", single_trays: "", large_trays: "", review_cards: "", open_tickets: "" },
-      );
-      setReceipts(parsePhotoList(row?.local_receipts));
-      const savedWastage = parseWastage(row?.wastage);
-      const savedMeals = parseStaffMeals(row?.staff_meals);
-      setWastage(savedWastage.length ? savedWastage.map((line) => ({ item_name: line.item_name, quantity: String(line.quantity) })) : [{ item_name: "", quantity: "" }]);
-      setStaffMeals(savedMeals.length ? savedMeals.map((line) => ({ staff_name: line.staff_name, item: line.item, quantity: String(line.quantity) })) : [{ staff_name: "", item: "", quantity: "" }]);
-      setError(null);
-      setSavedAt(null);
-      setLoading(false);
-      // History rides along with the day that just loaded (same effect, async).
-      void loadHistory();
     })();
     return () => {
       cancelled = true;
@@ -181,31 +157,26 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
     setSaving(true);
     setError(null);
 
-    const scope = locationScope();
-    let del = supabase.from("cash_outs").delete().eq("count_date", date);
-    if (scope) del = del.or(scope);
-    const { error: delErr } = await del;
-    if (delErr) {
-      setError("Couldn't save — run supabase/schema-cash-out.sql and supabase/schema-cash-out-columns.sql, then retry.");
+    try {
+      // One POST per day: the server rewrites the branch's row for that date
+      // and stamps who saved it, so there is no delete-then-insert window.
+      const { row } = await fetchJson<{ row: CashOutRow }>("/api/btb/cash-out", jsonRequest({
+        ...draft,
+        local_receipts: receipts,
+        wastage: cleanWastage(wastage),
+        staff_meals: cleanStaffMeals(staffMeals),
+      }));
+      // Apply the saved row to local state — no full-page reload.
+      const saved = normalise(row);
+      setHistory((prev) => [saved, ...prev.filter((r) => r.count_date !== saved.count_date)]
+        .sort((a, b) => (a.count_date < b.count_date ? 1 : -1)));
+      setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't save this count. Your entries are still here.");
+    } finally {
       setSaving(false);
-      return;
     }
-    const { error: insErr } = await supabase.from("cash_outs").insert({
-      ...draft,
-      local_receipts: JSON.stringify(receipts),
-      wastage: cleanWastage(wastage),
-      staff_meals: cleanStaffMeals(staffMeals),
-      location_id: activeLocationId(),
-      created_by: createdBy,
-    });
-    if (insErr) {
-      setError("Couldn't save — run supabase/schema-cash-out.sql, schema-cash-out-columns.sql and schema-cash-out-receipts.sql, then retry.");
-      setSaving(false);
-      return;
-    }
-    setSavedAt(new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
-    setSaving(false);
-    loadHistory();
   };
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => {

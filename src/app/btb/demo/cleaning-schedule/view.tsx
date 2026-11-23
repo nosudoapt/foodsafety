@@ -4,7 +4,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cleaningTasks } from "@/lib/btb-cleaning";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
-import { supabase } from "@/lib/supabase";
+import { fetchJson } from "@/lib/fetch-json";
+import { jsonRequest } from "@/components/btb/Feedback";
 import {
   compressImage,
   photoSrc,
@@ -12,7 +13,6 @@ import {
   removePhotos,
   uploadToSupabase,
 } from "@/lib/photos";
-import { locationScope, activeLocationId } from "@/lib/locations";
 import { attributionName, btbToday } from "@/lib/btb-team";
 import { isoDay as toISODate } from "@/lib/staff-schedule";
 import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
@@ -20,7 +20,9 @@ import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
 // One cleaning_logs row per task per week: who did it, when, and JSON arrays of
 // object paths for each photo side (multiple angles). Photos are compressed
 // on-device and uploaded to the ops-photos Storage bucket — the row only stores
-// paths. History loads from Supabase on mount; edits debounce-save per task.
+// paths. Everything the browser reads or writes goes through /api/btb/cleaning,
+// which resolves the branch and the actor from the session: this page never
+// talks to a table directly.
 interface TaskLog {
   id?: string; // cleaning_logs row id (undefined until first save)
   date: string; // YYYY-MM-DD → done_date
@@ -28,6 +30,18 @@ interface TaskLog {
   name: string; // → done_by
   before: string[]; // object paths → before_photo (JSON array)
   after: string[]; // object paths → after_photo (JSON array)
+}
+
+/** One row as the server returns it. */
+interface ApiLog {
+  id: string;
+  task_name: string;
+  week_start: string | null;
+  done_by: string | null;
+  done_date: string | null;
+  done_time: string | null;
+  before_photo: string | null;
+  after_photo: string | null;
 }
 
 type WeekData = Record<number, TaskLog>; // taskIdx -> log
@@ -125,7 +139,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
 
   // Persist the CURRENT state of one task row. Always re-reads storeRef so a
   // save that races with typing can't clobber newer edits (pending debounce
-  // timers converge the content afterwards).
+  // timers converge the content afterwards). One POST to /api/btb/cleaning.
   const persist = useCallback(
     async (key: string, idx: number) => {
       const t = timers.current.get(`${key}:${idx}`);
@@ -138,60 +152,30 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
         if (!log) return;
         if (!hasContent(log)) {
           if (log.id) {
-            const { error: err } = await supabase.from("cleaning_logs").delete().eq("id", log.id);
-            if (err) throw new Error(err.message);
+            await fetchJson("/api/btb/cleaning", jsonRequest({ action: "clear", id: log.id }));
             setLog(key, idx, { ...emptyLog(), date: log.date });
             setError("");
           }
           return;
         }
-        const taskName = cleaningTasks[idx];
-        let id = log.id;
-        if (!id) {
-          // Idempotent first save: reuse an existing row for this task/week.
-          let find = supabase
-            .from("cleaning_logs")
-            .select("id")
-            .eq("week_start", key)
-            .eq("task_name", taskName);
-          const findScope = locationScope();
-          if (findScope) find = find.or(findScope);
-          const { data: existing, error: err } = await find.limit(1);
-          if (err) throw new Error(err.message);
-          id = existing?.[0]?.id;
-        }
         const doneDate = log.date || defaultDate(key);
-        const payload = {
-          task_name: taskName,
+        // The server re-checks the task, the week, the branch and the actor and
+        // reuses the existing row for this task/week, so a re-save never stacks.
+        const { log: saved } = await fetchJson<{ log: ApiLog }>("/api/btb/cleaning", jsonRequest({
+          task_name: cleaningTasks[idx],
           week_start: key,
           done_date: doneDate,
-          // Attribution is automatic from the signed-in identity; any previously
-          // typed name is overwritten on the next save.
-          done_by: actorName || null,
           done_time: log.time || null,
-          before_photo: JSON.stringify(log.before),
-          after_photo: JSON.stringify(log.after),
-          location_id: activeLocationId(),
-        };
-        if (id) {
-          const { error: err } = await supabase.from("cleaning_logs").update(payload).eq("id", id);
-          if (err) throw new Error(err.message);
-        } else {
-          const { data, error: err } = await supabase
-            .from("cleaning_logs")
-            .insert(payload)
-            .select("id")
-            .single();
-          if (err) throw new Error(err.message);
-          id = data.id;
-        }
-        // Merge the row id / auto date into whatever the latest local edit is.
+          before_photo: log.before,
+          after_photo: log.after,
+        }));
+        // Merge the saved row into whatever the latest local edit is.
         const after = storeRef.current[key]?.[idx];
         if (after && hasContent(after)) {
-          setLog(key, idx, { ...after, id, date: after.date || doneDate });
-        } else if (id) {
+          setLog(key, idx, { ...after, id: saved.id, date: after.date || doneDate, name: saved.done_by ?? after.name });
+        } else if (saved.id) {
           // Content was cleared while this save was in flight — clean the row up.
-          await supabase.from("cleaning_logs").delete().eq("id", id);
+          await fetchJson("/api/btb/cleaning", jsonRequest({ action: "clear", id: saved.id }));
           setLog(key, idx, { ...emptyLog(), date: after?.date ?? "" });
         }
         setError("");
@@ -199,7 +183,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
         setError(e instanceof Error ? e.message : "Could not save this entry.");
       }
     },
-    [setLog, actorName],
+    [setLog],
   );
 
   const schedulePersist = useCallback(
@@ -227,26 +211,18 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
     [setLog, schedulePersist],
   );
 
-  // Load history once from Supabase (newest row wins per task/week).
+  // Load history once through the API (newest row wins per task/week).
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        let load = supabase
-          .from("cleaning_logs")
-          .select(
-            "id, task_name, done_by, done_date, done_time, before_photo, after_photo, week_start",
-          );
-        const loadScope = locationScope();
-        if (loadScope) load = load.or(loadScope);
-        const { data, error: err } = await load.order("created_at", { ascending: false });
-        if (err) throw new Error(err.message);
+        const data = await fetchJson<{ logs: ApiLog[] }>("/api/btb/cleaning");
         if (cancelled) return;
         const loaded: Store = {};
-        for (const row of data ?? []) {
+        for (const row of data.logs ?? []) {
           const idx = cleaningTasks.indexOf(row.task_name);
           if (idx < 0) continue;
-          const key = row.week_start ? mondayOf(row.week_start) : mondayOf(row.done_date);
+          const key = row.week_start ? mondayOf(row.week_start) : mondayOf(row.done_date ?? btbToday());
           const week = loaded[key] || (loaded[key] = {});
           if (week[idx]) continue;
           week[idx] = {
@@ -370,8 +346,7 @@ function CleaningSchedule({ readOnly }: { readOnly: boolean }) {
     setZoom(null);
     try {
       if (ids.length) {
-        const { error: err } = await supabase.from("cleaning_logs").delete().in("id", ids);
-        if (err) throw new Error(err.message);
+        await fetchJson("/api/btb/cleaning", jsonRequest({ action: "clear", ids }));
       }
       if (paths.length) await removePhotos(paths).catch(() => {});
       setError("");

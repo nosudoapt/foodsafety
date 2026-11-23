@@ -264,6 +264,16 @@
       "step": 55,
       "file": "schema-btb-inventory-location-scope.sql",
       "description": "Month-end inventory becomes per branch: legacy rows backfilled to Drumheller, branch-scoped indexes and uniqueness, and a seed helper so a new branch starts with its own copy of the item list."
+    },
+    {
+      "step": 56,
+      "file": "schema-btb-cleaning-cashout-server.sql",
+      "description": "Cleaning schedule and cash-out move behind server endpoints: branch and week columns on cleaning_logs, one till count per branch per day, and browser writes revoked on cleaning_logs, cash_outs, prep_counts and order_sheets."
+    },
+    {
+      "step": 57,
+      "file": "schema-workspace-auth-cutover.sql",
+      "description": "Unified auth prerequisites: canonical tenants/principals, linked collision credential archives, safe signup/profile privileges, explicit console assignments, durable login limits and revocable sessions. Legacy ownership is not guessed."
     }
   ]
 }
