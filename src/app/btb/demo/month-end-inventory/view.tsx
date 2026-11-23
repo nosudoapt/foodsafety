@@ -216,14 +216,14 @@ function InventoryMonth({ month, months, onMonthChange, readOnly }: { month: str
   const costPct = savedSnapshot ? savedSnapshot.food_cost_pct : accounting.foodCostPct;
 
   return <div className="inventory-workspace">
-    <PageHeader title="Month-end inventory" subtitle="Count your stock, reconcile purchases and save a clear close for the next month."
+    <PageHeader title="Month-end inventory" subtitle={data?.location ? `Count your stock, reconcile purchases and close the month for ${data.location.name}.` : "Count your stock, reconcile purchases and save a clear close for the next month."}
       action={data ? <Badge accent={finalized ? "green" : "purple"}>{finalized ? <LockKeyhole size={13} aria-hidden="true" /> : <Pencil size={13} aria-hidden="true" />}{finalized ? "Finalized" : data.snapshot ? "Reopened draft" : "Draft"}</Badge> : undefined} />
     <div className="inventory-toolbar">
       <label className="inventory-month"><span>Closing month</span><select value={month} disabled={!!saving} onChange={(event) => {
         if (unsaved && !window.confirm("Switch month and discard your unsaved entries?")) return;
         onMonthChange(event.target.value);
       }}>{months.map((key) => <option key={key} value={key}>{monthLabel(key)}</option>)}</select></label>
-      <p>Compared with {monthLabel(prevMonth(month))} · company-wide inventory</p>
+      <p>Compared with {monthLabel(prevMonth(month))} · {data?.location ? <Badge accent="blue">{data.location.name}</Badge> : "company-wide inventory"}</p>
       <button className="dash__refresh" aria-label="Refresh inventory" disabled={!!saving || !loaded || unsaved} onClick={() => { setNotice(""); setError(""); setRevision((value) => value + 1); }}><RefreshCw size={17} aria-hidden="true" /></button>
     </div>
 

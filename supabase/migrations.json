@@ -259,6 +259,11 @@
       "step": 54,
       "file": "schema-btb-edit-log.sql",
       "description": "Field-level audit of prep and order sheet changes (tenant and branch scoped), readable only by owner, supervisor and corporate."
+    },
+    {
+      "step": 55,
+      "file": "schema-btb-inventory-location-scope.sql",
+      "description": "Month-end inventory becomes per branch: legacy rows backfilled to Drumheller, branch-scoped indexes and uniqueness, and a seed helper so a new branch starts with its own copy of the item list."
     }
   ]
 }

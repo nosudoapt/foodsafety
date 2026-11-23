@@ -109,6 +109,7 @@ are idempotent (safe to re-run).
 | 52 | `schema-btb-location-scope.sql` | Branch isolation for the daily tools: temperature standards and order sheets gain a location, and location-aware writers replace the restaurant-wide ones so one branch cannot read or change another's temperature log, checklists, order sheet or staff schedule. |
 | 53 | `schema-btb-prep-sheet.sql` | Prep sheet workflow: per-branch weekly PAR levels, section assignments, autosaved drafts, submissions with in-app manager notices, comments and 45 days of history. |
 | 54 | `schema-btb-edit-log.sql` | Field-level audit of prep and order sheet changes, branch scoped and readable only by owner, supervisor and corporate. |
+| 55 | `schema-btb-inventory-location-scope.sql` | Month-end inventory per branch: legacy rows backfilled to Drumheller, branch-scoped indexes and uniqueness, and a seed helper so a new branch gets its own copy of the item list. |
 
 
 ## Role set — single source of truth

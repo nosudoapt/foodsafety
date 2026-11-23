@@ -4,13 +4,16 @@ import type { BtbPageAccess } from "./btb-page-access";
 import type { BtbRole } from "./btb-roles";
 import { queryExactCount } from "./query-count";
 
-export async function loadBtbOverview(client: SupabaseClient, role: BtbRole, rows: BtbPageAccess[], day: string, signal: AbortSignal, grants: readonly string[] | null = null, legacy = true): Promise<BtbOverview> {
+export async function loadBtbOverview(client: SupabaseClient, role: BtbRole, rows: BtbPageAccess[], day: string, signal: AbortSignal, grants: readonly string[] | null = null, legacy = true, locationId: string | null = null): Promise<BtbOverview> {
   const dates = btbDateWindow(day);
   if (!dates) throw new Error("Invalid dashboard date");
   const entries = await Promise.all(btbMetricIds(role, rows, grants, legacy).map(async (id): Promise<[BtbMetricId, number | string | null]> => {
     if (id === "inventoryStatus") {
       try {
-        const { data, error } = await client.from("inventory_month_snapshots").select("status").is("location_id", null).eq("count_month", dates.inventoryMonth).abortSignal(signal).maybeSingle();
+        // Month-end inventory belongs to one branch; the legacy unowned rows are
+        // only read when the caller has no branch (the shared demo).
+        const snapshots = client.from("inventory_month_snapshots").select("status").eq("count_month", dates.inventoryMonth).abortSignal(signal);
+        const { data, error } = await (locationId ? snapshots.eq("location_id", locationId) : snapshots.is("location_id", null)).maybeSingle();
         return [id, error ? null : data?.status === "finalized" ? "Finalized" : "Draft"];
       } catch { return [id, null]; }
     }

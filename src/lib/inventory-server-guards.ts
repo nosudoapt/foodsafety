@@ -9,11 +9,11 @@ export type DbGuardResult =
   | { ok: false; status: 409 | 500; error: string; cause?: unknown };
 
 /** A finalized month is immutable until a manager explicitly reopens it. */
-export async function requireEditableMonth(db: SupabaseClient, month: string): Promise<DbGuardResult> {
+export async function requireEditableMonth(db: SupabaseClient, month: string, locationId: string): Promise<DbGuardResult> {
   const { data, error } = await db
     .from("inventory_month_snapshots")
     .select("status")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("count_month", month)
     .maybeSingle();
 
@@ -32,11 +32,12 @@ export async function requireEditableMonth(db: SupabaseClient, month: string): P
 export async function requireItemWithoutFinalizedHistory(
   db: SupabaseClient,
   itemId: string,
+  locationId: string,
 ): Promise<DbGuardResult> {
   const { data: counts, error: countError } = await db
     .from("inventory_counts")
     .select("count_month")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("item_id", itemId);
 
   if (countError) return unavailable(countError, "The item history could not be checked. Please retry.");
@@ -46,7 +47,7 @@ export async function requireItemWithoutFinalizedHistory(
   const { data: finalized, error: snapshotError } = await db
     .from("inventory_month_snapshots")
     .select("count_month")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("status", "finalized")
     .in("count_month", months)
     .limit(1);

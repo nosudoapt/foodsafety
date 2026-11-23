@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
-import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const GET = btbInventoryRoute(readPurchases);
 export const POST = btbInventoryRoute(savePurchase);
@@ -18,7 +18,8 @@ import { entryAmount, isDuplicateInvoice, type PurchaseEntry } from "@/lib/inven
 // browser is not trusted for month/date consistency, amounts, or duplicates.
 const PURCHASE_ROLES = ["manager", "supervisor", "corporate", "admin"];
 
-async function savePurchase(req: Request) {
+async function savePurchase(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
@@ -57,14 +58,14 @@ async function savePurchase(req: Request) {
   }
 
   const db = inventoryDb();
-  const editable = await requireEditableMonth(db, count_month);
+  const editable = await requireEditableMonth(db, count_month, locationId);
   if (!editable.ok) return databaseFailure(editable.cause, editable.error, editable.status);
 
   // Duplicate-invoice guard for GFS entries that carry a reference.
   if (type === "gfs" && ref) {
     const { data: existingRows, error: duplicateReadError } = await db
       .from("inventory_purchases")
-      .select("id, type, supplier, reference, purchase_date, amount, description, count_month").is("location_id", null);
+      .select("id, type, supplier, reference, purchase_date, amount, description, count_month").eq("location_id", locationId);
     if (duplicateReadError) return databaseFailure(duplicateReadError);
     const entries = (existingRows ?? []) as PurchaseEntry[];
     const candidate: PurchaseEntry = { count_month, purchase_date, type, supplier: sup, description: description.trim(), amount: amt, reference: ref };
@@ -98,7 +99,8 @@ async function savePurchase(req: Request) {
 }
 
 // List a month's purchases (any signed-in role — read-only).
-async function readPurchases(req: Request) {
+async function readPurchases(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
@@ -110,7 +112,7 @@ async function readPurchases(req: Request) {
   const { data, error } = await inventoryDb()
     .from("inventory_purchases")
     .select("*")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("count_month", month)
     .order("purchase_date")
     .order("created_at");

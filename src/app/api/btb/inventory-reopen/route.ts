@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
-import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const POST = btbInventoryRoute(reopenMonth);
 import { inventoryDb } from "@/lib/supabase-server";
@@ -20,7 +20,8 @@ import { persistWithAudit, snapshotRestoreFields, type SnapshotRow } from "@/lib
 // reopened without its audit trail.
 const MANAGER_ROLES = ["manager", "admin"];
 
-async function reopenMonth(req: Request) {
+async function reopenMonth(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
@@ -42,7 +43,7 @@ async function reopenMonth(req: Request) {
   const { data: later, error: laterError } = await db
     .from("inventory_month_snapshots")
     .select("count_month")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("status", "finalized")
     .gt("count_month", count_month);
   if (laterError) return databaseFailure(laterError);
@@ -57,7 +58,7 @@ async function reopenMonth(req: Request) {
   const { data: existing, error: existingError } = await db
     .from("inventory_month_snapshots")
     .select("*")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("count_month", count_month)
     .maybeSingle();
   if (existingError) return databaseFailure(existingError);
@@ -72,7 +73,7 @@ async function reopenMonth(req: Request) {
       const { data, error } = await db
         .from("inventory_month_snapshots")
         .update({ status: "draft", reopened_by: role, reopened_at: reopenedAt, reopen_reason: why })
-        .is("location_id", null)
+        .eq("location_id", locationId)
         .eq("count_month", count_month)
         .eq("status", "finalized") // guard the transition
         .select()
@@ -82,6 +83,7 @@ async function reopenMonth(req: Request) {
     writeAudit: async () => {
       const { error } = await db.from("inventory_audit_log").insert({
         count_month,
+        location_id: locationId,
         action: "reopen",
         actor: role,
         reason: why,
@@ -95,7 +97,7 @@ async function reopenMonth(req: Request) {
       const { data, error } = await db
         .from("inventory_month_snapshots")
         .update(snapshotRestoreFields(prior))
-        .is("location_id", null)
+        .eq("location_id", locationId)
         .eq("count_month", count_month)
         .eq("status", "draft")
         .eq("version", written.version ?? prior.version ?? 1)

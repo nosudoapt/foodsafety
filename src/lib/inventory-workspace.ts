@@ -19,6 +19,8 @@ export interface InventorySnapshot {
 
 export interface InventoryMonthData {
   items: InventoryItem[];
+  /** The branch this month belongs to — never a company-wide figure. */
+  location: { id: string; name: string; slug: string } | null;
   counts: InventoryCount[];
   prevCounts: InventoryCount[];
   sales: string;
@@ -31,7 +33,7 @@ export interface InventoryMonthData {
  * a failed snapshot/ledger read must never look like a new, empty draft. */
 export async function loadInventoryMonth(month: string, signal: AbortSignal): Promise<InventoryMonthData> {
   const [items, counts, opening, purchases, snapshot] = await Promise.all([
-    fetchJson<{ items: InventoryItem[] }>("/api/btb/inventory-items", { signal }),
+    fetchJson<{ items: InventoryItem[]; location: InventoryMonthData["location"] }>("/api/btb/inventory-items", { signal }),
     fetchJson<{ counts: InventoryCount[]; prevCounts: InventoryCount[]; sales: string }>(`/api/btb/inventory-counts?month=${month}`, { signal }),
     fetchJson<InventoryMonthData["opening"]>(`/api/btb/inventory-opening?month=${month}`, { signal }),
     fetchJson<{ purchases: PurchaseEntry[] }>(`/api/btb/inventory-purchases?month=${month}`, { signal }),
@@ -49,6 +51,7 @@ export async function loadInventoryMonth(month: string, signal: AbortSignal): Pr
   }
   return {
     items: items.items.map((item) => ({ ...item, unit_cost: Number(item.unit_cost) })),
+    location: items.location ?? null,
     counts: counts.counts.map((item) => ({ ...item, qty: countQty(item.qty) })),
     prevCounts: counts.prevCounts.map((item) => ({ ...item, qty: countQty(item.qty) })),
     sales: counts.sales, opening, purchases: purchases.purchases, snapshot: snapshot.snapshot,

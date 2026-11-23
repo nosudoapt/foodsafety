@@ -7,7 +7,7 @@ import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
 import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, parseCountSave, requireRole } from "@/lib/btb-inventory-api";
 import { requireEditableMonth } from "@/lib/inventory-server-guards";
 import { replaceRows } from "@/lib/persist-replace";
-import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const GET = btbInventoryRoute(readCounts);
 export const POST = btbInventoryRoute(saveCounts);
@@ -24,7 +24,8 @@ export const POST = btbInventoryRoute(saveCounts);
 const COUNT_COLS = "id, item_id, count_month, qty, counted_by, location_id";
 // Read a month's counts, the previous month's counts (variance column) and
 // the stored food-sales figure in one round trip.
-async function readCounts(req: Request) {
+async function readCounts(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), INVENTORY_READ_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -34,9 +35,9 @@ async function readCounts(req: Request) {
 
   const db = inventoryDb();
   const [countsRes, prevRes, summaryRes] = await Promise.all([
-    db.from("inventory_counts").select(COUNT_COLS).is("location_id", null).eq("count_month", month),
-    db.from("inventory_counts").select(COUNT_COLS).is("location_id", null).eq("count_month", prevMonth(month)),
-    db.from("inventory_month_summary").select("sales").is("location_id", null).eq("count_month", month),
+    db.from("inventory_counts").select(COUNT_COLS).eq("location_id", locationId).eq("count_month", month),
+    db.from("inventory_counts").select(COUNT_COLS).eq("location_id", locationId).eq("count_month", prevMonth(month)),
+    db.from("inventory_month_summary").select("sales").eq("location_id", locationId).eq("count_month", month),
   ]);
   if (countsRes.error) return databaseFailure(countsRes.error);
   if (prevRes.error) return databaseFailure(prevRes.error);
@@ -51,7 +52,8 @@ async function readCounts(req: Request) {
 }
 
 // Save the count sheet for a month (replace semantics, restore-on-failure).
-async function saveCounts(req: Request) {
+async function saveCounts(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -62,7 +64,7 @@ async function saveCounts(req: Request) {
   const { count_month: month, rows } = parsed.value;
 
   const db = inventoryDb();
-  const editable = await requireEditableMonth(db, month);
+  const editable = await requireEditableMonth(db, month, locationId);
   if (!editable.ok) return databaseFailure(editable.cause, editable.error, editable.status);
 
   // Reject unknown IDs before deleting anything. Without this preflight, a
@@ -72,7 +74,7 @@ async function saveCounts(req: Request) {
     const { data: knownItems, error: itemError } = await db
       .from("inventory_items")
       .select("id")
-      .is("location_id", null)
+      .eq("location_id", locationId)
       .in("id", itemIds);
     if (itemError) return databaseFailure(itemError);
     if ((knownItems ?? []).length !== itemIds.length) {
@@ -84,7 +86,7 @@ async function saveCounts(req: Request) {
   // empty sheet clears the month.
   const toInsert = rows
     .filter((r) => r.qty > 0)
-    .map((r) => ({ item_id: r.item_id, count_month: month, qty: r.qty, counted_by: auth.role, location_id: null }));
+    .map((r) => ({ item_id: r.item_id, count_month: month, qty: r.qty, counted_by: auth.role, location_id: locationId }));
 
   const outcome = await replaceRows({
     label: "count sheet save",
@@ -92,12 +94,12 @@ async function saveCounts(req: Request) {
       const { data, error } = await db
         .from("inventory_counts")
         .select("*")
-        .is("location_id", null)
+        .eq("location_id", locationId)
         .eq("count_month", month);
       return { rows: (data ?? []) as Record<string, unknown>[], error };
     },
     del: async () => {
-      const { error } = await db.from("inventory_counts").delete().is("location_id", null).eq("count_month", month);
+      const { error } = await db.from("inventory_counts").delete().eq("location_id", locationId).eq("count_month", month);
       return { error };
     },
     ins: async () => {

@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, dbError, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
-import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const POST = btbInventoryRoute(finalizeMonth);
 import { inventoryDb } from "@/lib/supabase-server";
@@ -26,16 +26,16 @@ const MANAGER_ROLES = ["manager", "admin"];
 
 // Recompute the closing inventory value for a month straight from the stored
 // count sheet: Σ (qty × item.unit_cost). Ignores anything the browser claims.
-async function serverClosingValue(db: SupabaseClient, month: string): Promise<number> {
+async function serverClosingValue(db: SupabaseClient, month: string, locationId: string): Promise<number> {
   const { data: items, error: itemError } = await db
     .from("inventory_items")
-    .select("id, name, unit, category, unit_cost, position").is("location_id", null);
+    .select("id, name, unit, category, unit_cost, position").eq("location_id", locationId);
   dbError(itemError, "The inventory items could not be read. Please retry.");
 
   const { data: counts, error: countError } = await db
     .from("inventory_counts")
     .select("item_id, qty")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("count_month", month);
   dbError(countError, "The inventory counts could not be read. Please retry.");
 
@@ -47,11 +47,11 @@ async function serverClosingValue(db: SupabaseClient, month: string): Promise<nu
 }
 
 // Recompute eligible monthly purchases from the ledger (single source of truth).
-async function serverPurchases(db: SupabaseClient, month: string): Promise<number> {
+async function serverPurchases(db: SupabaseClient, month: string, locationId: string): Promise<number> {
   const { data, error } = await db
     .from("inventory_purchases")
     .select("amount")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("count_month", month);
   dbError(error, "The inventory purchases could not be read. Please retry.");
   const sum = (data ?? []).reduce((total, row) => {
@@ -66,12 +66,13 @@ async function serverPurchases(db: SupabaseClient, month: string): Promise<numbe
 async function serverOpening(
   db: SupabaseClient,
   month: string,
+  locationId: string,
 ): Promise<{ opening: number | null; priorDraft: boolean }> {
   const pm = prevMonth(month);
   const { data, error } = await db
     .from("inventory_month_snapshots")
     .select("closing_value, status")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("count_month", pm)
     .maybeSingle();
   dbError(error, "The prior snapshot could not be read. Please retry.");
@@ -82,7 +83,8 @@ async function serverOpening(
   return { opening: Math.round(closing * 100) / 100, priorDraft: false };
 }
 
-async function finalizeMonth(req: Request) {
+async function finalizeMonth(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
   if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
@@ -99,7 +101,7 @@ async function finalizeMonth(req: Request) {
   const { data: existing, error: existingError } = await db
     .from("inventory_month_snapshots")
     .select("*")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("count_month", count_month)
     .maybeSingle();
   if (existingError) return databaseFailure(existingError);
@@ -114,9 +116,9 @@ async function finalizeMonth(req: Request) {
   let openingResult: { opening: number | null; priorDraft: boolean };
   try {
     [closing, purchases, openingResult] = await Promise.all([
-      serverClosingValue(db, count_month),
-      serverPurchases(db, count_month),
-      serverOpening(db, count_month),
+      serverClosingValue(db, count_month, locationId),
+      serverPurchases(db, count_month, locationId),
+      serverOpening(db, count_month, locationId),
     ]);
   } catch (error) {
     return databaseFailure(error, "The persisted accounting data could not be read. Please retry.");
@@ -154,6 +156,8 @@ async function finalizeMonth(req: Request) {
     finalized_by: role,
     finalized_at: new Date().toISOString(),
     version: nextSnapshotVersion(prior),
+    location_id: locationId,
+    scope_key: locationId,
   };
 
   const outcome = await persistWithAudit<SnapshotRow>(count_month, {
@@ -169,6 +173,7 @@ async function finalizeMonth(req: Request) {
     writeAudit: async (written) => {
       const { error } = await db.from("inventory_audit_log").insert({
         count_month,
+        location_id: locationId,
         action: "finalize",
         actor: role,
         snapshot: written,
@@ -182,7 +187,7 @@ async function finalizeMonth(req: Request) {
         const { data, error } = await db
           .from("inventory_month_snapshots")
           .update(snapshotRestoreFields(prior))
-          .is("location_id", null)
+          .eq("location_id", locationId)
           .eq("count_month", count_month)
           .eq("status", "finalized")
           .eq("version", written.version ?? row.version ?? 1)
@@ -195,7 +200,7 @@ async function finalizeMonth(req: Request) {
       const { data, error } = await db
         .from("inventory_month_snapshots")
         .delete()
-        .is("location_id", null)
+        .eq("location_id", locationId)
         .eq("count_month", count_month)
         .eq("status", "finalized")
         .eq("version", written.version ?? row.version ?? 1)

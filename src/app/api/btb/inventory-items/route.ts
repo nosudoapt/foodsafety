@@ -5,7 +5,7 @@ import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api
 import { inventoryDb } from "@/lib/supabase-server";
 import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, assertEditableItem, isUuid, parseNewItem, requireRole } from "@/lib/btb-inventory-api";
 import { requireItemWithoutFinalizedHistory } from "@/lib/inventory-server-guards";
-import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const GET = btbInventoryRoute(readItems);
 export const POST = btbInventoryRoute(createItem);
@@ -27,7 +27,8 @@ export const DELETE = btbInventoryRoute(deleteItem);
 // migration (schema-inventory-master-list.sql).
 const ITEM_COLS = "id, name, unit, unit_size, category, unit_cost, position, location_id, protected, item_number, pack_size, case_price";
 
-async function readItems() {
+async function readItems(scope: BtbInventoryScope) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), INVENTORY_READ_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -35,14 +36,15 @@ async function readItems() {
   const { data, error } = await inventoryDb()
     .from("inventory_items")
     .select(ITEM_COLS)
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .order("position")
     .order("name");
   if (error) return databaseFailure(error);
-  return NextResponse.json({ items: data ?? [] });
+  return NextResponse.json({ items: data ?? [], location: { id: scope.location.id, name: scope.location.name, slug: scope.location.slug } });
 }
 
-async function createItem(req: Request) {
+async function createItem(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -61,7 +63,7 @@ async function createItem(req: Request) {
   const { data: twin, error: twinError } = await db
     .from("inventory_items")
     .select("id")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .ilike("name", pattern)
     .limit(1);
   if (twinError) return databaseFailure(twinError);
@@ -71,7 +73,7 @@ async function createItem(req: Request) {
   // page insert did with `items.length`.
   let position = item.position;
   if (position === null) {
-    const { count, error: countError } = await db.from("inventory_items").select("id", { count: "exact", head: true }).is("location_id", null);
+    const { count, error: countError } = await db.from("inventory_items").select("id", { count: "exact", head: true }).eq("location_id", locationId);
     if (countError) return databaseFailure(countError);
     position = count ?? 0;
   }
@@ -84,7 +86,7 @@ async function createItem(req: Request) {
       unit_cost: item.unit_cost,
       category: null,
       position,
-      location_id: null,
+      location_id: locationId,
       protected: false,
       item_number: null,
       pack_size: item.pack_size,
@@ -96,7 +98,8 @@ async function createItem(req: Request) {
   return NextResponse.json({ item: data });
 }
 
-async function updateItem(req: Request) {
+async function updateItem(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -115,7 +118,7 @@ async function updateItem(req: Request) {
   const { data: current, error: currentError } = await db
     .from("inventory_items")
     .select("name, protected")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("id", id)
     .maybeSingle();
   if (currentError) return databaseFailure(currentError);
@@ -124,13 +127,13 @@ async function updateItem(req: Request) {
     return NextResponse.json({ error: editable.error }, { status: current ? 409 : 404 });
   }
 
-  const history = await requireItemWithoutFinalizedHistory(db, id);
+  const history = await requireItemWithoutFinalizedHistory(db, id, locationId);
   if (!history.ok) return databaseFailure(history.cause, history.error, history.status);
 
   const { data, error } = await db
     .from("inventory_items")
     .update({ name: parsed.value.name, unit: parsed.value.unit, unit_cost: parsed.value.unit_cost, pack_size: parsed.value.pack_size, case_price: parsed.value.case_price })
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("id", id)
     .select(ITEM_COLS)
     .maybeSingle();
@@ -142,7 +145,8 @@ async function updateItem(req: Request) {
 // Deletion rule: names seeded from the master sheet may not be removed; a name
 // the crew added later may be, as long as no finalized month depends on it.
 // A master item is retired by counting 0, never by vanishing from the sheet.
-async function deleteItem(req: Request) {
+async function deleteItem(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -154,7 +158,7 @@ async function deleteItem(req: Request) {
   const { data, error } = await db
     .from("inventory_items")
     .select("name, protected")
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("id", id)
     .maybeSingle();
   if (error) return databaseFailure(error);
@@ -167,13 +171,13 @@ async function deleteItem(req: Request) {
     }, { status: 409 });
   }
 
-  const history = await requireItemWithoutFinalizedHistory(db, id);
+  const history = await requireItemWithoutFinalizedHistory(db, id, locationId);
   if (!history.ok) return databaseFailure(history.cause, history.error, history.status);
 
   const { error: deleteError } = await db
     .from("inventory_items")
     .delete()
-    .is("location_id", null)
+    .eq("location_id", locationId)
     .eq("id", id);
   if (deleteError) return databaseFailure(deleteError);
   return NextResponse.json({ ok: true });

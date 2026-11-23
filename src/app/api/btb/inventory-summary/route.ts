@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
-import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const POST = btbInventoryRoute(saveSummary);
 import { inventoryDb } from "@/lib/supabase-server";
@@ -17,7 +17,8 @@ import { replaceRows } from "@/lib/persist-replace";
 // is hand-typed. Replace-with-restore, same non-atomicity disclosure as the
 // count sheet save.
 
-async function saveSummary(req: Request) {
+async function saveSummary(scope: BtbInventoryScope, req: Request) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -28,7 +29,7 @@ async function saveSummary(req: Request) {
   const { count_month: month, sales } = parsed.value;
 
   const db = inventoryDb();
-  const editable = await requireEditableMonth(db, month);
+  const editable = await requireEditableMonth(db, month, locationId);
   if (!editable.ok) return databaseFailure(editable.cause, editable.error, editable.status);
 
   const outcome = await replaceRows({
@@ -37,18 +38,18 @@ async function saveSummary(req: Request) {
       const { data, error } = await db
         .from("inventory_month_summary")
         .select("*")
-        .is("location_id", null)
+        .eq("location_id", locationId)
         .eq("count_month", month);
       return { rows: (data ?? []) as Record<string, unknown>[], error };
     },
     del: async () => {
-      const { error } = await db.from("inventory_month_summary").delete().is("location_id", null).eq("count_month", month);
+      const { error } = await db.from("inventory_month_summary").delete().eq("location_id", locationId).eq("count_month", month);
       return { error };
     },
     ins: async () => {
       const { data, error } = await db
         .from("inventory_month_summary")
-        .insert({ count_month: month, sales, location_id: null })
+        .insert({ count_month: month, sales, location_id: locationId })
         .select("id");
       return { inserted: data?.length ?? 0, error };
     },

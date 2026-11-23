@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { BTB_COOKIE } from "@/lib/btb-auth";
 import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
-import { btbInventoryRoute } from "@/lib/btb-inventory-route";
+import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const GET = btbInventoryRoute(readHealth);
 import { MONTH_END_EDIT_ROLES, requireRole } from "@/lib/btb-inventory-api";
@@ -24,7 +24,8 @@ const REQUIRED_TABLES = [
  * every required table can be read through the privileged client. It returns
  * counts only — never credentials or row contents.
  */
-async function readHealth() {
+async function readHealth(scope: BtbInventoryScope) {
+  const locationId = scope.location.id;
   const cookieStore = await cookies();
   const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -43,7 +44,7 @@ async function readHealth() {
   const checks = await Promise.all(
     REQUIRED_TABLES.map(async (table) => {
       const query = db.from(table).select("*", { count: "exact", head: true });
-      const { count, error } = await (table === "role_page_access" ? query : query.is("location_id", null));
+      const { count, error } = await (table === "role_page_access" ? query : query.eq("location_id", locationId));
       return { table, count: count ?? 0, error: error?.message ?? null };
     }),
   );

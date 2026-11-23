@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { apiFailure, requireBtbAccess } from "@/lib/btb-api";
+import { apiFailure, btbRequestLocation, requireBtbAccess } from "@/lib/btb-api";
 import { btbDateWindow } from "@/lib/btb-dashboard";
 import { loadBtbOverview } from "@/lib/btb-dashboard-data";
 import { btbToday } from "@/lib/btb-team";
@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     if (!btbDateWindow(day)) return NextResponse.json({ error: "Choose a valid dashboard date." }, { status: 400, headers });
     const signal = AbortSignal.timeout(10_000);
     const legacy = !access.locationWorkspace || ["corporate", "owner"].includes(identity.role);
-    return NextResponse.json(await loadBtbOverview(db, identity.role, access.rows, day, signal, access.pageGrants, legacy), { headers });
+    const location = await btbRequestLocation({ db, identity, access }, request);
+    return NextResponse.json(await loadBtbOverview(db, identity.role, access.rows, day, signal, access.pageGrants, legacy, location?.id ?? null), { headers });
   } catch (error) { return apiFailure(error, request); }
 }
