@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
+import { clientIp } from "@/lib/btb-clock-policy";
+import { firstAttemptRow, lockoutMessage } from "@/lib/btb-login-guard";
 import { btbDemoSlug } from "@/lib/btb-demo";
 import { inventoryDb } from "@/lib/supabase-server";
 import { BTB_RESTAURANT, isEmail, type BtbEmployee } from "@/lib/btb-team";
@@ -57,16 +59,38 @@ export async function POST(request: NextRequest) {
       slug = btbDemoSlug() ?? "";
     } else {
       const db = inventoryDb();
-      const limit = await db.rpc("btb_consume_login_attempt", { p_key: createHash("sha256").update(email).digest("hex") });
-      dbError(limit.error, "Employee sign-in is not ready. Apply the BTB team schema and try again.");
-      if (limit.data !== true) throw new BtbApiError("Too many sign-in attempts. Wait 15 minutes and try again.", 429);
+      const ip = clientIp(request);
+      const emailKey = createHash("sha256").update(email).digest("hex");
+      // Per-IP throttle runs before the password check: it is what stops one
+      // client spraying many emails. A real person on a different IP is never
+      // caught by someone else's failures.
+      const ipCheck = await db.rpc("btb_auth_check_ip", { p_scope: "employee", p_ip: ip });
+      dbError(ipCheck.error, "Employee sign-in is not ready. Apply the BTB team schema and try again.");
+      const ipRow = firstAttemptRow(ipCheck.data);
+      if (ipRow.blocked) {
+        await db.from("btb_login_events").insert({ scope: "employee", email, email_hash: emailKey, ip, outcome: "ip_blocked" });
+        throw new BtbApiError(lockoutMessage(ipRow.retry_after), 429);
+      }
       const member = await db.from("btb_employees").select(EMPLOYEE_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).eq("email", email).maybeSingle();
       dbError(member.error, "Employee sign-in is temporarily unavailable.");
       const employee = member.data as BtbEmployee | null;
       const credentials = employee ? await db.from("btb_employee_credentials").select("password_hash,session_version").eq("employee_id", employee.id).maybeSingle() : { data: null, error: null };
       dbError(credentials.error, "Employee sign-in is temporarily unavailable.");
       const valid = await verifyEmployeePassword(password, credentials.data?.password_hash ?? null);
-      if (!valid || !employee?.active || !employee.login_enabled || !credentials.data) throw new BtbApiError("Invalid email or password", 401);
+      if (!valid || !employee?.active || !employee.login_enabled || !credentials.data) {
+        // Only a refused password is counted, so ordinary sign-ins can never
+        // lock the account out. A correct password always clears the counter.
+        const failure = await db.rpc("btb_auth_note_failure", {
+          p_scope: "employee", p_key: emailKey, p_ip: ip, p_email: email,
+          p_outcome: !employee ? "no_account" : !employee.active || !employee.login_enabled || !credentials.data ? "disabled" : "bad_password",
+        });
+        dbError(failure.error, "Employee sign-in is temporarily unavailable.");
+        const row = firstAttemptRow(failure.data);
+        if (row.blocked) throw new BtbApiError(lockoutMessage(row.retry_after), 429);
+        throw new BtbApiError("Invalid email or password", 401);
+      }
+      const cleared = await db.rpc("btb_auth_note_success", { p_scope: "employee", p_key: emailKey, p_ip: ip, p_email: email });
+      dbError(cleared.error, "Employee sign-in is temporarily unavailable.");
       value = employeeSessionValueFor({ id: employee.id, role: employee.role, version: credentials.data.session_version });
       role = employee.role;
       name = employee.name;

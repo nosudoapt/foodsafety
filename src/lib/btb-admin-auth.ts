@@ -6,6 +6,7 @@ import { BtbApiError } from "./api-errors";
 import { BtbConfigurationError } from "./btb-auth";
 import { isEmail, isUuid, isVersion } from "./btb-team";
 import { verifyEmployeePassword } from "./btb-passwords";
+import { firstAttemptRow, lockoutMessage } from "./btb-login-guard";
 import type { BtbAdminIdentity } from "./btb-admin";
 
 export const BTB_ADMIN_COOKIE = "btb_admin_session";
@@ -54,22 +55,37 @@ export async function btbAdminIdentityFromSession(value: string | null | undefin
 }
 
 /** Only the separate admin table is consulted, never shared/demo credentials. */
-export async function authenticateBtbAdmin(db: SupabaseClient, email: string, password: string): Promise<BtbAdminIdentity> {
+export async function authenticateBtbAdmin(db: SupabaseClient, email: string, password: string, ip?: string | null): Promise<BtbAdminIdentity> {
   email = email.trim().toLowerCase();
   if (!isEmail(email) || email.endsWith("@btb.demo") || !password || password.length > 128) throw new BtbApiError("Invalid email or password", 401);
-  const limit = await db.rpc("btb_consume_admin_attempt", { p_key: createHash("sha256").update(email).digest("hex") });
-  consoleDbError(limit.error);
-  if (limit.data !== true) throw new BtbApiError("Too many sign-in attempts. Wait 15 minutes and try again.", 429);
+  const key = createHash("sha256").update(email).digest("hex");
+  // Per-IP throttle first: it stops one client spraying many console emails.
+  const ipCheck = await db.rpc("btb_auth_check_ip", { p_scope: "console", p_ip: ip ?? null });
+  consoleDbError(ipCheck.error);
+  const ipRow = firstAttemptRow(ipCheck.data);
+  if (ipRow.blocked) throw new BtbApiError(lockoutMessage(ipRow.retry_after), 429);
   const result = await db.from("btb_super_admins").select("id,email,name,password_hash,active,session_version").eq("email", email).maybeSingle();
   consoleDbError(result.error);
   const admin = result.data;
   const valid = await verifyEmployeePassword(password, admin?.password_hash ?? null);
-  if (!valid || !admin?.active) throw new BtbApiError("Invalid email or password", 401);
+  if (!valid || !admin?.active) {
+    // Only refusals are counted, so ordinary console sign-ins never lock out.
+    const failure = await db.rpc("btb_auth_note_failure", {
+      p_scope: "console", p_key: key, p_ip: ip ?? null, p_email: email,
+      p_outcome: !admin ? "no_account" : !admin.active ? "disabled" : "bad_password",
+    });
+    consoleDbError(failure.error);
+    const row = firstAttemptRow(failure.data);
+    if (row.blocked) throw new BtbApiError(lockoutMessage(row.retry_after), 429);
+    throw new BtbApiError("Invalid email or password", 401);
+  }
   // Check the version again before signing, including a concurrent reset/block.
   const login = await db.from("btb_super_admins").update({ last_login_at: new Date().toISOString() })
     .eq("id", admin.id).eq("active", true).eq("session_version", admin.session_version)
     .select("id,email,name,session_version").maybeSingle();
   consoleDbError(login.error);
   if (!login.data) throw new BtbApiError("Invalid email or password", 401);
+  const cleared = await db.rpc("btb_auth_note_success", { p_scope: "console", p_key: key, p_ip: ip ?? null, p_email: email });
+  consoleDbError(cleared.error);
   return { id: login.data.id, email: login.data.email, name: login.data.name, sessionVersion: login.data.session_version };
 }

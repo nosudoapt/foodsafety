@@ -12,6 +12,7 @@ export interface TimeEntry {
   status: "open" | "pending" | "changes_requested" | "approved";
   version: number; notes: string; review_notes: string | null;
   reviewed_by_name: string | null; reviewed_at: string | null;
+  incomplete_tasks?: { task_type: string; note: string }[];
 }
 export interface TimeData {
   timezone: string; today: string; employees: TeamMember[]; shifts: BtbShift[];

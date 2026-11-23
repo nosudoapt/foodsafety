@@ -55,20 +55,30 @@ test("console status and credential version are rechecked without reading passwo
   await assert.rejects(btbAdminIdentityFromSession(value, unavailable.client), /console is not available/);
 });
 
-test("console sign-in uses only its own table, rate limiter and salted credentials", async () => {
+test("console sign-in uses only its own table, failure counter and salted credentials", async () => {
   const password = "Console test passphrase";
   const password_hash = await hashEmployeePassword(password);
   const row = { id, name: "Console Admin", email: "admin@test.invalid", active: true, session_version: 1, password_hash };
-  const { client, requests } = queryClient(request => jsonRows(new URL(request.url).pathname.includes("/rpc/") ? true : row));
-  assert.deepEqual(await authenticateBtbAdmin(client, " ADMIN@test.invalid ", password), { id, name: row.name, email: row.email, sessionVersion: 1 });
-  assert.ok(requests.some(request => request.url.includes("btb_consume_admin_attempt")));
+  const rpc = (request: Request) => {
+    if (request.url.includes("btb_auth_check_ip")) return jsonRows([{ blocked: false, retry_after: 0 }]);
+    if (request.url.includes("btb_auth_note_failure")) return jsonRows([{ blocked: false, attempts: 1, retry_after: 900 }]);
+    if (request.url.includes("btb_auth_note_success")) return jsonRows(null);
+    return jsonRows(new URL(request.url).pathname.includes("/rpc/") ? true : row);
+  };
+  const { client, requests } = queryClient(rpc);
+  assert.deepEqual(await authenticateBtbAdmin(client, " ADMIN@test.invalid ", password, "203.0.113.9"), { id, name: row.name, email: row.email, sessionVersion: 1 });
+  assert.ok(requests.some(request => request.url.includes("btb_auth_check_ip")));
+  assert.ok(requests.some(request => request.url.includes("btb_auth_note_success")));
   assert.ok(requests.some(request => request.method === "PATCH"));
   assert.ok(requests.every(request => !/btb_employees|btb_employee_credentials|btb_consume_login_attempt/.test(request.url)));
   for (const email of ["admin@btb.demo", "manager@btb.demo"]) await assert.rejects(authenticateBtbAdmin(client, email, password), error => (error as { status: number }).status === 401);
   await assert.rejects(authenticateBtbAdmin(client, row.email, "wrong-password"), error => (error as { status: number }).status === 401);
-  const missing = queryClient(request => jsonRows(request.url.includes("/rpc/") ? true : null));
+  const missing = queryClient(request => request.url.includes("/rpc/")
+    ? jsonRows(request.url.includes("btb_auth_note_failure") ? [{ blocked: false, attempts: 1, retry_after: 900 }] : [{ blocked: false, retry_after: 0 }])
+    : jsonRows(null));
   await assert.rejects(authenticateBtbAdmin(missing.client, row.email, password), error => (error as { status: number }).status === 401);
-  const limited = queryClient(() => jsonRows(false));
+  // A blocked network is refused before the password is even looked at.
+  const limited = queryClient(() => jsonRows([{ blocked: true, retry_after: 600 }]));
   await assert.rejects(authenticateBtbAdmin(limited.client, row.email, password), error => (error as { status: number }).status === 429);
 });
 

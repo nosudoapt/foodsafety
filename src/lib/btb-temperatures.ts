@@ -19,6 +19,7 @@ export interface TemperatureInput {
   min_safe_temp: number;
   max_safe_temp: number;
   notes: string;
+  photo_url?: string | null;
 }
 
 export interface TemperatureStandard {
@@ -65,10 +66,15 @@ export function parseTemperature(input: Record<string, unknown>): { value: Tempe
   if (temperature === null) return { error: "Enter a temperature between −273.15 and 999.99°C, with at most two decimal places." };
   if (min === null || max === null || min > max) return { error: "Enter a valid target range. The minimum must not exceed the maximum." };
   if (typeof input.notes !== "string" || input.notes.length > 2000 || input.notes.includes("\u0000")) return { error: "Keep notes under 2,000 characters, without null bytes." };
+  if (input.photo_url != null && input.photo_url !== "" && (
+    typeof input.photo_url !== "string" || input.photo_url.length > 1000
+    || !/^(https?:\/\/|\/)[^\s]+$/i.test(input.photo_url) || input.photo_url.includes("\u0000")
+  )) return { error: "Attach a valid photo, or leave the photo empty." };
   return { value: {
     id: input.id.toLowerCase(), record_type: input.record_type as TemperatureType,
     equipment_name: (input.equipment_name as string).trim(), food_item: (input.food_item as string).trim(),
     temperature, min_safe_temp: min, max_safe_temp: max, notes: input.notes.trim(),
+    photo_url: typeof input.photo_url === "string" && input.photo_url.trim() ? input.photo_url.trim() : null,
   } };
 }
 

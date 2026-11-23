@@ -8,7 +8,11 @@ import { supabase } from "@/lib/supabase";
 import { activeLocationId, locationScope } from "@/lib/locations";
 import {
   CASH_OUT_RETENTION_DAYS,
+  cleanStaffMeals,
+  cleanWastage,
   isEmptyDraft,
+  parseStaffMeals,
+  parseWastage,
   retentionCutoff,
   tillLeft,
   toDraft,
@@ -21,7 +25,7 @@ import { compressImage, uploadToSupabase } from "@/lib/files";
 import { parsePhotoList, photoSrc, removePhotos } from "@/lib/photos";
 
 const HISTORY_COLS =
-  "id, count_date, till_amount, cash_sale, delivery_fees, driver_tips, cash_out, safe_drop, local_purchase, single_trays, large_trays, review_cards, open_tickets, local_receipts, created_by, created_at";
+  "id, count_date, till_amount, cash_sale, delivery_fees, driver_tips, cash_out, safe_drop, local_purchase, single_trays, large_trays, review_cards, open_tickets, local_receipts, wastage, staff_meals, created_by, created_at";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -63,6 +67,10 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
   // Local-purchase receipt photos (ops-photos object paths) for the open day.
   const [receipts, setReceipts] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  // Wastage and staff meals are recorded beside the till count; neither changes
+  // the cash maths. Blank rows are simply ignored when saving.
+  const [wastage, setWastage] = useState([{ item_name: "", quantity: "" }]);
+  const [staffMeals, setStaffMeals] = useState([{ staff_name: "", item: "", quantity: "" }]);
 
   // Who is at the tablet — stored on the row as created_by.
   useEffect(() => {
@@ -147,6 +155,10 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
           : { till_amount: "", cash_sale: "", delivery_fees: "", driver_tips: "", cash_out: "", safe_drop: "", local_purchase: "", single_trays: "", large_trays: "", review_cards: "", open_tickets: "" },
       );
       setReceipts(parsePhotoList(row?.local_receipts));
+      const savedWastage = parseWastage(row?.wastage);
+      const savedMeals = parseStaffMeals(row?.staff_meals);
+      setWastage(savedWastage.length ? savedWastage.map((line) => ({ item_name: line.item_name, quantity: String(line.quantity) })) : [{ item_name: "", quantity: "" }]);
+      setStaffMeals(savedMeals.length ? savedMeals.map((line) => ({ staff_name: line.staff_name, item: line.item, quantity: String(line.quantity) })) : [{ staff_name: "", item: "", quantity: "" }]);
       setError(null);
       setSavedAt(null);
       setLoading(false);
@@ -162,8 +174,8 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
 
   const save = async () => {
     if (readOnly || saving) return;
-    if (isEmptyDraft(draft)) {
-      setError("Nothing to save — fill in at least one amount first.");
+    if (isEmptyDraft(draft) && !cleanWastage(wastage).length && !cleanStaffMeals(staffMeals).length) {
+      setError("Nothing to save — fill in at least one amount, wastage line or staff meal first.");
       return;
     }
     setSaving(true);
@@ -181,6 +193,8 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
     const { error: insErr } = await supabase.from("cash_outs").insert({
       ...draft,
       local_receipts: JSON.stringify(receipts),
+      wastage: cleanWastage(wastage),
+      staff_meals: cleanStaffMeals(staffMeals),
       location_id: activeLocationId(),
       created_by: createdBy,
     });
@@ -305,6 +319,30 @@ function CashOut({ readOnly }: { readOnly: boolean }) {
               </label>
             ))}
           </div>
+
+          {!readOnly && (
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-2"><strong className="text-sm text-slate-700">Wastage</strong><Button type="button" accent="red" variant="ghost" onClick={() => setWastage((rows) => [...rows, { item_name: "", quantity: "" }])}>Add item</Button></div>
+                <p className="mt-1 text-xs text-slate-500">Item name and quantity only. This is a stock/quality record — it never changes the till totals.</p>
+                {wastage.map((line, index) => <div className="mt-2 flex flex-wrap items-end gap-2" key={index}>
+                  <Input accent="red" placeholder="Item name" maxLength={150} value={line.item_name} onChange={(event) => setWastage((rows) => rows.map((row, i) => i === index ? { ...row, item_name: event.target.value } : row))} />
+                  <Input accent="red" type="number" min="0" step="0.01" placeholder="Quantity" value={line.quantity} onChange={(event) => setWastage((rows) => rows.map((row, i) => i === index ? { ...row, quantity: event.target.value } : row))} />
+                  <Button type="button" accent="red" variant="ghost" onClick={() => setWastage((rows) => rows.length === 1 ? [{ item_name: "", quantity: "" }] : rows.filter((_, i) => i !== index))}>Remove</Button>
+                </div>)}
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <div className="flex items-center justify-between gap-2"><strong className="text-sm text-slate-700">Staff meals</strong><Button type="button" accent="red" variant="ghost" onClick={() => setStaffMeals((rows) => [...rows, { staff_name: "", item: "", quantity: "" }])}>Add meal</Button></div>
+                <p className="mt-1 text-xs text-slate-500">Staff name, item and quantity. This records the benefit; no price is inferred.</p>
+                {staffMeals.map((line, index) => <div className="mt-2 flex flex-wrap items-end gap-2" key={index}>
+                  <Input accent="red" placeholder="Staff name" maxLength={150} value={line.staff_name} onChange={(event) => setStaffMeals((rows) => rows.map((row, i) => i === index ? { ...row, staff_name: event.target.value } : row))} />
+                  <Input accent="red" placeholder="Item" maxLength={150} value={line.item} onChange={(event) => setStaffMeals((rows) => rows.map((row, i) => i === index ? { ...row, item: event.target.value } : row))} />
+                  <Input accent="red" type="number" min="0" step="0.01" placeholder="Qty" value={line.quantity} onChange={(event) => setStaffMeals((rows) => rows.map((row, i) => i === index ? { ...row, quantity: event.target.value } : row))} />
+                  <Button type="button" accent="red" variant="ghost" onClick={() => setStaffMeals((rows) => rows.length === 1 ? [{ staff_name: "", item: "", quantity: "" }] : rows.filter((_, i) => i !== index))}>Remove</Button>
+                </div>)}
+              </div>
+            </div>
+          )}
 
           {!readOnly && (
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">

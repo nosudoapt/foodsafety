@@ -21,12 +21,44 @@ export interface CashOutDraft {
   open_tickets: number;
 }
 
+export interface WastageLine { item_name: string; quantity: number }
+export interface StaffMealLine { staff_name: string; item: string; quantity: number }
+
 export interface CashOutRow extends CashOutDraft {
   id: string;
   /** JSON array of ops-photos object paths for local-purchase receipts. */
   local_receipts?: string | null;
+  wastage?: WastageLine[] | null;
+  staff_meals?: StaffMealLine[] | null;
   created_by?: string | null;
   created_at?: string;
+}
+
+/** Trim and drop blank lines; quantities must be positive numbers. */
+export function cleanWastage(lines: readonly { item_name: string; quantity: string | number }[]): WastageLine[] {
+  return lines.flatMap((line) => {
+    const item = line.item_name.trim();
+    const quantity = typeof line.quantity === "number" ? line.quantity : Number(line.quantity);
+    return item && Number.isFinite(quantity) && quantity > 0 ? [{ item_name: item.slice(0, 150), quantity: round2(quantity) }] : [];
+  });
+}
+
+export function cleanStaffMeals(lines: readonly { staff_name: string; item: string; quantity: string | number }[]): StaffMealLine[] {
+  return lines.flatMap((line) => {
+    const staff = line.staff_name.trim();
+    const item = line.item.trim();
+    const quantity = typeof line.quantity === "number" ? line.quantity : Number(line.quantity);
+    return staff && item && Number.isFinite(quantity) && quantity > 0
+      ? [{ staff_name: staff.slice(0, 150), item: item.slice(0, 150), quantity: round2(quantity) }] : [];
+  });
+}
+
+export function parseWastage(value: unknown): WastageLine[] {
+  return Array.isArray(value) ? cleanWastage(value as { item_name: string; quantity: string | number }[]) : [];
+}
+
+export function parseStaffMeals(value: unknown): StaffMealLine[] {
+  return Array.isArray(value) ? cleanStaffMeals(value as { staff_name: string; item: string; quantity: string | number }[]) : [];
 }
 
 export const CASH_OUT_RETENTION_DAYS = 30;

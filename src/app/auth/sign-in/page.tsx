@@ -26,7 +26,12 @@ function friendlyAuthError(message: string): string {
   if (m.includes("too many requests") || m.includes("rate limit")) {
     return "Too many attempts. Wait a minute, then try again.";
   }
-  if (m.includes("network") || m.includes("fetch")) {
+  // A missing or wrong Supabase URL / anon key is a configuration fault, not a
+  // wrong password — say so plainly instead of leaking the SDK message.
+  if (m.includes("supabaseurl is required") || m.includes("invalid api key") || m.includes("failed to fetch")) {
+    return "Sign-in is not configured for this site. Check the Supabase URL and key.";
+  }
+  if (m.includes("network")) {
     return "Couldn't reach the server. Check your connection and try again.";
   }
   return message;

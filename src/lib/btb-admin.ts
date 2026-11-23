@@ -80,6 +80,20 @@ export const BTB_MONITORING_MIN_DAYS = 7;
 export const BTB_MONITORING_MAX_DAYS = 31;
 export const BTB_MONITORING_WINDOWS = [7, 14, 30] as const;
 
+export interface BtbAdminLoginEvent {
+  created_at: string;
+  email: string;
+  ip: string | null;
+  outcome: string;
+  scope: string;
+}
+export interface BtbAdminLoginActivity {
+  events: BtbAdminLoginEvent[];
+  successes24h: number;
+  failures24h: number;
+  blocked24h: number;
+}
+
 export interface BtbAdminMonitoringProblem {
   failed_emails: number; failed_imports: number; changes_requested: number; total: number;
 }

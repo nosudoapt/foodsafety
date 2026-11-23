@@ -11,6 +11,8 @@ import { useBtbData } from "@/components/btb/useBtbData";
 import { useBtbWorkspace } from "@/contexts/BtbWorkspaceContext";
 import { fetchJson } from "@/lib/fetch-json";
 import { attributionName, btbToday } from "@/lib/btb-team";
+import { compressImage, uploadToSupabase } from "@/lib/files";
+import { photoSrc } from "@/lib/photos";
 import {
   TEMPERATURE_SHEET_ROWS,
   TEMPERATURE_SHEET_SLOTS,
@@ -298,6 +300,8 @@ function ReadingForm({ standards, onClose, onSaved }: { standards: TemperatureSt
   const [form, setForm] = useState(() => ({ id: crypto.randomUUID(), record_type: "cold_storage", equipment_name: "", food_item: "", temperature: "", min_safe_temp: "", max_safe_temp: "", notes: "" }));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [photoPath, setPhotoPath] = useState("");
+  const [uploading, setUploading] = useState(false);
   const choices = standards.filter((standard) => standard.record_type === form.record_type);
   const parsed = parseTemperature(form);
   const within = parsed.value && temperatureInRange(parsed.value.temperature, parsed.value.min_safe_temp, parsed.value.max_safe_temp);
@@ -306,7 +310,7 @@ function ReadingForm({ standards, onClose, onSaved }: { standards: TemperatureSt
     if (saving) return;
     if (parsed.error) { setError(parsed.error); return; }
     setSaving(true); setError("");
-    try { const result = await fetchJson<{ record: BtbTemperatureRecord }>("/api/btb/temperatures", jsonRequest(parsed.value)); onSaved(result.record); }
+    try { const result = await fetchJson<{ record: BtbTemperatureRecord }>("/api/btb/temperatures", jsonRequest({ ...parsed.value, photo_url: photoPath || null })); onSaved(result.record); }
     catch (cause) { setError(messageOf(cause)); }
     finally { setSaving(false); }
   };
@@ -324,6 +328,20 @@ function ReadingForm({ standards, onClose, onSaved }: { standards: TemperatureSt
       <div className="ops-form-grid"><label>Approved minimum (°C)<Input readOnly value={form.min_safe_temp} /></label><label>Approved maximum (°C)<Input readOnly value={form.max_safe_temp} /></label></div>
       {parsed.value && <p className={`ui-notice ${within ? "ui-notice--success" : "ui-notice--warning"}`} role="status">{within ? "Within the recorded target range." : "Outside the recorded target range. Record the corrective action below."}</p>}
       <label>Notes / corrective action <span>optional</span><textarea className="ui-input" rows={3} maxLength={2000} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
+      <label>Photo evidence <span>optional</span><input type="file" accept="image/*" capture="environment" disabled={saving || uploading} onChange={async (event) => {
+        const file = event.target.files?.[0]; event.target.value = "";
+        if (!file) return;
+        setUploading(true); setError("");
+        try {
+          const blob = await compressImage(file);
+          const path = `temperature/${form.id}/${crypto.randomUUID()}.jpg`;
+          await uploadToSupabase(path, blob);
+          setPhotoPath(path);
+        } catch (cause) { setError(cause instanceof Error ? `Photo upload failed: ${cause.message}` : "Photo upload failed."); }
+        finally { setUploading(false); }
+      }} /><small>Optional. A photo is attached to this reading only.</small></label>
+      {uploading && <p className="ops-meta" role="status">Uploading photo…</p>}
+      {photoPath && <p className="ops-meta"><a href={photoSrc(photoPath)} target="_blank" rel="noreferrer">View attached photo</a> · <button type="button" className="link" onClick={() => setPhotoPath("")}>Remove</button></p>}
       <p className="ops-meta">Recorded by: {identity ? attributionName(identity) : "your signed-in account"}. The saved time is added automatically.</p>
     </fieldset><div className="ui-modal__actions"><Button variant="ghost" disabled={saving} onClick={onClose}>Cancel</Button><Button type="submit" disabled={saving || !choices.length}>{saving ? "Saving…" : "Save reading"}</Button></div>
   </form></Modal>;

@@ -101,6 +101,11 @@ are idempotent (safe to re-run).
 | 44 | `schema-btb-platform-finance.sql` | Location finance: invoices, stock receipts, supplier price history, bank reconciliation and GST periods. |
 | 45 | `schema-btb-platform-ai.sql` | AI document extraction settings and usage metering; the extractor only prefills the review queue. |
 | 46 | `schema-btb-manager-settings.sql` | A branch manager may configure their own location settings, including the AI extraction key; corporate/owner keep organization-wide reach. |
+| 47 | `schema-cash-out-extras.sql` | Cash-out wastage (item, quantity) and staff-meal (staff, item, quantity) lines; till totals are unchanged. |
+| 48 | `schema-temperature-photos.sql` | Optional photo evidence on an off-form temperature reading. |
+| 49 | `schema-btb-task-assignments.sql` | Per-person daily duties (temperature, prep, opening, closing, cleaning) and the incomplete-task marker on clock-out. |
+| 50 | `schema-btb-clock-policy.sql` | On-site clock-in policy: server geofence, restaurant IP/CIDR allowlist, device binding and an audit of every attempt. |
+| 51 | `schema-btb-auth-hardening.sql` | Sign-in hardening: failures only counted, cleared on success, per-IP throttle, and 30 days of attempt history for the console. |
 
 ## Role set — single source of truth
 

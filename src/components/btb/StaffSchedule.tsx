@@ -16,6 +16,8 @@ import { addDays, dayLabel, weekDays, weekStart } from "@/lib/staff-schedule";
 import { locationToday, type TimeData } from "@/lib/btb-time";
 import type { PlatformLocation } from "@/lib/btb-platform";
 import StaffTimePanel, { scheduleLead } from "./StaffTimePanel";
+import TaskAssignments from "./TaskAssignments";
+import ClockPolicyPanel from "./ClockPolicyPanel";
 
 type ScheduleData = { employees: TeamMember[]; shifts: BtbShift[] };
 const dutyLabel = (duty: ShiftDuty) => SHIFT_DUTIES.find((item) => item.value === duty)?.label ?? duty;
@@ -48,6 +50,8 @@ export function ScheduleWeek({ start, readOnly, locationId, locationName }: { st
       </>}
       {editing && data && <ShiftForm key={editing === "new" ? "new" : editing.id} shift={editing === "new" ? null : editing} locationId={locationId} start={start} employees={employees} onClose={() => setEditing(null)} onSaved={(shift) => { update((current) => ({ ...current, shifts: [...current.shifts.filter((item) => item.id !== shift.id), shift] })); setEditing(null); setNotice("Shift saved. The weekly schedule is up to date."); }} onDeleted={(id) => { update((current) => ({ ...current, shifts: current.shifts.filter((shift) => shift.id !== id) })); setEditing(null); setNotice(locationId ? "Shift cancelled. Its linked time records are retained." : "Shift removed."); }} />}
       {locationId && time && <StaffTimePanel key={locationId} locationId={locationId} start={start} data={time} reload={reload} />}
+      {locationId && <TaskAssignments locationId={locationId} start={start} employees={employees} />}
+      {locationId && identity?.role === "manager" && <ClockPolicyPanel key={locationId} locationId={locationId} employees={employees} />}
     </div>
     {data && <OnePagePrint landscape label="Weekly schedule print sheet"><header className="ops-print-heading"><div><h1>Between the Buns · Weekly schedule{locationName ? ` · ${locationName}` : ""}</h1><p>{start} – {addDays(start, 6)}</p></div><span>{shifts.length} shifts · All employees</span></header><table className="schedule-print-table"><thead><tr><th scope="col">Team / coverage</th>{days.map((day) => <th scope="col" key={day}>{dayLabel(day)}</th>)}</tr></thead><tbody>{(["opening", "closing"] as const).map((duty) => <tr key={duty}><th scope="row">{duty === "opening" ? "Opening staff" : "Closing staff"}</th>{days.map((day) => <td key={day}>{dutyNames(byDay(day), employees, duty).join(", ") || "Unassigned"}</td>)}</tr>)}{employees.filter((employee) => shifts.some((shift) => shift.employee_id === employee.id)).map((employee) => <tr key={employee.id}><th scope="row">{employee.name}</th>{days.map((day) => <td key={day}>{byDay(day).filter((shift) => shift.employee_id === employee.id).map((shift) => <div key={shift.id}>{timeLabel(shift)}{shift.duty !== "none" && <><br /><strong>{dutyLabel(shift.duty)}</strong></>}</div>)}</td>)}</tr>)}</tbody></table><p className="ops-print-footer">Times use {time?.timezone ?? "the restaurant’s local time"}. (+1 day) means the shift ends the following day. Scheduled times are not approved payroll hours.</p></OnePagePrint>}
   </>;

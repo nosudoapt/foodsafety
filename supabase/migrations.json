@@ -219,6 +219,31 @@
       "step": 46,
       "file": "schema-btb-manager-settings.sql",
       "description": "A branch manager may configure their own location settings (including the AI extraction key); corporate/owner keep organization-wide reach."
+    },
+    {
+      "step": 47,
+      "file": "schema-cash-out-extras.sql",
+      "description": "Cash-out wastage lines (item, quantity) and staff-meal lines (staff, item, quantity), stored as validated JSON arrays without changing till totals."
+    },
+    {
+      "step": 48,
+      "file": "schema-temperature-photos.sql",
+      "description": "Optional photo evidence on an off-form temperature reading."
+    },
+    {
+      "step": 49,
+      "file": "schema-btb-task-assignments.sql",
+      "description": "Per-person daily task assignments (temperature, prep, opening, closing, cleaning) and the clock-out incomplete-task marker for manager approval."
+    },
+    {
+      "step": 50,
+      "file": "schema-btb-clock-policy.sql",
+      "description": "On-site clock-in policy: server-enforced geofence, restaurant network allowlist, device binding and an audit of every attempt."
+    },
+    {
+      "step": 51,
+      "file": "schema-btb-auth-hardening.sql",
+      "description": "Sign-in hardening: count failures only, clear on success, throttle per IP, and record every attempt for 30 days."
     }
   ]
 }

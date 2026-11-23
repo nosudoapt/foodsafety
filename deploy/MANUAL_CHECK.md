@@ -37,6 +37,26 @@ Sign-in URLs: demo at `/btb/login`, console at `/btb/admin/login`.
 > when the server sets `BTB_SHARED_LOGIN=1` — a local QA/Playwright convenience
 > that must never be set in production.
 
+## B2. Production environment — the two keys that break saving when missing
+
+Both are Vercel **Production** secrets. Missing either produces a 503 on save, not a
+database error, so the UI looks read-only while every read still works.
+
+| Variable | Missing symptom | Fixed by |
+|---|---|---|
+| `VAULT_ENC_KEY` (base64, 32 bytes) | Login Vault: “Encryption is unavailable. Ask your administrator to check the vault configuration.” | `openssl rand -base64 32`, then `vercel env add VAULT_ENC_KEY production` |
+| `BTB_UPLOADER_PROFILE_ID` | Every file upload (manuals, documents, marketing, social) fails with “Uploads need a connected BTB uploader profile.” | the `profiles.id` of the BTB uploader row, then `vercel env add BTB_UPLOADER_PROFILE_ID production` |
+
+`VAULT_ENC_KEY` has no safe fallback in production, and changing it makes existing vault
+secrets unreadable — back it up with the other production secrets.
+
+Environment changes are baked in at build time, so redeploy afterwards. Verify with:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://<host>/api/vault?workspace=btb
+curl -s -o /dev/null -w '%{http_code}\n' https://<host>/api/btb/uploader?page=manuals
+```
+
 ## C. Console (super-admin)
 
 | # | Do this | Expect |

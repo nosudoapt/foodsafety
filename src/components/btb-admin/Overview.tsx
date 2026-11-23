@@ -6,6 +6,7 @@ import { Activity, Building2, Database, RefreshCcw, ShieldCheck, Sparkles, Users
 import { Badge, Button, Card, PageHeader } from "@/components/ui";
 import { LoadState } from "@/components/btb/Feedback";
 import { useBtbData } from "@/components/btb/useBtbData";
+import SignInActivity from "./SignInActivity";
 import { BTB_MONITORING_WINDOWS, type BtbAdminMonitoring, type BtbAdminMonitoringLocation } from "@/lib/btb-admin";
 
 const mb = (bytes: number) => bytes <= 0 ? "0 KB"
@@ -110,6 +111,7 @@ export default function BtbAdminOverview() {
             </table>
           </div>}
       </section>
+      <SignInActivity />
     </>)}
   </div>;
 }

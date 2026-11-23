@@ -3,7 +3,7 @@ import { attributionName, BTB_RESTAURANT, btbToday } from "@/lib/btb-team";
 import { matchesTemperatureStandard, parseTemperature, temperatureInRange, type BtbTemperatureRecord, type TemperatureStandard } from "@/lib/btb-temperatures";
 import { temperatureOwner } from "@/lib/btb-temperature-store";
 
-const COLUMNS = "id,record_type,equipment_name,food_item,temperature,min_safe_temp,max_safe_temp,unit,is_safe,notes,recorded_at,business_date,slot";
+const COLUMNS = "id,record_type,equipment_name,food_item,temperature,min_safe_temp,max_safe_temp,unit,is_safe,notes,photo_url,recorded_at,business_date,slot";
 
 export const GET = btbRoute("temperatures", false, async ({ db }) => {
   const owner = await temperatureOwner(db);
@@ -36,7 +36,7 @@ export const POST = btbRoute("temperatures", true, async ({ db, identity }, requ
     dbError(result.error, "The saved reading could not be checked. Keep this form and retry.");
     const record = result.data;
     if (!record) return null;
-    const same = ["record_type", "equipment_name", "food_item", "temperature", "min_safe_temp", "max_safe_temp", "unit", "notes"]
+    const same = ["record_type", "equipment_name", "food_item", "temperature", "min_safe_temp", "max_safe_temp", "unit", "notes", "photo_url"]
       .every((key) => record[key as keyof typeof record] === payload[key as keyof typeof payload]);
     if (!same) throw new BtbApiError("This reading was already saved with different details. Close this form and add a new reading.", 409);
     return record;
