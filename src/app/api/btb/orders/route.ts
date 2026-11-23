@@ -1,5 +1,6 @@
 import { btbRequestLocation, btbRoute, BtbApiError, dbError, readBody } from "@/lib/btb-api";
 import { withLocation } from "@/lib/btb-location-context";
+import { parSetIsCurrent, parWeekStart } from "@/lib/btb-prep";
 import { BTB_RESTAURANT, attributionName, btbToday, isIsoDate, isUuid, isVersion } from "@/lib/btb-team";
 import { validOrderLines } from "@/lib/btb-operations";
 import { BROOKS_ORDER_GUIDE } from "@/lib/brooks-order-guide";
@@ -32,13 +33,33 @@ export const GET = btbRoute("order_sheet", false, async (context, request) => {
   if (before) query = query.lt("order_date", before);
   const result = await query.order("order_date", { ascending: false }).limit(date ? 1 : 30);
   dbError(result.error, "Orders could not be loaded. Please retry.");
-  return { orders: result.data ?? [], hasMore: !date && result.data?.length === 30 };
+  const week = parWeekStart(btbToday());
+  let parSet = false;
+  if (location) {
+    const mark = await db.from("btb_par_weeks").select("set_at")
+      .eq("location_id", location.id).eq("area", "order").eq("week_start", week).maybeSingle();
+    dbError(mark.error, "The order PAR status could not be checked.");
+    parSet = parSetIsCurrent(mark.data?.set_at as string | undefined);
+  }
+  return { orders: result.data ?? [], hasMore: !date && result.data?.length === 30, weekStart: week, parSet };
 }, { allowLocationWorkspace: true });
 
 export const POST = btbRoute("order_sheet", true, async (context, request) => {
   const { db, identity } = context;
   const location = await btbRequestLocation(context, request);
   const body = await readBody(request);
+  // The PAR chip: confirm this week's order PARs without touching a saved sheet.
+  if (body.action === "par-set") {
+    if (!["manager", "supervisor", "owner", "corporate"].includes(identity.role)) throw new BtbApiError("A manager or owner confirms the order PARs.", 403);
+    if (!location) throw new BtbApiError("Open your branch workspace to confirm the order PARs.", 400);
+    const week = parWeekStart(btbToday());
+    const marked = await db.from("btb_par_weeks").upsert({
+      location_id: location.id, area: "order", week_start: week,
+      set_by: identity.employeeId, set_by_name: identity.name, set_at: new Date().toISOString(),
+    }, { onConflict: "location_id,area,week_start" });
+    dbError(marked.error, "The PAR confirmation could not be saved. Please retry.");
+    return { ok: true, weekStart: week, parSet: true };
+  }
   if (!isIsoDate(body.date) || body.date > btbToday() || !isVersion(body.version) || !validOrderLines(body.lines)) throw new BtbApiError("Check the order date and enter non-negative PAR and on-hand quantities.");
   const catalog = new Set(BROOKS_ORDER_GUIDE.flatMap((category) => category.items.map((item) => item.name)));
   if (body.lines.some((line) => !catalog.has(line.item_name))) {
