@@ -249,6 +249,11 @@
       "step": 52,
       "file": "schema-btb-location-scope.sql",
       "description": "Branch isolation for the daily tools: temperature standards and order sheets gain a location, and location-aware writers replace the restaurant-wide ones so one branch can never read or change another's temperature log, checklists, order sheet or staff schedule."
+    },
+    {
+      "step": 53,
+      "file": "schema-btb-prep-sheet.sql",
+      "description": "Prep sheet workflow: per-branch weekly PAR levels, section assignments, autosaved drafts, submissions with in-app manager notices, comments and 45 days of history."
     }
   ]
 }
