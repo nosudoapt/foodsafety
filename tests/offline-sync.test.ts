@@ -240,18 +240,17 @@ test("queued payloads carry everything the replay needs", async () => {
 // --- page wiring -----------------------------------------------------------
 
 const ROOT = join(__dirname, "../..");
-const prepSource = readFileSync(join(ROOT, "src/app/btb/demo/prep-list/view.tsx"), "utf8");
+const prepSource = readFileSync(join(ROOT, "src/app/btb/demo/prep-list/prep-sheet.tsx"), "utf8");
 const tempSource = readFileSync(join(ROOT, "src/app/temperatures/page.tsx"), "utf8");
 
-test("the prep sheet parks failed saves and replays them", () => {
-  assert.ok(prepSource.includes('from "@/lib/offline-queue"'));
-  assert.ok(prepSource.includes("shouldQueue(error.message)"), "connectivity failures must queue");
-  assert.ok(prepSource.includes('newOp("prep_save"'));
-  assert.ok(prepSource.includes('drain(queue, sendQueuedSave, PREP_KINDS)'));
-  assert.ok(
-    prepSource.includes('window.addEventListener("online", onOnline)'),
-    "replay must also fire when the browser comes back online",
-  );
+test("the prep sheet autosaves to the server instead of a browser table", () => {
+  // The sheet is now server-authoritative: typing is debounced into a draft so a
+  // refresh or a customer interruption cannot lose it.
+  assert.ok(prepSource.includes('action: "draft"'), "typing is saved as a server draft");
+  assert.ok(prepSource.includes("setTimeout"), "autosave is debounced");
+  assert.ok(prepSource.includes('setSave("saved")'), "the sheet shows that it saved");
+  assert.ok(!prepSource.includes('from "@/lib/supabase"'), "the prep sheet no longer writes browser tables");
+  assert.ok(prepSource.includes("/api/btb/prep"), "every read and write goes through the server API");
 });
 
 test("temperature readings park failed saves and replay them", () => {
@@ -266,9 +265,7 @@ test("temperature readings park failed saves and replay them", () => {
   );
 });
 
-test("both pages tell the user when a save is waiting to sync", () => {
-  for (const source of [prepSource, tempSource]) {
-    assert.ok(source.includes("offlinePending > 0"), "a pending banner must render");
-    assert.ok(source.includes("stored on this device"));
-  }
+test("the temperature page tells the user when a save is waiting to sync", () => {
+  assert.ok(tempSource.includes("offlinePending > 0"), "a pending banner must render");
+  assert.ok(tempSource.includes("stored on this device"));
 });

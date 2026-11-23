@@ -186,6 +186,8 @@ const ROUTE_FEATURE: Record<string, string> = {
   manuals: "manuals",
 };
 
+const SERVER_GATED_CLIENT_ISLANDS = new Set(["prep-list"]);
+
 const SERVER_ONLY_GATED_ROUTES = new Set([
   "account",
   "menu",
@@ -208,6 +210,18 @@ test("interactive BTB views preserve their existing feature gates", () => {
         SERVER_ONLY_GATED_ROUTES.has(slug),
         `route "/btb/demo/${slug}" maps to no feature — add its client gate or explicitly audit its server-only gate`,
       );
+      continue;
+    }
+    // The prep sheet became a server-backed client island: its authorization is
+    // the awaited BtbServerPage boundary (asserted below for every leaf), and its
+    // data calls run through /api/btb/prep rather than browser tables. It is
+    // audited here instead of carrying a second, client-side gate.
+    if (SERVER_GATED_CLIENT_ISLANDS.has(slug)) {
+      const page = readFileSync(join(root, slug, "page.tsx"), "utf8");
+      assert.ok(page.includes(`page: "${slug}"`), `${slug}/page.tsx must await its server boundary`);
+      const island = readFileSync(join(root, slug, "prep-sheet.tsx"), "utf8");
+      assert.ok(island.includes("/api/btb/prep"), `${slug} must read through its server API`);
+      assert.ok(!island.includes('from "@/lib/supabase"'), `${slug} must not write browser tables`);
       continue;
     }
     const source = readFileSync(join(root, slug, "view.tsx"), "utf8");

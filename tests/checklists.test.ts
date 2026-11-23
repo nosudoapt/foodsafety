@@ -13,7 +13,7 @@ import { checkDraftKey, parseCheckDraft, previewChecks } from "../src/lib/btb-ch
 // its own gate, has its own hub card, and the prep sheet no longer carries it.
 
 const PAGE = join(process.cwd(), "src/app/btb/demo/checklists/view.tsx");
-const PREP = join(process.cwd(), "src/app/btb/demo/prep-list/view.tsx");
+const PREP = join(process.cwd(), "src/app/btb/demo/prep-list/prep-sheet.tsx");
 
 const pageSource = readFileSync(PAGE, "utf8");
 const prepSource = readFileSync(PREP, "utf8");
