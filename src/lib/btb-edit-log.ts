@@ -1,4 +1,3 @@
-import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Owners and supervisors audit the sheets; managers and staff never see this. */
