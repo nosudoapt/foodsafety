@@ -7,7 +7,7 @@ import { BROOKS_ORDER_GUIDE } from "@/lib/brooks-order-guide";
 
 const COLUMNS = "id,order_date,lines,version,saved_by_name,saved_at";
 export const GET = btbRoute("order_sheet", false, async (context, request) => {
-  const { db } = context;
+  const { db, identity } = context;
   const location = await btbRequestLocation(context, request);
   const params = new URL(request.url).searchParams;
   const date = params.get("date");
@@ -41,7 +41,8 @@ export const GET = btbRoute("order_sheet", false, async (context, request) => {
     dbError(mark.error, "The order PAR status could not be checked.");
     parSet = parSetIsCurrent(mark.data?.set_at as string | undefined);
   }
-  return { orders: result.data ?? [], hasMore: !date && result.data?.length === 30, weekStart: week, parSet };
+  return { orders: result.data ?? [], hasMore: !date && result.data?.length === 30, weekStart: week, parSet,
+    canManagePar: ["manager", "supervisor", "owner", "corporate"].includes(identity.role) };
 }, { allowLocationWorkspace: true });
 
 export const POST = btbRoute("order_sheet", true, async (context, request) => {

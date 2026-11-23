@@ -14,6 +14,7 @@ import { BROOKS_ORDER_GUIDE } from "@/lib/brooks-order-guide";
 import { btbToday, isIsoDate, isVersion } from "@/lib/btb-team";
 import { orderQuantity, orderTotal, validOrderLines, type BtbOrder, type BtbOrderRevision, type OrderLine } from "@/lib/btb-operations";
 import { fetchJson } from "@/lib/fetch-json";
+import OrderParChip from "./OrderParChip";
 
 type OrderData = { orders: BtbOrder[]; hasMore: boolean };
 interface OrderDraft { version: number; lines: OrderLine[] }
@@ -27,7 +28,7 @@ function OrderWorkspace({ readOnly }: { readOnly: boolean }) {
   const [date, setDate] = useState(btbToday);
   const [history, setHistory] = useState(false);
   const [revisions, setRevisions] = useState<BtbOrder | null>(null);
-  return <div className="ops-workspace"><div className="btb-screen ops-workspace"><PageHeader title="Order sheet" subtitle="Set your PAR, count what’s on hand, and compare with your previous order." action={<Button variant="ghost" onClick={() => setHistory(!history)} aria-expanded={history}><History size={18} />{history ? "Hide order history" : "Order history"}</Button>} /><div className="ops-toolbar"><label className="ops-inline-field">Order date<Input type="date" max={btbToday()} value={date} onChange={(event) => { if (isIsoDate(event.target.value)) setDate(event.target.value); }} /></label><p className="ops-meta">Order = PAR − on hand · minimum 0</p></div></div>
+  return <div className="ops-workspace"><div className="btb-screen ops-workspace"><PageHeader title="Order sheet" subtitle="Set your PAR, count what’s on hand, and compare with your previous order." action={<><OrderParChip /><Button variant="ghost" onClick={() => setHistory(!history)} aria-expanded={history}><History size={18} />{history ? "Hide order history" : "Order history"}</Button></>} /><div className="ops-toolbar"><label className="ops-inline-field">Order date<Input type="date" max={btbToday()} value={date} onChange={(event) => { if (isIsoDate(event.target.value)) setDate(event.target.value); }} /></label><p className="ops-meta">Order = PAR − on hand · minimum 0</p></div></div>
     <OrderDay key={date} date={date} readOnly={readOnly} onHistory={() => setHistory(true)} onRevisions={setRevisions} />
     {history && <div className="btb-screen"><OrderHistory onView={(day) => { setDate(day); window.scrollTo({ top: 0, behavior: "instant" }); }} onRevisions={setRevisions} /></div>}
     {revisions && <OrderRevisions order={revisions} onClose={() => setRevisions(null)} />}
