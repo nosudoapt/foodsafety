@@ -4,9 +4,9 @@ import { dbError } from "./btb-api";
 import type { TaskAssignment, TaskType } from "./btb-tasks";
 
 /** Completion is derived from the actual operational record for the business
- *  date — never from a manual tick on the assignment. Legacy records without a
- *  location are accepted for Branch 1; the location-scoped record wins once it
- *  exists. */
+ *  date — never from a manual tick on the assignment. Every lookup is filtered
+ *  to the one branch, so another location's sheet can never mark this branch's
+ *  duty complete. */
 export async function withCompletion(db: SupabaseClient, locationId: string, assignments: TaskAssignment[]): Promise<TaskAssignment[]> {
   if (!assignments.length) return assignments;
   const dates = [...new Set(assignments.map((item) => item.task_date))];
@@ -17,13 +17,11 @@ export async function withCompletion(db: SupabaseClient, locationId: string, ass
     done.set(date, set);
   };
   const [temperatures, prep, platformChecks, legacyChecks, cleaning] = await Promise.all([
-    db.from("temperature_records").select("business_date").in("business_date", dates)
-      .or(`location_id.eq.${locationId},location_id.is.null`),
-    db.from("prep_counts").select("count_date").in("count_date", dates),
+    db.from("temperature_records").select("business_date").eq("location_id", locationId).in("business_date", dates),
+    db.from("prep_counts").select("count_date").eq("location_id", locationId).in("count_date", dates),
     db.from("btb_shift_checks").select("check_date,check_type,completed").eq("location_id", locationId).in("check_date", dates),
-    db.from("btb_checklists").select("check_date,check_type,completed").in("check_date", dates)
-      .or(`location_id.eq.${locationId},location_id.is.null`),
-    db.from("cleaning_logs").select("done_date").in("done_date", dates),
+    db.from("btb_checklists").select("check_date,check_type,completed").eq("location_id", locationId).in("check_date", dates),
+    db.from("cleaning_logs").select("done_date").eq("location_id", locationId).in("done_date", dates),
   ]);
   dbError(temperatures.error ?? prep.error ?? platformChecks.error ?? legacyChecks.error ?? cleaning.error,
     "Assigned task completion could not be checked. Please retry.");

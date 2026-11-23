@@ -1,38 +1,43 @@
-import { btbRoute, BtbApiError, dbError, readAll, readBody } from "@/lib/btb-api";
+import { btbRequestLocation, btbRoute, BtbApiError, dbError, readAll, readBody } from "@/lib/btb-api";
 import { attributionName, BTB_RESTAURANT, btbToday } from "@/lib/btb-team";
+import { withLocation } from "@/lib/btb-location-context";
 import { matchesTemperatureStandard, parseTemperature, temperatureInRange, type BtbTemperatureRecord, type TemperatureStandard } from "@/lib/btb-temperatures";
 import { temperatureOwner } from "@/lib/btb-temperature-store";
 
 const COLUMNS = "id,record_type,equipment_name,food_item,temperature,min_safe_temp,max_safe_temp,unit,is_safe,notes,photo_url,recorded_at,business_date,slot";
 
-export const GET = btbRoute("temperatures", false, async ({ db }) => {
+export const GET = btbRoute("temperatures", false, async (context, request) => {
+  const { db } = context;
+  const location = await btbRequestLocation(context, request);
   const owner = await temperatureOwner(db);
   const cutoff = new Date(Date.now() - 90 * 86_400_000).toISOString();
-  const records = await readAll<BtbTemperatureRecord>((from, to) => db.from("temperature_records")
-    .select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).eq("user_id", owner).is("location_id", null)
+  const records = await readAll<BtbTemperatureRecord>((from, to) => withLocation(db.from("temperature_records")
+    .select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).eq("user_id", owner), location)
     .gte("recorded_at", cutoff).order("recorded_at", { ascending: false }).order("id").range(from, to),
   "Temperature history couldn’t be loaded. Please try again.");
-  const standards = await readAll<TemperatureStandard>((from, to) => db.from("btb_temperature_standards")
-    .select("record_type,equipment_name,min_safe_temp,max_safe_temp").eq("restaurant_name", BTB_RESTAURANT)
+  const standards = await readAll<TemperatureStandard>((from, to) => withLocation(db.from("btb_temperature_standards")
+    .select("record_type,equipment_name,min_safe_temp,max_safe_temp").eq("restaurant_name", BTB_RESTAURANT), location)
     .order("record_type").order("equipment_name").range(from, to), "Approved temperature standards couldn’t be loaded. Please try again.");
   return { records, standards, today: btbToday() };
 }, { allowLocationWorkspace: true });
 
-export const POST = btbRoute("temperatures", true, async ({ db, identity }, request) => {
+export const POST = btbRoute("temperatures", true, async (context, request) => {
+  const { db, identity } = context;
+  const location = await btbRequestLocation(context, request);
   const parsed = parseTemperature(await readBody(request, 16_000));
   if (parsed.error) throw new BtbApiError(parsed.error);
   const input = parsed.value!;
   const owner = await temperatureOwner(db);
   const payload = {
-    ...input, user_id: owner, restaurant_name: BTB_RESTAURANT, location_id: null, unit: "C",
+    ...input, user_id: owner, restaurant_name: BTB_RESTAURANT, location_id: location?.id ?? null, unit: "C",
     is_safe: temperatureInRange(input.temperature, input.min_safe_temp, input.max_safe_temp),
     // Human-readable attribution fits the existing notes column without a SQL
     // migration. The server supplies the actor; the browser cannot impersonate one.
     notes: `Recorded by: ${attributionName(identity)}${identity.employeeId ? ` [${identity.employeeId}]` : ""}${input.notes ? `\n${input.notes}` : ""}`,
   };
   const savedReading = async () => {
-    const result = await db.from("temperature_records").select(COLUMNS).eq("id", input.id)
-      .eq("restaurant_name", BTB_RESTAURANT).eq("user_id", owner).is("location_id", null).maybeSingle();
+    const result = await withLocation(db.from("temperature_records").select(COLUMNS).eq("id", input.id)
+      .eq("restaurant_name", BTB_RESTAURANT).eq("user_id", owner), location).maybeSingle();
     dbError(result.error, "The saved reading could not be checked. Keep this form and retry.");
     const record = result.data;
     if (!record) return null;
@@ -43,8 +48,8 @@ export const POST = btbRoute("temperatures", true, async ({ db, identity }, requ
   };
   const previous = await savedReading();
   if (previous) return { record: previous };
-  const configured = await db.from("btb_temperature_standards").select("record_type,equipment_name,min_safe_temp,max_safe_temp")
-    .eq("restaurant_name", BTB_RESTAURANT).eq("record_type", input.record_type).eq("equipment_name", input.equipment_name).maybeSingle();
+  const configured = await withLocation(db.from("btb_temperature_standards").select("record_type,equipment_name,min_safe_temp,max_safe_temp")
+    .eq("restaurant_name", BTB_RESTAURANT).eq("record_type", input.record_type).eq("equipment_name", input.equipment_name), location).maybeSingle();
   dbError(configured.error, "Approved temperature standards could not be checked. Keep this form and retry.");
   const standard = configured.data as TemperatureStandard | null;
   if (!standard) throw new BtbApiError("Ask your manager to confirm an approved standard for this equipment and record type before saving.");
@@ -56,8 +61,8 @@ export const POST = btbRoute("temperatures", true, async ({ db, identity }, requ
   // A retry (including two simultaneous saves) is append-once, never an upsert
   // that silently replaces a previously recorded reading.
   if (result.error?.code === "23505") {
-    const previous = await savedReading();
-    if (previous) return { record: previous };
+    const previousRow = await savedReading();
+    if (previousRow) return { record: previousRow };
   }
   dbError(result.error, "The reading wasn’t saved. Your entries are still here; please try again.");
   if (!result.data) throw new BtbApiError("The save could not be confirmed. Keep this form and retry.", 503);

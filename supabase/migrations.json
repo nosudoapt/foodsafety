@@ -244,6 +244,11 @@
       "step": 51,
       "file": "schema-btb-auth-hardening.sql",
       "description": "Sign-in hardening: count failures only, clear on success, throttle per IP, and record every attempt for 30 days."
+    },
+    {
+      "step": 52,
+      "file": "schema-btb-location-scope.sql",
+      "description": "Branch isolation for the daily tools: temperature standards and order sheets gain a location, and location-aware writers replace the restaurant-wide ones so one branch can never read or change another's temperature log, checklists, order sheet or staff schedule."
     }
   ]
 }

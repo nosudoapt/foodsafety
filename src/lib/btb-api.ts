@@ -8,6 +8,7 @@ import { btbCanEdit, btbCanView, type BtbFeature } from "./btb-access";
 import { BTB_CARDS } from "./btb-hub";
 import { btbPageAllowed, type BtbEffectiveAccess } from "./btb-page-access";
 import { loadBtbEffectiveAccess } from "./btb-effective-access";
+import { resolveBtbLocation, type BtbLocationContext } from "./btb-location-context";
 import { BTB_RESTAURANT, type BtbEmployee, type BtbIdentity } from "./btb-team";
 import { inventoryDb } from "./supabase-server";
 import { btbOriginAllowed } from "./btb-origin";
@@ -102,6 +103,19 @@ export async function btbEmployeeIsLocationManaged(db: SupabaseClient, employeeI
 
 export interface BtbApiContext { db: SupabaseClient; identity: BtbIdentity; access: BtbEffectiveAccess }
 export interface BtbAccessOptions { allowLocationWorkspace?: boolean; page?: string }
+
+/**
+ * The branch this request operates on. Written records are stamped with it and
+ * reads are filtered by it, so two branches can never see each other's rows.
+ *
+ * The shared demo returns `null`, which means the legacy unowned rows — the
+ * demo keeps its showcase data and never touches a real branch.
+ */
+export async function btbRequestLocation(context: BtbApiContext, request: Request, explicit?: string | null): Promise<BtbLocationContext | null> {
+  const param = explicit !== undefined ? explicit : new URL(request.url).searchParams.get("location");
+  const slug = (await cookies()).get("btb_slug")?.value ?? null;
+  return resolveBtbLocation(context.identity, context.access, param, slug);
+}
 
 export async function requireBtbAccess(feature?: BtbFeature, edit = false, options?: BtbAccessOptions): Promise<BtbApiContext> {
   const value = (await cookies()).get(BTB_COOKIE)?.value;
