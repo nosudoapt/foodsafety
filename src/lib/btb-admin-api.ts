@@ -1,28 +1,26 @@
 import "server-only";
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { apiFailure, BtbApiError, PRIVATE_HEADERS, requireBtbOrigin } from "./btb-api";
-import { BTB_ADMIN_COOKIE, btbAdminIdentityFromSession } from "./btb-admin-auth";
 import type { BtbAdminIdentity } from "./btb-admin";
-import { inventoryDb } from "./supabase-server";
+import { requireWorkspaceSession, type VerifiedWorkspaceSession } from "./workspace-auth-server";
+import { inWorkspace } from "./workspace-request-context";
 
-export interface BtbAdminContext { db: SupabaseClient; admin: BtbAdminIdentity }
+export interface BtbAdminContext { db: SupabaseClient; admin: BtbAdminIdentity; session: VerifiedWorkspaceSession }
 
 export async function requireBtbAdmin(): Promise<BtbAdminContext> {
-  const value = (await cookies()).get(BTB_ADMIN_COOKIE)?.value;
-  if (!value) throw new BtbApiError("Please sign in to the BTB console.", 401);
-  const db = inventoryDb();
-  const admin = await btbAdminIdentityFromSession(value, db);
-  if (!admin) throw new BtbApiError("Your console session has ended. Please sign in again.", 401);
-  return { db, admin };
+  const session = await requireWorkspaceSession();
+  if (session.claims.principalType !== "console" || session.claims.role !== "admin" || session.claims.tenantSlug !== "between-the-buns" || !session.principal.sourceVersion) throw new BtbApiError("This console is not in your workspace.", 403);
+  const admin: BtbAdminIdentity = { id: session.principal.credentialId, name: session.principal.name, email: session.principal.email, sessionVersion: session.principal.sourceVersion };
+  return { db: session.db, admin, session };
 }
 
 export function btbAdminRoute(handler: (context: BtbAdminContext, request: Request) => Promise<unknown>) {
   return async (request: Request) => {
     try {
       if (!["GET", "HEAD"].includes(request.method)) requireBtbOrigin(request, "Open this form in the BTB console and try again.");
-      return NextResponse.json(await handler(await requireBtbAdmin(), request), { headers: PRIVATE_HEADERS });
+      const context = await requireBtbAdmin();
+      return NextResponse.json(await inWorkspace({ claims: context.session.claims, db: context.db }, () => handler(context, request)), { headers: PRIVATE_HEADERS });
     } catch (error) { return apiFailure(error, request); }
   };
 }

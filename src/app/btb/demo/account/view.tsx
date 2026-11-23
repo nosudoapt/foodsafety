@@ -20,7 +20,12 @@ export default function AccountPage() {
     setError(""); setNotice("");
     if (form.password !== form.confirm) { setError("The new passwords do not match."); return; }
     setSaving(true);
-    try { await fetchJson("/api/btb/account", jsonRequest(form)); setForm({ currentPassword: "", password: "", confirm: "" }); setNotice("Your password is changed. Other sessions have been signed out."); }
+    try {
+      await fetchJson("/api/btb/account", jsonRequest(form));
+      setForm({ currentPassword: "", password: "", confirm: "" });
+      setNotice("Your password is changed. Signing you out so you can use it…");
+      window.location.replace("/auth/sign-in");
+    }
     catch (cause) { setError(messageOf(cause)); }
     finally { setSaving(false); }
   };

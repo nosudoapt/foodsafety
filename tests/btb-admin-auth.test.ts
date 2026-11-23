@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { authenticateBtbAdmin, BTB_ADMIN_COOKIE, BTB_ADMIN_MAX_AGE, btbAdminClaimsFromSession, btbAdminIdentityFromSession, btbAdminSessionValueFor, btbAdminSigningKey } from "../src/lib/btb-admin-auth";
 import { employeeSessionValueFor, roleFromSession, sessionValueFor } from "../src/lib/btb-auth";
@@ -82,13 +82,17 @@ test("console sign-in uses only its own table, failure counter and salted creden
   await assert.rejects(authenticateBtbAdmin(limited.client, row.email, password), error => (error as { status: number }).status === 429);
 });
 
-test("console guards and logout never read, create or clear the demo/green cookie", () => {
+test("console guards and logout share the one workspace session and never touch a legacy cookie", () => {
   const api = readFileSync(join(root, "src/lib/btb-admin-api.ts"), "utf8");
-  const logout = readFileSync(join(root, "src/app/api/btb/admin/logout/route.ts"), "utf8");
-  assert.ok(api.includes("get(BTB_ADMIN_COOKIE)"));
-  assert.ok(!api.includes("get(BTB_COOKIE)"));
-  assert.ok(logout.includes("set(BTB_ADMIN_COOKIE"));
-  assert.ok(!/BTB_COOKIE|supabase\.auth/.test(logout));
+  assert.ok(api.includes("requireWorkspaceSession()"), "the console authorizes from the verified session");
+  assert.ok(api.includes('principalType !== "console"'), "only a console principal may enter");
+  assert.ok(!api.includes("BTB_ADMIN_COOKIE"), "the console cookie is retired");
+  assert.ok(!api.includes("BTB_COOKIE"), "the store cookie is retired");
+  // The legacy console door is deleted, and sign-out is the unified one.
+  assert.equal(existsSync(join(root, "src/app/api/btb/admin/login/route.ts")), false);
+  const logout = readFileSync(join(root, "src/app/api/auth/logout/route.ts"), "utf8");
+  assert.ok(logout.includes("revokeWorkspaceSession"), "logout revokes the durable session row");
+  assert.ok(!/BTB_ADMIN_COOKIE|BTB_COOKIE|supabase\.auth/.test(logout));
   const offenders: string[] = [];
   const walk = (directory: string) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {

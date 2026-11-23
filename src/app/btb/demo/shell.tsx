@@ -51,11 +51,11 @@ function BtbShell({ slug, children }: { slug: string; children: React.ReactNode 
     clearBtbPublicCapabilities();
     setError("");
     try {
-      await fetchJson("/api/btb/logout", { method: "POST" });
+      await fetchJson("/api/auth/logout", { method: "POST" });
       announceBtbSessionChange();
       // Cross the authentication boundary with a fresh document. Refreshing
       // the old protected route races its server redirect and retains RSC data.
-      window.location.replace("/btb/login");
+      window.location.replace("/auth/sign-in");
     } catch {
       setError("Could not sign out. Please try again.");
     } finally { setSigningOut(false); }

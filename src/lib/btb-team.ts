@@ -23,6 +23,11 @@ export interface BtbIdentity {
   email: string;
   employeeId: string | null;
   sessionVersion?: number;
+  sub?: string;
+  tenantId?: string;
+  currentLocationId?: string;
+  allowedLocationIds?: string[];
+  sessionId?: string;
 }
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

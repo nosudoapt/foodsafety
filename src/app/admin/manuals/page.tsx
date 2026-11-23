@@ -1,5 +1,3 @@
-"use client";
-import PrintManuals from "@/components/PrintManuals";
-export default function Page() {
-  return <PrintManuals application="foodsafe" />;
-}
+import WorkspaceServerPage from "@/components/WorkspaceServerPage";
+import View from "./view";
+export default async function Page() { return await WorkspaceServerPage({ path: "/admin/manuals", children: <View /> }); }

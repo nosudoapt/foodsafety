@@ -47,11 +47,12 @@ test("console password change fails closed when the version moved underneath it"
     error => (error as { status: number }).status === 409);
 });
 
-test("the password route re-signs the current cookie with the new version", () => {
+test("the console password route rotates the credential and retires its own session", () => {
   const route = readFileSync(join(__dirname, "..", "..", "src/app/api/btb/admin/password/route.ts"), "utf8");
   assert.match(route, /requireBtbOrigin/);
   assert.match(route, /changeBtbAdminPassword/);
-  assert.match(route, /version:\s*result\.sessionVersion/);
-  assert.match(route, /BTB_ADMIN_COOKIE/);
-  assert.ok(!/BTB_COOKIE/.test(route), "the demo cookie is never touched");
+  assert.match(route, /revokeWorkspaceSession/);
+  assert.match(route, /setWorkspaceCookie/);
+  assert.match(route, /signInAgain: true/);
+  assert.ok(!/BTB_ADMIN_COOKIE|BTB_COOKIE/.test(route), "no legacy cookie is read or written");
 });

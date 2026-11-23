@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Mail } from "lucide-react";
@@ -66,10 +65,20 @@ export default function SignIn() {
     setError("");
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-      if (authError) { setError(friendlyAuthError(authError.message)); return; }
-      const next = new URLSearchParams(window.location.search).get("next");
-      router.replace(safeNextPath(next));
+      // One form for everyone. The server resolves which credential store owns
+      // this email, verifies it, and returns the view that person may open.
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { permittedView?: string; error?: string };
+      if (!res.ok) {
+        setError(res.status === 429 ? "Too many attempts. Wait a few minutes, then try again." : friendlyAuthError(data.error ?? "Invalid email or password"));
+        return;
+      }
+      setPassword("");
+      router.replace(safeNextPath(data.permittedView ?? null));
       router.refresh();
     } catch {
       setError("Couldn’t reach the server. Check your connection and try again.");
@@ -81,7 +90,7 @@ export default function SignIn() {
       <p className="ax__eyebrow">Welcome back</p>
       <h1 className="ax__title">Sign in to your workspace</h1>
       <p className="ax__sub">
-        Your logs, your vault and every site you run — one register.
+        One sign-in for every site, team and register you are assigned.
       </p>
 
       <form className="ax__form" onSubmit={handleSignIn} noValidate>
@@ -134,15 +143,6 @@ export default function SignIn() {
       <p className="foot">
         New to Pholo?{" "}
         <Link href="/auth/sign-up?trial=1">Start a 30-day trial</Link>
-      </p>
-
-      <div className="divider">or</div>
-      <p className="foot" style={{ marginTop: 0 }}>
-        Signing in for{" "}
-        <Link href="/btb/login" style={{ color: "var(--muted-2)" }}>
-          Between the Buns
-        </Link>
-        ?
       </p>
     </AuthShell>
   );

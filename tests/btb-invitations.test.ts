@@ -17,7 +17,7 @@ test("invitation links use independent 256-bit tokens, SHA-256 hashes and only t
   const url = new URL(first.link);
   const raw = url.searchParams.get("token")!;
   assert.ok(validInvitationToken(raw)); assert.notEqual(first.link, second.link);
-  assert.equal(url.origin, "https://app.example.test"); assert.equal(url.pathname, "/btb/login/set-password");
+  assert.equal(url.origin, "https://app.example.test"); assert.equal(url.pathname, "/auth/set-password");
   assert.equal(url.searchParams.has("ignored"), false);
   assert.equal(first.tokenHash, createHash("sha256").update(raw).digest("hex"));
   assert.notEqual(first.tokenHash, raw); assert.ok(first.body.includes(first.link));
@@ -85,6 +85,6 @@ test("invitation transport binds actor/recipient server-side and only missing em
   assert.ok(source.includes("p_body: invitation.body") && source.includes("p_token_hash: invitation.tokenHash"));
   assert.ok(source.includes("!emailService.senderConfigured ? { manualLink: invitation.link } : {}"));
   assert.ok(!source.includes("x-forwarded-host"));
-  const setup = readFileSync(join(root, "src/app/btb/login/set-password/layout.tsx"), "utf8");
+  const setup = readFileSync(join(root, "src/app/auth/set-password/layout.tsx"), "utf8");
   assert.ok(setup.includes('referrer: "no-referrer"') && setup.includes("index: false"));
 });

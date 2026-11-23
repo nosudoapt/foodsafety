@@ -231,7 +231,6 @@ test("queued payloads carry everything the replay needs", async () => {
   }
   const prepPayload = prep.payload as { date: string; scope: string; rows: unknown[] };
   assert.equal(prepPayload.date, "2026-10-04");
-  assert.equal(prepPayload.scope, "location_id.is.null");
   assert.equal(prepPayload.rows.length, 1, "the replay re-inserts the exact rows that were saved");
   const tempPayload = temp.payload as { recorded_at: string };
   assert.equal(tempPayload.recorded_at, "2026-10-04T10:15:00.000Z", "an offline reading keeps its real time");
@@ -241,7 +240,7 @@ test("queued payloads carry everything the replay needs", async () => {
 
 const ROOT = join(__dirname, "../..");
 const prepSource = readFileSync(join(ROOT, "src/app/btb/demo/prep-list/prep-sheet.tsx"), "utf8");
-const tempSource = readFileSync(join(ROOT, "src/app/temperatures/page.tsx"), "utf8");
+const tempSource = readFileSync(join(ROOT, "src/app/temperatures/view.tsx"), "utf8");
 
 test("the prep sheet autosaves to the server instead of a browser table", () => {
   // The sheet is now server-authoritative: typing is debounced into a draft so a

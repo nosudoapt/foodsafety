@@ -1,21 +1,21 @@
 import "server-only";
-import { cookies, headers } from "next/headers";
+import { headers } from "next/headers";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { BTB_COOKIE, btbAccountFor, employeeClaimsFromSession, roleFromSession } from "./btb-auth";
 import { btbCanEdit, btbCanView, type BtbFeature } from "./btb-access";
 import { BTB_CARDS } from "./btb-hub";
 import { btbPageAllowed, type BtbEffectiveAccess } from "./btb-page-access";
 import { loadBtbEffectiveAccess } from "./btb-effective-access";
 import { resolveBtbLocation, type BtbLocationContext } from "./btb-location-context";
-import { BTB_RESTAURANT, type BtbEmployee, type BtbIdentity } from "./btb-team";
-import { inventoryDb } from "./supabase-server";
+import { BTB_RESTAURANT, type BtbIdentity } from "./btb-team";
+import { requireWorkspaceSession, workspaceBtbIdentity, workspaceSessionFromValue, type VerifiedWorkspaceSession } from "./workspace-auth-server";
+import { inWorkspace } from "./workspace-request-context";
 import { btbOriginAllowed } from "./btb-origin";
 import { BtbApiError, failureDetails, publicFailure } from "./api-errors";
 export { BtbApiError } from "./api-errors";
 
-export const PRIVATE_HEADERS = { "Cache-Control": "private, no-store" };
+export const PRIVATE_HEADERS = { "Cache-Control": "private, no-store", Vary: "Cookie" };
 export const EMPLOYEE_COLUMNS = "id,name,email,phone,position,role,active,login_enabled,version,created_at";
 export const TEAM_COLUMNS = "id,name,position,role,active";
 
@@ -23,6 +23,7 @@ export function dbError(error: { code?: string; message?: string } | null, messa
   if (!error) return;
   if (error.code === "23505") throw new BtbApiError("That record already exists. Reload before trying again.", 409, error);
   if (error.code === "40001") throw new BtbApiError("This record changed on another device. Reload the latest version before saving your draft.", 409, error);
+  if (error.code === "42501") throw new BtbApiError("This request is not permitted in the current workspace.", 403, error);
   throw new BtbApiError(message, 503, error);
 }
 
@@ -50,22 +51,9 @@ export async function readBody(request: Request, maxBytes = 256_000): Promise<Re
 
 /** Always re-read account status and credential version for individual logins. */
 export async function btbIdentityFromSession(value: string | undefined | null, db?: SupabaseClient): Promise<BtbIdentity | null> {
-  if (value?.startsWith("employee.")) {
-    const claims = employeeClaimsFromSession(value);
-    if (!claims) return null;
-    const client = db ?? inventoryDb();
-    const [member, credentials] = await Promise.all([
-      client.from("btb_employees").select(EMPLOYEE_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).eq("id", claims.id).maybeSingle(),
-      client.from("btb_employee_credentials").select("session_version").eq("employee_id", claims.id).maybeSingle(),
-    ]);
-    dbError(member.error ?? credentials.error, "Your employee session could not be verified. Please try again.");
-    const employee = member.data as BtbEmployee | null;
-    if (!employee?.active || !employee.login_enabled || employee.role !== claims.role || credentials.data?.session_version !== claims.version) return null;
-    return { role: employee.role, employeeId: employee.id, name: employee.name, email: employee.email ?? "", sessionVersion: claims.version };
-  }
-  const role = roleFromSession(value);
-  const account = role ? btbAccountFor(role) : null;
-  return account ? { role: account.role, name: account.name, email: account.email, employeeId: null } : null;
+  const session = await workspaceSessionFromValue(value, db);
+  if (!session || session.claims.principalType !== "employee" || session.claims.tenantSlug !== "between-the-buns") return null;
+  return workspaceBtbIdentity(session);
 }
 
 export async function verifiedBtbRole(value: string | undefined | null) {
@@ -74,13 +62,8 @@ export async function verifiedBtbRole(value: string | undefined | null) {
 
 /** Membership OR invitation history switches personal accounts to scoped
  * workflows. Removed console people can never fall back to legacy access. */
-export async function btbUsesLocationWorkspace(identity: BtbIdentity, db = inventoryDb()): Promise<boolean> {
-  if (!identity.employeeId) return false;
-  if (["designer", "corporate", "owner"].includes(identity.role)) return true;
-  const result = await db.rpc("btb_employee_page_grants", { p_employee: identity.employeeId });
-  dbError(result.error, "Location access could not be checked. Please retry.");
-  if (!result.data || !("pageGrants" in result.data)) throw new BtbApiError("Location access could not be checked. Please retry.", 503);
-  return result.data.pageGrants !== null;
+export async function btbUsesLocationWorkspace(identity: BtbIdentity): Promise<boolean> {
+  return !!identity.employeeId && !!identity.tenantId && !!identity.currentLocationId;
 }
 
 export async function legacyBtbRole(value: string | undefined | null) {
@@ -95,38 +78,31 @@ export async function legacyBtbRole(value: string | undefined | null) {
 /** Removed console people remain managed; shared employee/schedule screens
  * must not reactivate them or alter their historical location workflow. */
 export async function btbEmployeeIsLocationManaged(db: SupabaseClient, employeeId: string): Promise<boolean> {
-  const result = await db.rpc("btb_employee_page_grants", { p_employee: employeeId });
+  const result = await db.from("btb_location_access").select("employee_id").eq("employee_id", employeeId).limit(1);
   dbError(result.error, "This employee’s location access could not be verified. Please retry.");
-  if (!result.data || !("pageGrants" in result.data)) throw new BtbApiError("This employee’s location access could not be verified. Please retry.", 503);
-  return result.data.pageGrants !== null;
+  return !!result.data?.length;
 }
 
-export interface BtbApiContext { db: SupabaseClient; identity: BtbIdentity; access: BtbEffectiveAccess }
-export interface BtbAccessOptions { allowLocationWorkspace?: boolean; page?: string }
+export interface BtbApiContext { db: SupabaseClient; identity: BtbIdentity; access: BtbEffectiveAccess; session: VerifiedWorkspaceSession }
+export interface BtbAccessOptions { allowLocationWorkspace?: boolean; page?: string; session?: VerifiedWorkspaceSession }
 
 /**
  * The branch this request operates on. Written records are stamped with it and
  * reads are filtered by it, so two branches can never see each other's rows.
- *
- * The shared demo returns `null`, which means the legacy unowned rows — the
- * demo keeps its showcase data and never touches a real branch.
+ * Query values only assert the current branch; they never select it.
  */
 export async function btbRequestLocation(context: BtbApiContext, request: Request, explicit?: string | null): Promise<BtbLocationContext | null> {
   const param = explicit !== undefined ? explicit : new URL(request.url).searchParams.get("location");
-  const slug = (await cookies()).get("btb_slug")?.value ?? null;
-  return resolveBtbLocation(context.identity, context.access, param, slug);
+  return resolveBtbLocation(context.identity, context.access, param);
 }
 
 export async function requireBtbAccess(feature?: BtbFeature, edit = false, options?: BtbAccessOptions): Promise<BtbApiContext> {
-  const value = (await cookies()).get(BTB_COOKIE)?.value;
-  if (!value) throw new BtbApiError("Please sign in to continue.", 401);
-  const db = inventoryDb();
-  const identity = await btbIdentityFromSession(value, db);
-  if (!identity) throw new BtbApiError("Your session has ended. Please sign in again.", 401);
+  const session = options?.session ?? await requireWorkspaceSession();
+  const db = session.db;
+  const identity = workspaceBtbIdentity(session);
   const access = await loadBtbEffectiveAccess(db, identity);
   if (feature) {
     if (feature === "platform" && !identity.employeeId) throw new BtbApiError("Sign in with your individual employee account to use the location workspace.", 401);
-    if (!options?.allowLocationWorkspace && !["corporate", "owner"].includes(identity.role) && access.locationWorkspace) throw new BtbApiError("Use your assigned location workspace for this workflow.", 403);
     if (!btbCanView(feature, identity.role) || (edit && !btbCanEdit(feature, identity.role))) throw new BtbApiError("Your role cannot make this change.", 403);
     // Shared feature buckets (reference) must name their exact page. Never let
     // granting prep-manual implicitly authorize menu/allergen/fryer URLs.
@@ -134,7 +110,7 @@ export async function requireBtbAccess(feature?: BtbFeature, edit = false, optio
     const card = options?.page ? candidates.find(item => item.href === `/btb/demo/${options.page}`) : candidates.length === 1 ? candidates[0] : undefined;
     if (!card || !btbPageAllowed(card, identity.role, access.rows, access.pageGrants)) throw new BtbApiError("This page is not enabled in your workspace.", 403);
   }
-  return { db, identity, access };
+  return { db, identity, access, session };
 }
 
 export async function apiFailure(error: unknown, request?: Request, tenant = BTB_RESTAURANT): Promise<NextResponse> {
@@ -166,7 +142,10 @@ export function btbRoute(feature: BtbFeature | undefined, edit: boolean, handler
       if (edit || !["GET", "HEAD"].includes(request.method)) {
         requireBtbOrigin(request);
       }
-      const data = await handler(await requireBtbAccess(feature, edit, options), request);
+      const context = await requireBtbAccess(feature, edit, options);
+      const location = new URL(request.url).searchParams.get("location");
+      if (location !== null && location !== context.session.claims.locationId) throw new BtbApiError("This location is not the current workspace.", 403);
+      const data = await inWorkspace({ claims: context.session.claims, db: context.db }, () => handler(context, request));
       return NextResponse.json(data, { headers: PRIVATE_HEADERS });
     } catch (error) { return apiFailure(error, request); }
   };

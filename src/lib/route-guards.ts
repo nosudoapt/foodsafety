@@ -8,6 +8,7 @@ const OPS = OPERATIONAL_ROLES as string[];
 // Management/owner-tier admin screens: role-listed so proxy.ts can redirect
 // anyone else to /admin.
 export const ADMIN_ROUTE_ROLES: { prefix: string; roles: string[] }[] = [
+  { prefix: "/admin/inspections/corporate", roles: OWNER },
   { prefix: "/admin/vault", roles: OWNER },
   { prefix: "/admin/platform", roles: OWNER },
   { prefix: "/admin/new-restaurant", roles: OWNER },

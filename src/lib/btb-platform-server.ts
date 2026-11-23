@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BtbApiError, requireBtbAccess } from "./btb-api";
 import type { BtbRole } from "./btb-roles";
 import { publicPlatformFailure } from "./api-errors";
+import type { VerifiedWorkspaceSession } from "./workspace-auth-server";
 
 export interface PlatformActor {
   db: SupabaseClient;
@@ -10,6 +11,8 @@ export interface PlatformActor {
   employeeId: string;
   sessionVersion: number;
   role: BtbRole;
+  workspace: VerifiedWorkspaceSession;
+  locationId: string;
 }
 
 /**
@@ -22,11 +25,11 @@ export interface PlatformActor {
  * session version and location membership.
  */
 export async function platformActor(): Promise<PlatformActor> {
-  const { db, identity } = await requireBtbAccess("platform", false, { allowLocationWorkspace: true });
+  const { db, identity, session } = await requireBtbAccess("platform", false, { allowLocationWorkspace: true });
   if (!identity.employeeId || !identity.sessionVersion) {
     throw new BtbApiError("Sign in with your individual employee account to use the location workspace.", 401);
   }
-  return { db, employeeId: identity.employeeId, sessionVersion: identity.sessionVersion, role: identity.role };
+  return { db, employeeId: identity.employeeId, sessionVersion: identity.sessionVersion, role: identity.role, workspace: session, locationId: session.claims.locationId };
 }
 
 /**

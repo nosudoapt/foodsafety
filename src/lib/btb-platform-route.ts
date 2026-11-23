@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { apiFailure, PRIVATE_HEADERS, requireBtbOrigin } from "./btb-api";
 import { platformActor, platformRpc, type PlatformActor } from "./btb-platform-server";
+import { BtbApiError } from "./api-errors";
+import { inWorkspace } from "./workspace-request-context";
 
 export { platformActor, platformRpc };
 export type { PlatformActor };
@@ -22,7 +24,10 @@ export function platformRoute<A extends unknown[], B>(
   return async (request: Request, ...rest: A): Promise<NextResponse | Response> => {
     try {
       if (methods.includes(request.method)) requireBtbOrigin(request);
-      const data = await handler(await platformActor(), request, ...rest);
+       const actor = await platformActor();
+       const selected = new URL(request.url).searchParams.get("location");
+       if (selected !== null && selected !== actor.locationId) throw new BtbApiError("This location is not the current workspace.", 403);
+       const data = await inWorkspace({ claims: actor.workspace.claims, db: actor.db }, () => handler(actor, request, ...rest));
       if (data instanceof Response) return data;
       return NextResponse.json(data, { headers: PLATFORM_HEADERS });
     } catch (error) {

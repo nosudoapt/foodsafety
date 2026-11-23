@@ -1,32 +1,35 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { apiFailure, btbIdentityFromSession, PRIVATE_HEADERS } from "@/lib/btb-api";
+import { apiFailure, PRIVATE_HEADERS } from "@/lib/btb-api";
 import { BTB_RESTAURANT } from "@/lib/btb-roles";
-import { inventoryDb } from "@/lib/supabase-server";
 import { loadBtbEffectiveAccess } from "@/lib/btb-effective-access";
-import { BTB_COOKIE } from "@/lib/btb-auth";
+import { requireWorkspaceSession, workspaceBtbIdentity } from "@/lib/workspace-auth-server";
+import { inWorkspace } from "@/lib/workspace-request-context";
 
-// Who is signed in to BTB (used by the hub header). Signed-out callers get no
-// account list at all: the live sign-in is individual-only, and neither shared
-// role addresses nor employee emails may be enumerated anonymously.
-export async function GET() {
+// Who is signed in to BTB (used by the hub header). The identity comes from the
+// one verified workspace session, so a signed-out caller gets nothing at all and
+// nobody can enumerate employee names, roles or emails anonymously.
+export async function GET(request: Request) {
   try {
-  const cookieStore = await cookies();
-  const identity = await btbIdentityFromSession(cookieStore.get(BTB_COOKIE)?.value);
-
-  if (!identity) {
-    return NextResponse.json({ authenticated: false }, { headers: PRIVATE_HEADERS });
+    const session = await requireWorkspaceSession();
+    const identity = workspaceBtbIdentity(session);
+    const access = await inWorkspace({ claims: session.claims, db: session.db },
+      () => loadBtbEffectiveAccess(session.db, identity));
+    return NextResponse.json({
+      authenticated: true,
+      role: identity.role,
+      email: identity.email,
+      name: identity.name,
+      employeeId: identity.employeeId,
+      sessionVersion: identity.sessionVersion,
+      restaurant: BTB_RESTAURANT,
+      locationId: session.claims.locationId,
+      access,
+    }, { headers: PRIVATE_HEADERS });
+  } catch (error) {
+    // A signed-out visitor (or a principal outside BTB) simply is not signed in.
+    if (error instanceof Error && "status" in error && (error as { status?: number }).status === 401) {
+      return NextResponse.json({ authenticated: false }, { headers: PRIVATE_HEADERS });
+    }
+    return apiFailure(error, request);
   }
-
-  return NextResponse.json({
-    authenticated: true,
-    role: identity.role,
-    email: identity.email,
-    name: identity.name,
-    employeeId: identity.employeeId,
-    sessionVersion: identity.sessionVersion,
-    restaurant: BTB_RESTAURANT,
-    access: await loadBtbEffectiveAccess(inventoryDb(), identity),
-  }, { headers: PRIVATE_HEADERS });
-  } catch (error) { return apiFailure(error); }
 }

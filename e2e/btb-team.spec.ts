@@ -377,12 +377,12 @@ test("week 4 manager training is invisible to staff and signed off by the owner"
     sections: [{ heading: "Inventory Management", body: "- Conduct inventory checks." }],
   } });
   expect(created.ok()).toBeTruthy();
-  const module = (await created.json()).topic;
+  const trainingTopic = (await created.json()).topic;
 
   await signInEmployee(page, "sam@team.test", "/btb/demo/training-guide");
   await expect(page.getByRole("button", { name: "Week 4 — Management Training" })).toHaveCount(0);
   expect(await (await page.request.get("/api/btb/training")).text()).not.toContain("Week 4 — Management Training");
-  expect((await page.request.post("/api/btb/training", { data: { topic_id: module.id, topic_revision: module.revision, version: 0, completed_sections: [], reviewed: false, notes: "", status: "in_progress" } })).status()).toBe(403);
+   expect((await page.request.post("/api/btb/training", { data: { topic_id: trainingTopic.id, topic_revision: trainingTopic.revision, version: 0, completed_sections: [], reviewed: false, notes: "", status: "in_progress" } })).status()).toBe(403);
 
   await signInEmployee(page, "morgan@team.test", "/btb/demo/training-guide");
   await page.getByRole("button", { name: "Week 4 — Management Training" }).click();

@@ -71,7 +71,7 @@ test("OFF-01: real IndexedDB overflow remains visible and every captured payload
   await fixture.configure({ failures: [{ table: "btb_insert_temp_record", method: "POST", status: 503, times: -1 }] });
   const code = readFileSync(join(process.cwd(), ".test-dist/src/lib/offline-queue.js"), "utf8");
   await page.evaluate(async (source) => {
-    const exports: Record<string, Function> = {}; new Function("exports", source)(exports);
+    const exports = {} as typeof import("../src/lib/offline-queue"); new Function("exports", source)(exports);
     const store = exports.idbStore();
     for (let index = 0; index < 51; index++) await exports.enqueue(store, exports.newOp("temp_record", `Overflow capture ${index}`, { temperature: index }));
   }, code);

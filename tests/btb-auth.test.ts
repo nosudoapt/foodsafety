@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
   BTB_ACCOUNTS,
@@ -12,7 +12,6 @@ import {
   isBtbRole,
   roleFromSession,
   sessionValueFor,
-  sharedWorkspaceLoginEnabled,
   tokenValid,
 } from "../src/lib/btb-auth";
 import { cardsForRole, hiddenCardsForRole, BTB_CARDS } from "../src/lib/btb-hub";
@@ -227,20 +226,17 @@ test("no client component imports the module holding BTB's password", () => {
   assert.deepEqual(offenders, [], `client files must import ./btb-roles, not ./btb-auth: ${offenders.join(", ")}`);
 });
 
-test("shared workspace sign-in is opt-in and off unless BTB_SHARED_LOGIN=1", () => {
-  const saved = process.env.BTB_SHARED_LOGIN;
-  try {
-    delete process.env.BTB_SHARED_LOGIN;
-    assert.equal(sharedWorkspaceLoginEnabled(), false, "live sign-in must be employee-only by default");
-    process.env.BTB_SHARED_LOGIN = "0";
-    assert.equal(sharedWorkspaceLoginEnabled(), false);
-    process.env.BTB_SHARED_LOGIN = "true";
-    assert.equal(sharedWorkspaceLoginEnabled(), false, "only the explicit value 1 opts in");
-    process.env.BTB_SHARED_LOGIN = "1";
-    assert.equal(sharedWorkspaceLoginEnabled(), true);
-  } finally {
-    if (saved === undefined) delete process.env.BTB_SHARED_LOGIN; else process.env.BTB_SHARED_LOGIN = saved;
-  }
+test("the shared workspace door is retired, not merely disabled by a flag", () => {
+  // One sign-in for everyone: the per-role shared door and its API are gone.
+  assert.equal(existsSync(join(ROOT, "src/app/api/btb/login/route.ts")), false);
+  assert.equal(existsSync(join(ROOT, "src/app/api/btb/demo-login/route.ts")), false);
+  assert.equal(existsSync(join(ROOT, "src/app/btb/login/page.tsx")), false);
+  // And nothing can mint the old store cookie any more.
+  const minted = readdirSync("src/app/api", { recursive: true, encoding: "utf8" })
+    .filter((file) => file.endsWith(".ts"))
+    .map((file) => join("src/app/api", file))
+    .filter((file) => /sessionValueFor\(|employeeSessionValueFor\(/.test(read(file)));
+  assert.deepEqual(minted, []);
 });
 
 test("the signed-out response never enumerates shared or employee accounts", () => {
@@ -250,26 +246,27 @@ test("the signed-out response never enumerates shared or employee accounts", () 
   assert.ok(!me.includes("BTB_ACCOUNTS"), "the shared account list must not be returned to anonymous callers");
   assert.ok(!me.includes("btb_employees"), "anonymous callers must not enumerate employee emails");
   assert.ok(me.includes("authenticated: false"), "signed-out response must identify itself");
+  assert.ok(me.includes("requireWorkspaceSession"), "identity comes from the one verified session");
 
-  const login = read("src/app/api/btb/login/route.ts");
-  assert.ok(login.includes("sharedWorkspaceLoginEnabled"), "shared sign-in must be an explicit, off-by-default opt-in");
-  assert.ok(login.includes("accountForCredentials"), "the opted-in QA path still checks BTB's own list");
-  assert.ok(login.includes("httpOnly: true"));
-  assert.ok(login.includes("sessionValueFor"), "cookie must carry the role");
-  assert.ok(login.includes("BTB_COOKIE"), "cookie name must come from btb-auth");
+  const login = read("src/app/api/auth/login/route.ts");
+  assert.ok(login.includes("loginWorkspace"), "the unified door resolves one authoritative credential");
+  assert.ok(login.includes("INVALID_LOGIN"), "a refusal is uniform, never a hint about which store matched");
+  const bridge = read("src/lib/workspace-auth-server.ts");
+  assert.ok(bridge.includes("httpOnly: true"), "the session cookie is httpOnly");
+  assert.ok(!bridge.includes("BTB_COOKIE"), "the retired store cookie is never minted");
 });
 
 // --- 5. the proxy still gates every BTB page --------------------------------
 
-test("proxy cookie-gates BTB, rewrites location slugs and hides the demo door", () => {
+test("proxy gates BTB on the verified session and retires the old doors", () => {
   const source = read("src/proxy.ts");
-  assert.ok(source.includes('pathname === "/btb/login"'));
-  assert.ok(source.includes("tokenValid(session)"));
-  assert.ok(source.includes("btbDemoSlug"));
+  assert.ok(source.includes("workspaceSessionFromValue"), "the proxy verifies the signed session");
+  assert.ok(source.includes("retiredDoor"), "/btb/login and friends redirect to the unified door");
+  assert.ok(source.includes("pathWithin(path, \"/btb\")") || source.includes('pathWithin(path, "/btb")'), "BTB pages are gated");
+  assert.ok(source.includes("workspacePageAllowed"), "each page is checked against the session");
   assert.ok(source.includes("x-btb-slug"), "the resolved location slug reaches the server layout");
   assert.ok(source.includes("NextResponse.rewrite"), "location URLs render the existing pages without exposing /btb/demo");
-  assert.ok(source.includes('url.pathname = "/btb/login"'));
-  assert.ok(source.includes('url.searchParams.set("next", pathname'));
+  assert.ok(source.includes("requestHeaders.delete(name)") && source.includes('"x-btb-slug"'), "a client cannot inject a branch header");
 });
 
 // --- 6. BTB stays decoupled from the green demo -----------------------------

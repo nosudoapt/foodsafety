@@ -1,7 +1,6 @@
 "use client";
 
 import { useId, useState } from "react";
-import { useRouter } from "next/navigation";
 import { KeyRound } from "lucide-react";
 import { Button, Input } from "@/components/ui";
 import { fetchJson, RequestError } from "@/lib/fetch-json";
@@ -10,7 +9,6 @@ import type { BtbAdminIdentity } from "@/lib/btb-admin";
 const EMPTY = { currentPassword: "", newPassword: "", confirm: "" };
 
 export default function BtbAdminAccount({ admin }: { admin: BtbAdminIdentity }) {
-  const router = useRouter();
   const id = useId();
   const [form, setForm] = useState(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -31,8 +29,9 @@ export default function BtbAdminAccount({ admin }: { admin: BtbAdminIdentity }) 
         body: JSON.stringify({ currentPassword: form.currentPassword, newPassword: form.newPassword }),
       });
       setForm(EMPTY);
-      setNotice("Password updated. Any other console session has been signed out; this one stays active.");
-      router.refresh();
+      setNotice("Password updated. Signing you out so you can use it…");
+      // The version bump retires every issued cookie, including this one.
+      window.location.replace("/auth/sign-in");
     } catch (cause) {
       setError(cause instanceof RequestError ? cause.message : "Could not change the password. Check your connection and try again.");
     } finally { setBusy(false); }

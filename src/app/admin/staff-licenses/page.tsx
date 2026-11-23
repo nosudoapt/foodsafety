@@ -1,5 +1,3 @@
-"use client";
-import StaffLicenses from "@/components/StaffLicenses";
-export default function Page() {
-  return <StaffLicenses />;
-}
+import WorkspaceServerPage from "@/components/WorkspaceServerPage";
+import View from "./view";
+export default async function Page() { return await WorkspaceServerPage({ path: "/admin/staff-licenses", children: <View /> }); }

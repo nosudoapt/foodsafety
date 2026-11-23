@@ -162,21 +162,16 @@ test("designer is walled into the Marketing Portal", () => {
   }
 });
 
-// The proxy matcher drives both gates: the Supabase gate (PROTECTED_PREFIXES)
-// and BTB's cookie/CSRF gates. Non-BTB entries mirror the Supabase list.
-test("proxy matcher stays in sync with PROTECTED_PREFIXES", () => {
+// The proxy matcher is a deliberate catch-all: any new route is gated by
+// default, and only build output/static files skip the session check.
+test("proxy matcher is a catch-all so no route can silently skip the gate", () => {
   const source = readFileSync(join(__dirname, "../../src/proxy.ts"), "utf8");
   const block = source.match(/matcher:\s*\[([\s\S]*?)\]/);
   assert.ok(block, "proxy config.matcher not found");
   const entries = [...block[1].matchAll(/"([^"]+)"/g)].map((m) => m[1]);
-  assert.ok(entries.length > 0);
-  for (const entry of entries) {
-    assert.ok(entry.endsWith("/:path*"), `${entry} must end in /:path*`);
-  }
-  const prefixes = entries.map((e) => e.replace(/\/:path\*$/, ""));
-
-  assert.ok(prefixes.includes("/btb"), "Both BTB surfaces must be matched for their own cookie gates");
-  assert.ok(prefixes.includes("/api/btb"), "BTB APIs must be matched so the extra CSRF gate runs");
-  const supabaseGated = prefixes.filter((p) => p !== "/btb" && p !== "/api/btb");
-  assert.deepEqual([...supabaseGated].sort(), [...PROTECTED_PREFIXES].sort());
+  assert.deepEqual(entries, ["/:path*"], "one catch-all entry, nothing quietly excluded");
+  assert.ok(entries.every((entry) => entry.endsWith("/:path*")));
+  // Static output is skipped inside the handler instead of by the matcher.
+  assert.match(source, /_next\\\//);
+  assert.match(source, /workspacePageAllowed/);
 });

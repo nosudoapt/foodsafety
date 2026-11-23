@@ -140,7 +140,9 @@ export const ADMIN_NAV: AdminNavGroup[] = [
         label: "Corporate Inspection",
         href: "/admin/inspections/corporate",
         icon: "corporate",
-        roles: MGMT,
+        // HQ-only, matching ADMIN_ROUTE_ROLES — a manager must not see a link
+        // the route guard will refuse.
+        roles: OWNER,
         keywords: "group audit corporate visit",
       },
     ],

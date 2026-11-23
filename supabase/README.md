@@ -112,6 +112,7 @@ are idempotent (safe to re-run).
 | 55 | `schema-btb-inventory-location-scope.sql` | Month-end inventory per branch: legacy rows backfilled to Drumheller, branch-scoped indexes and uniqueness, and a seed helper so a new branch gets its own copy of the item list. |
 | 56 | `schema-btb-cleaning-cashout-server.sql` | Cleaning schedule and cash-out move behind server endpoints: branch and week columns on cleaning_logs, one till count per branch per day, and browser writes revoked on cleaning_logs, cash_outs, prep_counts and order_sheets. |
 | 57 | `schema-workspace-auth-cutover.sql` | Unified auth prerequisites: canonical tenants/principals, linked collision credential archives, protected signup/profile privileges, explicit console assignments, durable limits and revocable sessions. Unresolved legacy ownership stays unassigned. Apply once through the checksum-tracked runner. |
+| 58 | `schema-workspace-session-scope.sql` | Request-bound SQL and atomic session switching; owner/corporate/console roles still require explicit same-tenant assignments. Retires browser bearer tokens and raw data/RPC access. Adds nullable scope columns without legacy backfills. |
 
 
 ## Role set — single source of truth

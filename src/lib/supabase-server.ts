@@ -24,6 +24,7 @@
 
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { requestWorkspace } from "./workspace-request-context";
 
 let cached: { url: string; client: SupabaseClient } | null = null;
 
@@ -39,6 +40,17 @@ export function inventoryDb(): SupabaseClient {
   if (typeof window !== "undefined") {
     throw new Error("inventoryDb() is server-only — browsers must never hold this client.");
   }
+  // Legacy helper calls inherit the verified request's strict scope too. This
+  // store is request-local; it never persists an identity on the cached client.
+  const scope = requestWorkspace();
+  if (scope) return scope.db;
+  return serviceDb();
+}
+
+/** Unscoped infrastructure client. Only credential/session infrastructure and
+ * trusted background jobs use this; application handlers use their session db. */
+export function serviceDb(): SupabaseClient {
+  if (typeof window !== "undefined") throw new Error("serviceDb() is server-only.");
 
   const url = process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
@@ -53,7 +65,7 @@ export function inventoryDb(): SupabaseClient {
   if (cached?.url === url) return cached.client;
 
   const client = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
   });
   cached = { url, client };
   return client;

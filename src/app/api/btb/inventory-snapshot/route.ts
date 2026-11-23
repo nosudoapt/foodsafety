@@ -1,7 +1,5 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE } from "@/lib/btb-auth";
-import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure } from "@/lib/btb-api";
 import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const GET = btbInventoryRoute(readSnapshot);
@@ -13,9 +11,8 @@ import { isMonthKey } from "@/lib/month-end-inventory";
 // reopened months as draft so they can be corrected and re-finalized.
 async function readSnapshot(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
-  if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  // The workspace session already resolved and authorized this branch.
+  const role = scope.identity.role;
 
   const { searchParams } = new URL(req.url);
   const month = searchParams.get("month");

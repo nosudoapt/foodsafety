@@ -15,7 +15,7 @@ export default function BtbAdminShell({ admin, children }: { admin: BtbAdminIden
   const [error, setError] = useState("");
   async function signOut() {
     if (busy) return; setBusy(true); setError("");
-    try { await fetchJson("/api/btb/admin/logout", { method: "POST" }); router.replace("/btb/admin/login"); router.refresh(); }
+    try { await fetchJson("/api/auth/logout", { method: "POST" }); window.location.replace("/auth/sign-in"); }
     catch { setError("Could not sign out of the console. Please try again."); }
     finally { setBusy(false); }
   }

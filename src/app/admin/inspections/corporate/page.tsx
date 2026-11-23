@@ -1,5 +1,3 @@
-"use client";
-import InspectionForm from "@/components/InspectionForm";
-export default function CorporateInspectionPage() {
-  return <InspectionForm type="corporate" />;
-}
+import WorkspaceServerPage from "@/components/WorkspaceServerPage";
+import View from "./view";
+export default async function Page() { return await WorkspaceServerPage({ path: "/admin/inspections/corporate", children: <View /> }); }

@@ -1,5 +1,3 @@
-"use client";
-import EmergencyContacts from "@/components/EmergencyContacts";
-export default function Page() {
-  return <EmergencyContacts />;
-}
+import WorkspaceServerPage from "@/components/WorkspaceServerPage";
+import View from "./view";
+export default async function Page() { return await WorkspaceServerPage({ path: "/admin/emergency", children: <View /> }); }

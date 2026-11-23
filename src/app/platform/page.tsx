@@ -9,6 +9,11 @@ import { Activity, Building2, Database, DollarSign, KeyRound, LockKeyhole, Refre
 // Both products appear here as clients only: usage heatmap, storage (GB),
 // visits, active users and the pricing game (plan / seats / $ per month).
 
+// The heatmap is the last 30 days, so its labels need one stable "now". Reading
+// the clock at render time is impure; reading it once when this module loads is
+// not, and the page is a client bundle that loads fresh each visit.
+const HEATMAP_BASE = Date.now();
+
 interface ClientRow {
   restaurant_name: string;
   views30d: number;
@@ -194,6 +199,9 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
   }, []);
 
   useEffect(() => {
+    // The one initial fetch. State updates land in the promise callbacks below,
+    // not synchronously in this effect body.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load only
     void load();
   }, [load]);
 
@@ -265,7 +273,7 @@ function Dashboard({ onSignOut }: { onSignOut: () => void }) {
                     {data.heatmap.map((day, di) => (
                       <tr key={di}>
                         <td className="text-[9px] text-slate-400 pr-1 whitespace-nowrap">
-                          {new Date(Date.now() - (29 - di) * 86_400_000).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                          {new Date(HEATMAP_BASE - (29 - di) * 86_400_000).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
                         </td>
                         {day.map((count, hour) => (
                           <td key={hour}>

@@ -274,6 +274,11 @@
       "step": 57,
       "file": "schema-workspace-auth-cutover.sql",
       "description": "Unified auth prerequisites: canonical tenants/principals, linked collision credential archives, safe signup/profile privileges, explicit console assignments, durable login limits and revocable sessions. Legacy ownership is not guessed."
+    },
+    {
+      "step": 58,
+      "file": "schema-workspace-session-scope.sql",
+      "description": "Verified current-location SQL context, atomic session creation/switching, explicit console/employee membership without role bypass, scoped operational writes, and retirement of direct browser data/RPC capabilities. Legacy null ownership remains unresolved."
     }
   ]
 }

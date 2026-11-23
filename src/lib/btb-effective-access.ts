@@ -7,11 +7,12 @@ import { isUuid, type BtbIdentity } from "./btb-team";
 /** Request-time only. Neither restrictions nor location grants are cached across
  * requests, and a failed/missing resolver never becomes legacy access. */
 export async function loadBtbEffectiveAccess(db: SupabaseClient, identity: BtbIdentity): Promise<BtbEffectiveAccess> {
+  if (!identity.employeeId || !identity.tenantId || !identity.currentLocationId) throw new BtbApiError("No active workspace assigned — contact your manager", 403);
   let query = db.from("role_page_access").select("role,page,allowed");
   if (identity.role !== "admin") query = query.eq("role", identity.role);
   const [restrictions, assigned] = await Promise.all([
     query.abortSignal(AbortSignal.timeout(10_000)),
-    identity.employeeId ? db.rpc("btb_employee_page_grants", { p_employee: identity.employeeId }) : Promise.resolve({ data: { locationIds: [], pageGrants: null }, error: null }),
+    db.rpc("workspace_btb_page_grants", { p_employee: identity.employeeId, p_location: identity.currentLocationId }),
   ]);
   if (restrictions.error || assigned.error || !Array.isArray(restrictions.data) || !restrictions.data.every(isBtbPageAccess)) {
     throw new BtbApiError("Page access could not be verified. Please try again.", 503, restrictions.error ?? assigned.error);

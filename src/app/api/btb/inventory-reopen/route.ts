@@ -1,7 +1,5 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE } from "@/lib/btb-auth";
-import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure } from "@/lib/btb-api";
 import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const POST = btbInventoryRoute(reopenMonth);
@@ -22,9 +20,8 @@ const MANAGER_ROLES = ["manager", "admin"];
 
 async function reopenMonth(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
-  if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  // The workspace session already resolved and authorized this branch.
+  const role = scope.identity.role;
   if (!MANAGER_ROLES.includes(role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));

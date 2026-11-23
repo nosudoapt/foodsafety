@@ -1,7 +1,3 @@
-"use client";
-
-import VaultManager from "@/components/VaultManager";
-
-export default function VaultPage() {
-  return <VaultManager />;
-}
+import WorkspaceServerPage from "@/components/WorkspaceServerPage";
+import View from "./view";
+export default async function Page() { return await WorkspaceServerPage({ path: "/admin/vault", children: <View /> }); }

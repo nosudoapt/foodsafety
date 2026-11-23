@@ -1,5 +1,3 @@
-"use client";
-import NewRestaurantChecklist from "@/components/NewRestaurantChecklist";
-export default function Page() {
-  return <NewRestaurantChecklist />;
-}
+import WorkspaceServerPage from "@/components/WorkspaceServerPage";
+import View from "./view";
+export default async function Page() { return await WorkspaceServerPage({ path: "/admin/new-restaurant", children: <View /> }); }

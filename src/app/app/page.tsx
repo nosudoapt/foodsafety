@@ -1,26 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { ShieldCheck, UtensilsCrossed, ArrowRight } from "lucide-react";
+import { ShieldCheck, ArrowRight } from "lucide-react";
 
 const products = [
   {
     href: "/auth/sign-in",
     tag: "Access",
     title: "Pholo Manager",
-    desc: "Digital HACCP — temperatures, checks, cleaning, allergens and compliance records.",
+    desc: "Digital HACCP, prep and cleaning, allergens, training and every site you run — one register.",
     icon: ShieldCheck,
     accent: "green",
     cta: "Sign in",
-  },
-  {
-    href: "/btb/login",
-    tag: "Client",
-    title: "Between the Buns",
-    desc: "Dedicated staff hub — prep counts, cleaning schedules, recipes and store operations.",
-    icon: UtensilsCrossed,
-    accent: "red",
-    cta: "Staff sign-in",
   },
 ];
 
@@ -31,12 +22,6 @@ const styles = {
     icon: "bg-green-600",
     cta: "text-green-700",
   },
-  red: {
-    ring: "hover:border-red-400",
-    chip: "bg-red-100 text-red-700",
-    icon: "bg-red-600",
-    cta: "text-red-700",
-  },
 } as const;
 
 export default function Home() {
@@ -46,10 +31,10 @@ export default function Home() {
         <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 tracking-tight">
           Restaurant Operations Platform
         </h1>
-        <p className="text-slate-500 mt-2">Choose a workspace to continue</p>
+        <p className="text-slate-500 mt-2">One account, every workspace you are assigned.</p>
       </div>
 
-      <div className="grid w-full max-w-3xl gap-5 sm:grid-cols-2 stagger">
+      <div className="grid w-full max-w-xl gap-5">
         {products.map((p) => {
           const s = styles[p.accent as keyof typeof styles];
           const Icon = p.icon;
@@ -82,3 +67,4 @@ export default function Home() {
     </div>
   );
 }
+

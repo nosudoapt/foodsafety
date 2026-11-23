@@ -1,10 +1,8 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE } from "@/lib/btb-auth";
-import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
 import { isMonthKey, prevMonth } from "@/lib/month-end-inventory";
-import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, parseCountSave, requireRole } from "@/lib/btb-inventory-api";
+import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, parseCountSave } from "@/lib/btb-inventory-api";
 import { requireEditableMonth } from "@/lib/inventory-server-guards";
 import { replaceRows } from "@/lib/persist-replace";
 import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
@@ -26,10 +24,6 @@ const COUNT_COLS = "id, item_id, count_month, qty, counted_by, location_id";
 // the stored food-sales figure in one round trip.
 async function readCounts(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), INVENTORY_READ_ROLES);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
   const month = new URL(req.url).searchParams.get("month");
   if (!isMonthKey(month)) return NextResponse.json({ error: "invalid month" }, { status: 400 });
 
@@ -54,10 +48,7 @@ async function readCounts(scope: BtbInventoryScope, req: Request) {
 // Save the count sheet for a month (replace semantics, restore-on-failure).
 async function saveCounts(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
+  const role = scope.identity.role;
   const body = await req.json().catch(() => ({}));
   const parsed = parseCountSave(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -86,7 +77,7 @@ async function saveCounts(scope: BtbInventoryScope, req: Request) {
   // empty sheet clears the month.
   const toInsert = rows
     .filter((r) => r.qty > 0)
-    .map((r) => ({ item_id: r.item_id, count_month: month, qty: r.qty, counted_by: auth.role, location_id: locationId }));
+    .map((r) => ({ item_id: r.item_id, count_month: month, qty: r.qty, counted_by: role, location_id: locationId }));
 
   const outcome = await replaceRows({
     label: "count sheet save",

@@ -15,11 +15,11 @@ export function createBtbInvitation(origin: string, name: string, location: stri
   const base = new URL(origin);
   if (!["http:", "https:"].includes(base.protocol) || base.username || base.password) throw new BtbApiError("Open invitations from your BTB console.");
   const token = randomBytes(32).toString("hex");
-  const link = new URL("/btb/login/set-password", base.origin);
+  const link = new URL("/auth/set-password", base.origin);
   link.searchParams.set("token", token);
   return { tokenHash: invitationTokenHash(token), link: link.href,
     subject: "Your Between the Buns workspace invitation",
-    body: `Hi ${name},\n\nYou’ve been invited to the Between the Buns workspace at ${location}.\n\nSet your own password using this single-use link (valid for seven days):\n${link.href}\n\nAlready have a BTB employee password? This link replaces it and signs out older employee sessions. Your account is the same across assigned locations.\n\nAfter setup, sign in at ${base.origin}/btb/login with your employee email. Shared demo and console passwords are separate.\n\nIf you weren’t expecting this invitation, contact your administrator.`,
+    body: `Hi ${name},\n\nYou’ve been invited to the Between the Buns workspace at ${location}.\n\nSet your own password using this single-use link (valid for seven days):\n${link.href}\n\nAlready have a BTB employee password? This link replaces it and signs out older employee sessions. Your account is the same across assigned locations.\n\nAfter setup, sign in at ${base.origin}/auth/sign-in with your employee email. Shared demo and console passwords are separate.\n\nIf you weren’t expecting this invitation, contact your administrator.`,
   };
 }
 

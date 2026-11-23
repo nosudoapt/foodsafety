@@ -1,11 +1,9 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE } from "@/lib/btb-auth";
 import { legacyBtbRole as roleFromSession } from "@/lib/btb-api";
 import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const GET = btbInventoryRoute(readHealth);
-import { MONTH_END_EDIT_ROLES, requireRole } from "@/lib/btb-inventory-api";
+import { MONTH_END_EDIT_ROLES } from "@/lib/btb-inventory-api";
 import { hasServiceRoleKey, inventoryDb } from "@/lib/supabase-server";
 
 const REQUIRED_TABLES = [
@@ -26,10 +24,6 @@ const REQUIRED_TABLES = [
  */
 async function readHealth(scope: BtbInventoryScope) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
   if (!hasServiceRoleKey()) {
     return NextResponse.json({ error: "privileged database client is not configured" }, { status: 503 });
   }

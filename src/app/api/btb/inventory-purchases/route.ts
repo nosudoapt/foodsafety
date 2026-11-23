@@ -1,7 +1,5 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE } from "@/lib/btb-auth";
-import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure } from "@/lib/btb-api";
 import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
 export const GET = btbInventoryRoute(readPurchases);
@@ -20,9 +18,8 @@ const PURCHASE_ROLES = ["manager", "supervisor", "corporate", "admin"];
 
 async function savePurchase(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
-  if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  // The workspace session already resolved and authorized this branch.
+  const role = scope.identity.role;
   if (!PURCHASE_ROLES.includes(role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
@@ -101,9 +98,8 @@ async function savePurchase(scope: BtbInventoryScope, req: Request) {
 // List a month's purchases (any signed-in role — read-only).
 async function readPurchases(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const role = await roleFromSession(cookieStore.get(BTB_COOKIE)?.value);
-  if (!role) return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  // The workspace session already resolved and authorized this branch.
+  const role = scope.identity.role;
 
   const { searchParams } = new URL(req.url);
   const month = searchParams.get("month");

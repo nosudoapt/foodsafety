@@ -1,9 +1,7 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-import { BTB_COOKIE } from "@/lib/btb-auth";
-import { databaseFailure, legacyBtbRole as roleFromSession } from "@/lib/btb-api";
+import { databaseFailure } from "@/lib/btb-api";
 import { inventoryDb } from "@/lib/supabase-server";
-import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, assertEditableItem, isUuid, parseNewItem, requireRole } from "@/lib/btb-inventory-api";
+import { INVENTORY_READ_ROLES, MONTH_END_EDIT_ROLES, assertEditableItem, isUuid, parseNewItem } from "@/lib/btb-inventory-api";
 import { requireItemWithoutFinalizedHistory } from "@/lib/inventory-server-guards";
 import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
@@ -29,10 +27,6 @@ const ITEM_COLS = "id, name, unit, unit_size, category, unit_cost, position, loc
 
 async function readItems(scope: BtbInventoryScope) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), INVENTORY_READ_ROLES);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
   const { data, error } = await inventoryDb()
     .from("inventory_items")
     .select(ITEM_COLS)
@@ -45,10 +39,6 @@ async function readItems(scope: BtbInventoryScope) {
 
 async function createItem(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
   const body = await req.json().catch(() => ({}));
   const parsed = parseNewItem(body);
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
@@ -100,10 +90,6 @@ async function createItem(scope: BtbInventoryScope, req: Request) {
 
 async function updateItem(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
   const id = new URL(req.url).searchParams.get("id");
   if (!isUuid(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
 
@@ -147,10 +133,6 @@ async function updateItem(scope: BtbInventoryScope, req: Request) {
 // A master item is retired by counting 0, never by vanishing from the sheet.
 async function deleteItem(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
-  const cookieStore = await cookies();
-  const auth = requireRole(await roleFromSession(cookieStore.get(BTB_COOKIE)?.value), MONTH_END_EDIT_ROLES);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
   const id = new URL(req.url).searchParams.get("id");
   if (!isUuid(id)) return NextResponse.json({ error: "invalid id" }, { status: 400 });
 

@@ -1,5 +1,3 @@
-"use client";
-import ComplianceRegister from "@/components/ComplianceRegister";
-export default function Page() {
-  return <ComplianceRegister />;
-}
+import WorkspaceServerPage from "@/components/WorkspaceServerPage";
+import View from "./view";
+export default async function Page() { return await WorkspaceServerPage({ path: "/admin/compliance", children: <View /> }); }

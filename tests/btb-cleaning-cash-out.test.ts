@@ -22,16 +22,19 @@ test("both endpoints resolve the branch from the session, never from the body", 
   }
 });
 
-test("a real employee with no assigned branch is refused, a shared tablet keeps its tenant", () => {
+test("a session without a branch is refused: there is no shared/unowned tenant", () => {
   for (const route of [CLEANING, CASH_OUT]) {
     const source = read(route);
     assert.match(source, /if \(!location && context\.identity\.employeeId\)/);
     assert.match(source, /Ask your manager to assign one/, `${route} must fail closed for an unassigned employee`);
+    // No handler may fall back to rows with no location.
+    assert.ok(!source.includes('.is("location_id", null)'));
   }
-  // The legacy/shared tenant is expressed by withLocation's `is null` branch,
-  // not by the route handing out an unfiltered query.
+  // The filter helper itself refuses to run without a branch.
   const context = read("src/lib/btb-location-context.ts");
-  assert.match(context, /return location \? filter\.eq\("location_id", location\.id\) : filter\.is\("location_id", null\)/);
+  assert.match(context, /export function withLocation<Q>\(query: Q, location: BtbLocationContext \| null\): Q \{/);
+  assert.match(context, /if \(!location\) throw new BtbApiError\("No active workspace assigned — contact your manager", 403\)/);
+  assert.match(context, /return filter\.eq\("location_id", location\.id\)/);
 });
 
 test("reads and writes are gated on the feature matrix, so cash-out stays manager-only", () => {
@@ -39,10 +42,13 @@ test("reads and writes are gated on the feature matrix, so cash-out stays manage
   assert.match(read(CLEANING), /btbRoute\("cleaning_schedule", true/);
   assert.match(read(CASH_OUT), /btbRoute\("cash_out", false/);
   assert.match(read(CASH_OUT), /btbRoute\("cash_out", true/);
-  // The route wrapper refuses anonymous callers with 401 before the handler runs.
+  // Authentication is the one verified workspace session, not a BTB cookie.
+  const auth = read("src/lib/workspace-auth-server.ts");
+  assert.match(auth, /throw new BtbApiError\("Please sign in to continue\.", 401\)/);
   const api = read("src/lib/btb-api.ts");
-  assert.match(api, /throw new BtbApiError\("Please sign in to continue\.", 401\)/);
+  assert.match(api, /const session = options\?\.session \?\? await requireWorkspaceSession\(\)/);
   assert.match(api, /throw new BtbApiError\("Your role cannot make this change\.", 403\)/);
+  assert.ok(!api.includes("BTB_COOKIE"), "btb-api must not read the retired BTB cookie");
   // And the matrix itself: staff may read the till but never write it.
   assert.equal(btbCanView("cash_out", "staff"), true);
   assert.equal(btbCanEdit("cash_out", "staff"), false);

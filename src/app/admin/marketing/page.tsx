@@ -1,5 +1,3 @@
-"use client";
-import MarketingBoard from "@/components/MarketingBoard";
-export default function Page() {
-  return <MarketingBoard />;
-}
+import WorkspaceServerPage from "@/components/WorkspaceServerPage";
+import View from "./view";
+export default async function Page() { return await WorkspaceServerPage({ path: "/admin/marketing", children: <View /> }); }
