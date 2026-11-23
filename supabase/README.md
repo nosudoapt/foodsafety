@@ -108,6 +108,7 @@ are idempotent (safe to re-run).
 | 51 | `schema-btb-auth-hardening.sql` | Sign-in hardening: failures only counted, cleared on success, per-IP throttle, and 30 days of attempt history for the console. |
 | 52 | `schema-btb-location-scope.sql` | Branch isolation for the daily tools: temperature standards and order sheets gain a location, and location-aware writers replace the restaurant-wide ones so one branch cannot read or change another's temperature log, checklists, order sheet or staff schedule. |
 | 53 | `schema-btb-prep-sheet.sql` | Prep sheet workflow: per-branch weekly PAR levels, section assignments, autosaved drafts, submissions with in-app manager notices, comments and 45 days of history. |
+| 54 | `schema-btb-edit-log.sql` | Field-level audit of prep and order sheet changes, branch scoped and readable only by owner, supervisor and corporate. |
 
 
 ## Role set — single source of truth

@@ -254,6 +254,11 @@
       "step": 53,
       "file": "schema-btb-prep-sheet.sql",
       "description": "Prep sheet workflow: per-branch weekly PAR levels, section assignments, autosaved drafts, submissions with in-app manager notices, comments and 45 days of history."
+    },
+    {
+      "step": 54,
+      "file": "schema-btb-edit-log.sql",
+      "description": "Field-level audit of prep and order sheet changes (tenant and branch scoped), readable only by owner, supervisor and corporate."
     }
   ]
 }

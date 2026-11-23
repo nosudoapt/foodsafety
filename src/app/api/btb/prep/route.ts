@@ -4,6 +4,7 @@ import {
   prepSubmitState, prepSubmissionNotice, visiblePrepCategories,
 } from "@/lib/btb-prep";
 import { btbToday, isIsoDate, isUuid } from "@/lib/btb-team";
+import { diffSheet, recordEdits } from "@/lib/btb-edit-log";
 
 const MANAGE_ROLES = ["manager", "supervisor", "owner", "corporate"];
 const MAX_ITEMS = 400;
@@ -169,6 +170,14 @@ export const POST = btbRoute("prep_list", true, async (context, request) => {
         };
       });
     const state = prepSubmitState(rows.map((row) => ({ key: row.item_name, done: row.done })));
+    const cellOf = (row: Record<string, unknown>) => ({ "OH": String(row.on_hand ?? ""), "Pull": String(row.pull ?? ""), "Done": row.done === true ? "true" : "false" });
+    await recordEdits(db, diffSheet(
+      Object.fromEntries(((savedRows.data ?? []) as Record<string, unknown>[]).map((row) => [String(row.item_name), cellOf(row)])),
+      Object.fromEntries(rows.map((row) => [row.item_name, cellOf(row)])),
+      { tenant_id: "Between the Buns", location_id: location.id, area: "prep", sheet_date: day,
+        actor_id: identity.employeeId, actor_name: identity.name, actor_role: identity.role },
+      (item) => rows.find((row) => row.item_name === item)?.category ?? "",
+    ));
     const replaced = await db.from("prep_counts").delete().eq("location_id", location.id).eq("count_date", day).in("category", allowed);
     dbError(replaced.error, "The day's sheet could not be replaced. Nothing was changed.");
     const inserted = await db.from("prep_counts").insert(rows);
@@ -218,6 +227,17 @@ export const POST = btbRoute("prep_list", true, async (context, request) => {
           set_by: identity.employeeId, set_by_name: identity.name, set_at: new Date().toISOString(),
         };
       });
+      const previousLevels = await db.from("btb_prep_par_levels").select("item_key,unit,par,urgent,category")
+        .eq("location_id", location.id).eq("week_start", week);
+      dbError(previousLevels.error, "The previous PAR levels could not be read.");
+      const parCell = (row: Record<string, unknown>) => ({ "PAR": String(row.par ?? ""), "Unit": String(row.unit ?? ""), "Urgent": row.urgent === true ? "urgent" : "" });
+      await recordEdits(db, diffSheet(
+        Object.fromEntries(((previousLevels.data ?? []) as Record<string, unknown>[]).map((row) => [String(row.item_key), parCell(row)])),
+        Object.fromEntries(clean.map((row) => [row.item_key, parCell(row)])),
+        { tenant_id: "Between the Buns", location_id: location.id, area: "prep", sheet_date: btbToday(),
+          actor_id: identity.employeeId, actor_name: identity.name, actor_role: identity.role },
+        (item) => clean.find((row) => row.item_key === item)?.category ?? "",
+      ));
       const cleared = await db.from("btb_prep_par_levels").delete().eq("location_id", location.id).eq("week_start", week);
       dbError(cleared.error, "The previous PAR levels could not be replaced.");
       if (clean.length) {
