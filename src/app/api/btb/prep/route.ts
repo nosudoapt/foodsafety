@@ -4,7 +4,7 @@ import {
   prepSubmitState, prepSubmissionNotice, visiblePrepCategories,
 } from "@/lib/btb-prep";
 import { btbToday, isIsoDate, isUuid } from "@/lib/btb-team";
-import { diffSheet, recordEdits } from "@/lib/btb-edit-log";
+import { canViewEditLog, diffSheet, recordEdits } from "@/lib/btb-edit-log";
 
 const MANAGE_ROLES = ["manager", "supervisor", "owner", "corporate"];
 const MAX_ITEMS = 400;
@@ -94,6 +94,7 @@ export const GET = btbRoute("prep_list", false, async (context, request) => {
     team: (staff.data ?? []).map((row) => ({ id: row.id, name: row.name, role: row.role })),
     comments: comments.data ?? [], notices: notices.data ?? [], submissions: submissions.data ?? [],
     employeeId: identity.employeeId,
+    canViewEditLog: canViewEditLog(identity.role),
   };
 }, { allowLocationWorkspace: true, page: "prep-list" });
 

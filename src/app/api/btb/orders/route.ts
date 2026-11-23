@@ -1,6 +1,7 @@
 import { btbRequestLocation, btbRoute, BtbApiError, dbError, readBody } from "@/lib/btb-api";
 import { withLocation } from "@/lib/btb-location-context";
 import { parSetIsCurrent, parWeekStart } from "@/lib/btb-prep";
+import { canViewEditLog, diffSheet, recordEdits } from "@/lib/btb-edit-log";
 import { BTB_RESTAURANT, attributionName, btbToday, isIsoDate, isUuid, isVersion } from "@/lib/btb-team";
 import { validOrderLines } from "@/lib/btb-operations";
 import { BROOKS_ORDER_GUIDE } from "@/lib/brooks-order-guide";
@@ -42,7 +43,8 @@ export const GET = btbRoute("order_sheet", false, async (context, request) => {
     parSet = parSetIsCurrent(mark.data?.set_at as string | undefined);
   }
   return { orders: result.data ?? [], hasMore: !date && result.data?.length === 30, weekStart: week, parSet,
-    canManagePar: ["manager", "supervisor", "owner", "corporate"].includes(identity.role) };
+    canManagePar: ["manager", "supervisor", "owner", "corporate"].includes(identity.role),
+    canViewEditLog: canViewEditLog(identity.role) };
 }, { allowLocationWorkspace: true });
 
 export const POST = btbRoute("order_sheet", true, async (context, request) => {
@@ -71,6 +73,9 @@ export const POST = btbRoute("order_sheet", true, async (context, request) => {
     if (body.lines.some((line) => !catalog.has(line.item_name) && !archived.has(line.item_name))) throw new BtbApiError("One of the items is no longer in this order guide. Reload the guide first.");
   }
   const lines = body.lines.map(({ item_name, par, on_hand }) => ({ item_name, par, on_hand }));
+  const previous = await withLocation(db.from("btb_order_sheets").select("lines")
+    .eq("restaurant_name", BTB_RESTAURANT).eq("order_date", body.date), location).maybeSingle();
+  dbError(previous.error, "The saved order could not be read before saving.");
   const result = await db.rpc("btb_save_order_scoped", {
     p_date: body.date, p_lines: lines, p_version: body.version,
     p_employee_id: identity.employeeId, p_actor: attributionName(identity), p_location: location?.id ?? null,
@@ -78,5 +83,17 @@ export const POST = btbRoute("order_sheet", true, async (context, request) => {
   if (result.error?.code === "40001") throw new BtbApiError("This order changed on another device. Reload the saved version before applying your draft.", 409);
   dbError(result.error, "The order could not be saved. Your draft is still here.");
   if (!result.data?.[0]) throw new BtbApiError("The save was not confirmed. Reload before trying again.", 503);
+  if (location) {
+    const cell = (line: { par?: unknown; on_hand?: unknown }) => ({ "PAR": String(line.par ?? ""), "On hand": String(line.on_hand ?? "") });
+    const before = validOrderLines(previous.data?.lines) ? previous.data.lines : [];
+    const section = new Map<string, string>(BROOKS_ORDER_GUIDE.flatMap((group) => group.items.map((item) => [item.name, group.category] as const)));
+    await recordEdits(db, diffSheet(
+      Object.fromEntries(before.map((line) => [line.item_name, cell(line)])),
+      Object.fromEntries(lines.map((line) => [line.item_name, cell(line)])),
+      { tenant_id: "Between the Buns", location_id: location.id, area: "order", sheet_date: body.date,
+        actor_id: identity.employeeId, actor_name: identity.name, actor_role: identity.role },
+      (item) => section.get(item) ?? "",
+    ));
+  }
   return { order: result.data[0] };
 }, { allowLocationWorkspace: true });

@@ -6,10 +6,13 @@ import { canViewEditLog, EDIT_LOG_DAYS } from "@/lib/btb-edit-log";
  *  in the UI. */
 export const GET = btbRoute(undefined, false, async (context, request) => {
   const { db, identity } = context;
+  const params = new URL(request.url).searchParams;
+  // A cheap capability probe so a page header can decide whether to render the
+  // panel at all, without fetching entries and without leaking any row.
+  if (params.get("permission")) return { canView: canViewEditLog(identity.role) };
   if (!canViewEditLog(identity.role)) throw new BtbApiError("Only an owner or supervisor can read the edit log.", 403);
   const location = await btbRequestLocation(context, request);
   if (!location) throw new BtbApiError("Open a branch workspace to read its edit log.", 400);
-  const params = new URL(request.url).searchParams;
   const area = params.get("area");
   const since = new Date(Date.now() - EDIT_LOG_DAYS * 86_400_000).toISOString();
   let query = db.from("btb_edit_log")

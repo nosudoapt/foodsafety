@@ -10,6 +10,7 @@ import { jsonRequest } from "@/components/btb/Feedback";
 import { prepCategoryItems } from "@/lib/btb-prep";
 import { btbToday } from "@/lib/btb-team";
 import PrintButton from "@/components/PrintButton";
+import EditLogPanel from "@/components/btb/EditLogPanel";
 
 interface Item { key: string; name: string; unit: string; urgent: boolean; custom: boolean; par: number | null; oh: string; make: string | null; pull: string | null; done: boolean }
 interface Section { category: string; mode: "par" | "pull"; assigned: string[]; mine: boolean; items: Item[] }
@@ -20,6 +21,7 @@ interface Sheet {
   date: string; weekStart: string; historyDays: number; canManage: boolean; canSeePar: boolean;
   parSet: boolean | null; categories: Section[]; team: { id: string; name: string; role: string }[];
   comments: Comment[]; notices: Notice[]; submissions: Submission[]; employeeId: string | null;
+  canViewEditLog?: boolean;
 }
 interface Level { category: string; key: string; name: string; unit: string; par: string; urgent: boolean; custom: boolean }
 type Cell = { oh?: string; make?: string; pull?: string; done?: boolean };
@@ -219,6 +221,7 @@ export default function PrepSheet() {
             PAR levels: {sheet.parSet ? "set for this week" : "not set — tap to set"}
           </button>
         )}
+        {sheet?.canViewEditLog && <EditLogPanel area="prep" days={sheet.historyDays} />}
         {sheet && <button type="button" className="ui-button" onClick={() => void submit()}>Submit</button>}
       </header>
 
