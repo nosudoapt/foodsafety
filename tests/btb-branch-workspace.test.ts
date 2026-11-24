@@ -77,3 +77,31 @@ test("the sign-in form cannot paint a false password error", () => {
   assert.match(page, /signedIn\.current = true/, "a late response cannot repaint an error after success");
   assert.match(page, /We couldn’t sign you in just now/, "a platform failure reads like one");
 });
+
+
+test("a branch's page leads with its people, and head-office tools stay out of the way", () => {
+  const hub = read("src", "app", "btb", "demo", "hub.tsx");
+  const cardAt = hub.indexOf("<PeopleCard");
+  const metricsAt = hub.indexOf('aria-label="Key figures"');
+  assert.ok(cardAt > 0 && metricsAt > cardAt, "the people card comes before the figures");
+  assert.match(hub, /const HQ_TOOLS = new Set\(\["franchise_inspection", "marketing", "new_restaurant", "branding_requests", "vault"\]\)/,
+    "the group-only surfaces are named once");
+  assert.match(hub, /const branchMatches = hq \? matches\.filter\(\(card\) => !HQ_TOOLS\.has\(card\.feature\)\) : matches;/);
+  assert.match(hub, /branchMatches\.filter\(\(card\) => btbCardGroup\(card\) === group\)/, "the branch grid uses the branch list");
+  assert.match(hub, /className="btb-hq"><summary>Head-office tools/, "and the rest is one collapsed section");
+});
+
+test("the people card offers invitation, and the form opens on arrival", () => {
+  const card = read("src", "app", "btb", "demo", "PeopleCard.tsx");
+  assert.match(card, /href="\/btb\/demo\/employees\?action=invite"/);
+  assert.match(card, /href="\/btb\/demo\/employees\?action=add"/);
+  assert.match(card, /btbCanView\("employees", identity\.role, identity\.console === true\)/, "only a viewer of the team sees it");
+  const view = read("src", "app", "btb", "demo", "employees", "view.tsx");
+  assert.match(view, /params\.get\("action"\)/);
+  assert.match(view, /if \(action === "invite"\) \{ setInviteReceipt\(null\); setInviting\("new"\); \}/);
+});
+
+test("a console reads the team of the branch it entered", () => {
+  const route = read("src", "app", "api", "btb", "employees", "route.ts");
+  assert.match(route, /if \(identity\.console && identity\.currentLocationId\) return identity\.currentLocationId;/);
+});

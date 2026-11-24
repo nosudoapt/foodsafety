@@ -1,7 +1,7 @@
 "use client";
 // Interactive view; page.tsx owns the request-time server gate.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Mail, Pencil, Phone, Search, Send, UserPlus, UsersRound } from "lucide-react";
 import BtbFeatureGate from "@/components/BtbFeatureGate";
@@ -30,6 +30,22 @@ function Employees({ readOnly }: { readOnly: boolean }) {
   const [inviteReceipt, setInviteReceipt] = useState<(BtbInvitationReceipt & { name: string }) | null>(null);
   const [notice, setNotice] = useState("");
   const employees = data?.employees ?? [];
+  // The branch page's "Invite teammate" / "Add manually" links land here with
+  // ?invite=1 / ?add=1 so the right form opens on arrival.
+  useEffect(() => {
+    if (readOnly || !data) return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get("action") ?? (params.get("invite") === "1" ? "invite" : params.get("add") === "1" ? "add" : "");
+    if (!action) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    // Deferred a tick so opening a form from the URL never cascades a render
+    // inside this effect (and the query is already cleared if it re-runs).
+    const timer = window.setTimeout(() => {
+      if (action === "invite") { setInviteReceipt(null); setInviting("new"); }
+      if (action === "add") setEditing("new");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [readOnly, data]);
   const visible = employees.filter((employee) => (inactive || employee.active) && `${employee.name} ${employee.email} ${employee.phone} ${employee.position}`.toLowerCase().includes(query.toLowerCase()));
   return <div className="ops-workspace">
     <PageHeader title="Employees" subtitle="A named account for every teammate. Keep contact details, access and schedules together." action={!readOnly && <div className="ui-actions"><Button variant="ghost" disabled={!data} onClick={() => setEditing("new")}><UserPlus size={18} aria-hidden="true" />Add manually</Button><Button disabled={!data} onClick={() => { setInviteReceipt(null); setInviting("new"); }}><Send size={18} aria-hidden="true" />Invite teammate</Button></div>} />

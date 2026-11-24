@@ -13,6 +13,11 @@ import { btbCanEdit } from "@/lib/btb-access";
 import { btbToday } from "@/lib/btb-team";
 import { fetchJson } from "@/lib/fetch-json";
 import TrainingDashboardPanel from "@/components/btb/TrainingProgress";
+import PeopleCard from "./PeopleCard";
+
+/** Head-office surfaces: shown to the owner/a console, but never mixed into the
+ *  branch's day-to-day tools. */
+const HQ_TOOLS = new Set(["franchise_inspection", "marketing", "new_restaurant", "branding_requests", "vault"]);
 
 export default function BtbHub() {
   const { identity, rows } = useBtbWorkspace();
@@ -47,7 +52,10 @@ function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtb
   const quick = view.quick.flatMap((page) => cards.filter((card) => pageSlug(card) === page));
   const primary = quick[0];
   const matches = searchBtbCards(role, rows, query, pageGrants, console).filter(card => cards.some(available => available.href === card.href));
-  const groups = [...new Set(matches.map(btbCardGroup))];
+  const hq = console || role === "owner";
+  const branchMatches = hq ? matches.filter((card) => !HQ_TOOLS.has(card.feature)) : matches;
+  const hqMatches = hq ? matches.filter((card) => HQ_TOOLS.has(card.feature)) : [];
+  const groups = [...new Set(branchMatches.map(btbCardGroup))];
 
   useEffect(() => {
     let cancelled = false;
@@ -62,6 +70,8 @@ function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtb
 
   return <div className="dash btb-overview" data-role={role}>
     <header className="dash__heading"><div><p className="dash__eyebrow">{console && access?.locations[0] ? `${access.locations[0].name} overview` : `${BTB_ROLE_LABELS[role]} overview`}<span aria-hidden="true" /><time dateTime={overviewDay}>{new Date(`${overviewDay}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</time></p><h1>{view.title}</h1><p className="dash__intro">{view.subtitle}</p></div><div className="dash__heading-actions"><a className="ui-button ui-button--ghost" href="#btb-tools">Explore your tools</a>{primary && <Link className="ui-button" href={primary.href}>{primary.title}<ArrowRight size={16} aria-hidden="true" /></Link>}</div></header>
+    <PeopleCard branch={access?.locations[0]?.name ?? "this branch"} />
+
     <div className="dash__toolbar"><span className="dash__scope"><span className="btb-subnav__dot" aria-hidden="true" />Between the Buns · {access?.locations.length ? access.locations.map(site => `${site.name}${site.active ? "" : " (closed)"}`).join(" · ") : "saved workspace records"}</span><div className="dash__toolbar-right"><span className="dash__updated" role="status">{!loaded ? "Updating your overview…" : error || missing.length ? "Some records are unavailable" : `Updated ${new Date(result!.updatedAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`}</span><button className="dash__refresh" aria-label="Refresh overview" aria-busy={!loaded} disabled={!loaded} onClick={() => setRevision((value) => value + 1)}><RefreshCw size={17} aria-hidden="true" /></button></div></div>
     {(error || missing.length > 0) && <div className="ui-notice ui-notice--warning" role="status"><CircleAlert size={18} aria-hidden="true" /><div>{error || "Some counts are unavailable. Refresh to complete your overview."} <button onClick={() => setRevision((value) => value + 1)}>Try again</button></div></div>}
     {metricIds.length > 0 && <section className="dash__metrics" aria-label="Key figures" aria-busy={!loaded}>{metricIds.map((id) => {
@@ -89,9 +99,10 @@ function HubBody({ role, rows }: { role: BtbRole; rows: ReturnType<typeof useBtb
     {quick.length > 1 && <section aria-labelledby="btb-quick"><div className="dash-section__head"><div><h2 id="btb-quick">Your next move</h2><p>The everyday tools for your role.</p></div></div><div className="btb-quick">{quick.map((card) => <Link key={card.href} href={card.href}><span className="ui-icon ui-tone--purple"><BtbIcon name={card.iconKey} /></span><span><strong>{card.title}</strong><small>{card.feature === "training_guide" && role !== "corporate" ? "Learn & track progress" : btbCanEdit(card.feature, role, console) ? "Open & update" : "Open read-only"}</small></span><ArrowRight size={17} aria-hidden="true" /></Link>)}</div></section>}
 
     <section id="btb-tools" aria-labelledby="btb-tools-title"><div className="dash-section__head"><div><h2 id="btb-tools-title">Your workspace tools</h2><p>{cards.length} available {cards.length === 1 ? "page" : "pages"}, organised around the work.</p></div><label className="dash-search"><Search size={17} aria-hidden="true" /><span className="sr-only">Search BTB tools</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search recipes, stock, people…" />{query && <button onClick={() => setQuery("")} aria-label="Clear tool search"><X size={15} /></button>}</label></div>
-      {groups.map((group) => <section className="btb-toolgroup" key={group}><h3>{group}</h3><div className="btb-tools">{matches.filter((card) => btbCardGroup(card) === group).map((card) => <div className="btb-tool" key={card.href}><NavCard href={card.href} title={card.title} desc={card.desc} icon={BTB_ICONS[card.iconKey]} accent="purple" />{!btbCanEdit(card.feature, role, console) && <span className="btb-tool__mode"><Eye size={12} aria-hidden="true" />{card.feature === "training_guide" && role !== "corporate" ? "Learn & submit" : "Read-only"}</span>}</div>)}</div></section>)}
-      {!matches.length && <div className="ui-empty" role="status"><SearchX size={28} /><h3>{query ? `No tools match “${query}”` : "No tools are enabled yet"}</h3><p>{query ? "Try a different name or clear your search." : "Your administrator can review page availability for this role."}</p>{query && <button className="ui-button ui-button--ghost" onClick={() => setQuery("")}>Clear search</button>}</div>}
+      {groups.map((group) => <section className="btb-toolgroup" key={group}><h3>{group}</h3><div className="btb-tools">{branchMatches.filter((card) => btbCardGroup(card) === group).map((card) => <div className="btb-tool" key={card.href}><NavCard href={card.href} title={card.title} desc={card.desc} icon={BTB_ICONS[card.iconKey]} accent="purple" />{!btbCanEdit(card.feature, role, console) && <span className="btb-tool__mode"><Eye size={12} aria-hidden="true" />{card.feature === "training_guide" && role !== "corporate" ? "Learn & submit" : "Read-only"}</span>}</div>)}</div></section>)}
+      {!branchMatches.length && <div className="ui-empty" role="status"><SearchX size={28} /><h3>{query ? `No tools match “${query}”` : "No tools are enabled yet"}</h3><p>{query ? "Try a different name or clear your search." : "Your administrator can review page availability for this role."}</p>{query && <button className="ui-button ui-button--ghost" onClick={() => setQuery("")}>Clear search</button>}</div>}
     </section>
+    {hqMatches.length > 0 && <details className="btb-hq"><summary>Head-office tools <span>{hqMatches.length}</span></summary><p>Group-wide surfaces. They stay available, one click away, out of the branch&apos;s day-to-day.</p><div className="btb-tools">{hqMatches.map((card) => <div className="btb-tool" key={card.href}><NavCard href={card.href} title={card.title} desc={card.desc} icon={BTB_ICONS[card.iconKey]} accent="purple" /></div>)}</div></details>}
     <details className="dash-roles"><summary>One workspace. A different focus for every role.</summary><div className="dash-roles__grid">{BTB_ROLES.map((item) => <div className="dash-roles__item" key={item} data-current={item === role}><strong>{BTB_ROLE_LABELS[item]}</strong>{item === role && <span>Your view</span>}<p>{BTB_DASHBOARD_VIEWS[item].responsibility}</p></div>)}</div></details>
     <p className="dash__provenance">Figures reflect saved Between the Buns records and the pages enabled for your role and assigned locations. {legacy ? "An unavailable figure appears as “—”. The inventory tile shows the previous calendar month’s saved status." : "Open Location Workspace for assigned-location records; legacy restaurant-wide figures are not included."}</p>
   </div>;

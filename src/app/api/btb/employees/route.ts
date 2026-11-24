@@ -5,9 +5,11 @@ import { BTB_ACCOUNTS } from "@/lib/btb-auth";
 import { hashEmployeePassword, validEmployeePassword } from "@/lib/btb-passwords";
 
 /** The branch chosen on the sign-in cards (or the person's first active one).
- *  Corporate/owner and the shared demo keep the restaurant-wide view. */
+ *  A console that entered a branch reads that branch's team, never the group's.
+ *  Corporate/owner employees and the shared demo keep the restaurant-wide view. */
 async function activeLocation(context: BtbApiContext): Promise<string | null> {
   const { identity, access } = context;
+  if (identity.console && identity.currentLocationId) return identity.currentLocationId;
   if (!identity.employeeId || ["corporate", "owner"].includes(identity.role)) return null;
   const slug = (await cookies()).get("btb_slug")?.value;
   const site = access.locations.find((item) => item.slug === slug) ?? access.locations.find((item) => item.active);
