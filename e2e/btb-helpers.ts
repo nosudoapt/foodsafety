@@ -8,8 +8,14 @@ export const appOrigin = "http://127.0.0.1:5101";
 export const restaurant = "Between the Buns";
 
 export async function apiSignIn(request: APIRequestContext, email = "manager@btb.demo", credential = email.endsWith("@btb.demo") ? workspacePassword : password) {
-  const response = await request.post("/api/btb/login", { headers: { Origin: appOrigin }, data: { email, password: credential } });
+  // One door for every principal. The response names the view this person may
+  // open, so a caller never has to guess (or pick) a branch.
+  const response = await request.post("/api/auth/login", {
+    headers: { Origin: appOrigin }, data: { email, password: credential },
+  });
   await expect(response).toBeOK();
+  const session = await response.json();
+  return session as { authenticated: true; permittedView: string };
 }
 
 export async function createEmployee(request: APIRequestContext, overrides: Partial<BtbEmployee> = {}): Promise<BtbEmployee> {

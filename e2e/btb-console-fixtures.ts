@@ -27,9 +27,11 @@ export function consoleCookie(expires: number, version = 1) {
 }
 
 export async function signInConsole(page: Page, next = "/btb/admin") {
-  await page.goto(`/btb/admin/login?next=${encodeURIComponent(next)}`);
-  await page.getByLabel("Console email").fill(consoleEmail);
-  await page.getByLabel("Console password", { exact: true }).fill(consolePassword);
-  await page.getByRole("button", { name: "Open the console" }).click();
+  // The console no longer has a door of its own: it is one principal among many
+  // on the unified form, and the server decides the permitted view.
+  await page.goto(`/auth/sign-in?next=${encodeURIComponent(next)}`);
+  await page.getByLabel("Email").fill(consoleEmail);
+  await page.getByLabel("Password", { exact: true }).fill(consolePassword);
+  await page.getByRole("button", { name: /^sign in$/i }).click();
   await expect(page).toHaveURL(new RegExp(`${next.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 }
