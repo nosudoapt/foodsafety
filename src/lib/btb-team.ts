@@ -32,6 +32,8 @@ export interface BtbIdentity {
    *  its own principal for authorization and uses its linked employee record for
    *  attribution, so nothing is written anonymously. */
   console?: boolean;
+  /** The branches a console administers, resolved with its identity. */
+  branchIds?: string[];
 }
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

@@ -12,6 +12,7 @@ import { firstAttemptRow } from "./btb-login-guard";
 import { authenticatePrincipal, claimsForWorkspace, sessionMatchesContext, type CredentialAdapter } from "./workspace-auth-core";
 import { verifyWorkspacePassword } from "./workspace-passwords";
 import { signWorkspaceSession, verifyWorkspaceSession } from "./workspace-session";
+import { consoleBranchIds } from "./workspace-console-sites";
 import { scopedWorkspaceDb } from "./workspace-scoped-db";
 import { isBtbRole } from "./btb-roles";
 import type { BtbIdentity } from "./btb-team";
@@ -167,7 +168,8 @@ export async function workspaceBtbIdentity(session: VerifiedWorkspaceSession): P
   const { claims, principal } = session;
   if (claims.tenantSlug !== "between-the-buns") throw new BtbApiError("This surface is not in your workspace.", 403);
   if (claims.principalType === "console") {
-    const linked = await linkedEmployee(serviceDb(), claims.sub);
+    const db = serviceDb();
+    const [linked, branchIds] = await Promise.all([linkedEmployee(db, claims.sub), consoleBranchIds(db, claims, principal)]);
     return {
       role: linked && isBtbRole(linked.role) && linked.role !== "admin" ? linked.role : "owner",
       employeeId: linked?.id ?? null,
@@ -175,7 +177,7 @@ export async function workspaceBtbIdentity(session: VerifiedWorkspaceSession): P
       email: principal.email,
       sessionVersion: linked?.sessionVersion,
       sub: claims.sub, tenantId: claims.tenantId, currentLocationId: claims.locationId,
-      allowedLocationIds: claims.allowedLocationIds, sessionId: claims.sid, console: true,
+      allowedLocationIds: claims.allowedLocationIds, sessionId: claims.sid, console: true, branchIds,
     };
   }
   if (claims.principalType !== "employee" || !isBtbRole(claims.role) || claims.role === "admin") {

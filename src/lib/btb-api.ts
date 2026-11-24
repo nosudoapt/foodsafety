@@ -103,11 +103,9 @@ export async function requireBtbAccess(feature?: BtbFeature, edit = false, optio
   const db = session.db;
   const identity = await workspaceBtbIdentity(session);
   // A console acting inside a branch keeps its own principal but uses its linked
-  // employee for attribution. Its page set comes from the estate it administers,
-  // not from one employee's page grants.
-  const access = identity.console
-    ? await loadConsoleBtbAccess(serviceDb(), identity, await consoleBranchIds(serviceDb(), session.claims, session.principal))
-    : await loadBtbEffectiveAccess(db, identity);
+  // employee for attribution; loadBtbEffectiveAccess resolves its page set from
+  // the estate it administers.
+  const access = await loadBtbEffectiveAccess(db, identity);
   if (feature) {
     if (feature === "platform" && !identity.employeeId) throw new BtbApiError("Sign in with your individual employee account to use the location workspace.", 401);
     // The console administers the store, so it acts with store-manager authority;

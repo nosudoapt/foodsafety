@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { BtbApiError } from "./api-errors";
 import { accessibleBtbCards, isBtbPageAccess, pageSlug, type BtbEffectiveAccess } from "./btb-page-access";
 import { isUuid, type BtbIdentity } from "./btb-team";
+import { serviceDb } from "./supabase-server";
 
 /** A console (tenant super-admin) inside a branch workspace: every page of its
  *  own estate, restricted only by the owner role's saved page matrix. It has no
@@ -41,6 +42,9 @@ export async function loadConsoleBtbAccess(
 /** Request-time only. Neither restrictions nor location grants are cached across
  * requests, and a failed/missing resolver never becomes legacy access. */
 export async function loadBtbEffectiveAccess(db: SupabaseClient, identity: BtbIdentity): Promise<BtbEffectiveAccess> {
+  // A console is not an employee, so it never has per-employee page grants: its
+  // page set comes from the estate it administers.
+  if (identity.console) return loadConsoleBtbAccess(serviceDb(), identity, identity.branchIds ?? []);
   if (!identity.employeeId || !identity.tenantId || !identity.currentLocationId) throw new BtbApiError("No active workspace assigned — contact your manager", 403);
   let query = db.from("role_page_access").select("role,page,allowed");
   if (identity.role !== "admin") query = query.eq("role", identity.role);
