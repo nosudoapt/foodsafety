@@ -522,3 +522,74 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
   .ops-module-tabs { border-radius: var(--r-md); width: 100%; }
   .ops-module-tabs > button { flex: 1 1 140px; justify-content: center; padding-inline: 12px; }
 }
+
+/* ---------------------------------------------------------------- prep sheet
+   The daily prep sheet is a printed form reproduced on screen. Columns get
+   fixed widths so Unit/PAR/OH/Make line up down the page instead of drifting
+   with the longest item name, and the item column takes the remaining space. */
+.prep-sheet { --prep-item: minmax(0, 1fr); --prep-unit: 5.5rem; --prep-flag: 3.25rem;
+  --prep-par: 3.25rem; --prep-cell: 4.5rem; --prep-done: 3.25rem; }
+.prep-sheet__grid { display: grid; gap: 16px; align-items: start; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .prep-sheet__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 1500px) { .prep-sheet__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+.prep-section { overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-md); background: #fff; }
+.prep-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  padding: 8px 12px; background: var(--paper-2); border-bottom: 1px solid var(--line); }
+.prep-section__head h2 { margin: 0; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.01em; }
+.prep-section__who { font-size: 0.6875rem; font-weight: 500; color: var(--muted-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.prep-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.prep-table th, .prep-table td { padding: 6px 8px; font-size: 0.75rem; text-align: left;
+  vertical-align: middle; border-bottom: 1px solid var(--line-soft, #eef0f3); }
+.prep-table thead th { font-size: 0.625rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted-2); background: #fbfbfa; white-space: nowrap; }
+
+/* Fixed column widths — the reason the columns now align across sections. */
+.prep-table col.prep-col-item { width: auto; }
+.prep-table col.prep-col-unit { width: var(--prep-unit); }
+.prep-table col.prep-col-flag { width: var(--prep-flag); }
+.prep-table col.prep-col-par  { width: var(--prep-par); }
+.prep-table col.prep-col-cell { width: var(--prep-cell); }
+.prep-table col.prep-col-done { width: var(--prep-done); }
+
+.prep-table th[scope="row"] { font-weight: 600; color: var(--ink, #1a1a1a);
+  overflow-wrap: anywhere; }
+.prep-table .prep-num { font-variant-numeric: tabular-nums; color: var(--muted-2); }
+.prep-table .prep-center { text-align: center; }
+.prep-table input[type="checkbox"] { inline-size: 16px; block-size: 16px; margin: 0; accent-color: var(--brand); cursor: pointer; }
+.prep-table input.prep-input { width: 100%; padding: 4px 6px; font-size: 0.75rem; text-align: right;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+.prep-table input.prep-input:focus { outline: 2px solid var(--brand); outline-offset: 1px; border-color: transparent; }
+.prep-table tr.is-done th, .prep-table tr.is-done td { color: var(--muted-2); background: #f7faf8; }
+.prep-table tr.is-done th[scope="row"] { text-decoration: line-through; }
+.prep-table tbody tr:last-child td, .prep-table tbody tr:last-child th { border-bottom: 0; }
+
+.prep-section__add { border-top: 1px solid var(--line); padding: 6px 12px; font-size: 0.75rem; }
+
+@media print {
+  .prep-sheet__grid { grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+  .prep-section { border-radius: 0; }
+}
+
+/* Prep toolbar: title and date on the left, actions on the right, so the
+   controls do not wrap into a ragged second row on a normal laptop width. */
+.prep-toolbar { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between;
+  gap: 12px 20px; padding-bottom: 12px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.prep-toolbar__left { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px; min-width: 0; }
+.prep-toolbar__title { margin: 0; font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; }
+.prep-toolbar__date { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; font-weight: 600; color: var(--muted-2); }
+.prep-toolbar__date .ui-input { width: auto; padding: 5px 8px; font-size: 0.8125rem; }
+.prep-toolbar__right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.prep-toolbar__status { font-size: 0.6875rem; font-weight: 500; color: var(--muted-2); white-space: nowrap; }
+
+.prep-par-chip { border-radius: var(--r-pill); border: 1px solid; padding: 6px 12px;
+  font-size: 0.6875rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.prep-par-chip.is-set { border-color: #6ee7b7; background: #ecfdf5; color: #065f46; }
+.prep-par-chip.is-unset { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+
+@media (max-width: 720px) {
+  .prep-toolbar { align-items: stretch; }
+  .prep-toolbar__right > * { flex: 1 1 auto; justify-content: center; }
+}

@@ -210,19 +210,25 @@ export default function PrepSheet() {
     <div className="space-y-4 pb-10">
       <style>{`@media print{@page{size:A4 landscape;margin:6mm}body{background:#fff}.no-print{display:none!important}.prep-section{break-inside:avoid;margin:0 0 3mm}.prep-section h2{font-size:9pt;margin:0 0 1mm}.prep-section table{width:100%;font-size:7pt;border-collapse:collapse}.prep-section th,.prep-section td{border:1px solid #999;padding:0.6mm 1mm;line-height:1.05}.prep-section thead th{background:#eee}.prep-sheet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.prep-done{color:#111}}`}</style>
 
-      <header className="no-print flex flex-wrap items-center gap-2">
-        <h1 className="text-lg font-bold">Prep sheet</h1>
-        <label className="text-sm">Date <input type="date" className="ml-1 rounded border px-2 py-1" max={btbToday()} value={date} onChange={(event) => setDate(event.target.value)} /></label>
-        {sheet && <span className="ops-meta text-xs">Week of {sheet.weekStart} · {save === "saving" ? "Saving…" : save === "saved" ? "Saved" : save === "error" ? "Not saved" : `History ${sheet.historyDays} days`}</span>}
-        <button className="ui-button ui-button--ghost" onClick={() => void load(date)}>Refresh</button>
-        <PrintButton label="Print sheet" />
-        {sheet?.canManage && (
-          <button type="button" onClick={openPar} className={`rounded-full border px-3 py-1 text-xs font-semibold ${parChip}`}>
-            PAR levels: {sheet.parSet ? "set for this week" : "not set — tap to set"}
-          </button>
-        )}
-        {sheet?.canViewEditLog && <EditLogPanel area="prep" days={sheet.historyDays} />}
-        {sheet && <button type="button" className="ui-button" onClick={() => void submit()}>Submit</button>}
+      <header className="no-print prep-toolbar">
+        <div className="prep-toolbar__left">
+          <h1 className="prep-toolbar__title">Daily prep sheet</h1>
+          <label className="prep-toolbar__date">Sheet date
+            <input type="date" className="ui-input" max={btbToday()} value={date} onChange={(event) => setDate(event.target.value)} />
+          </label>
+        </div>
+        <div className="prep-toolbar__right">
+          {sheet && <span className="prep-toolbar__status" role="status">Week of {sheet.weekStart} · {save === "saving" ? "Saving…" : save === "saved" ? "Saved" : save === "error" ? "Not saved" : `History ${sheet.historyDays} days`}</span>}
+          {sheet?.canManage && (
+            <button type="button" onClick={openPar} className={`prep-par-chip ${sheet.parSet ? "is-set" : "is-unset"}`}>
+              PAR levels: {sheet.parSet ? "set for this week" : "not set — set now"}
+            </button>
+          )}
+          <button className="ui-button ui-button--ghost" onClick={() => void load(date)}>Refresh</button>
+          <PrintButton label="Print" />
+          {sheet?.canViewEditLog && <EditLogPanel area="prep" days={sheet.historyDays} />}
+          {sheet && <button type="button" className="ui-button" onClick={() => void submit()}>Submit</button>}
+        </div>
       </header>
 
       {sheet?.notices?.length ? (
@@ -242,52 +248,58 @@ export default function PrepSheet() {
       )}
 
       {sheet && sections.length > 0 && (
-        <div className="prep-sheet-grid grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="prep-sheet prep-sheet__grid">
           {sections.map((section) => (
-            <section key={section.category} className="prep-section overflow-hidden rounded border border-slate-300">
-              <h2 className="flex items-center justify-between bg-slate-100 px-2 py-1 text-sm font-bold">
-                <span>{section.category}</span>
-                <span className="text-[11px] font-normal text-slate-600">{section.assigned.length ? section.assigned.map(nameOf).join(", ") : "unassigned"}</span>
-              </h2>
-              <table className="ops-table w-full text-xs">
+            <section key={section.category} className="prep-section">
+              <div className="prep-section__head">
+                <h2>{section.category}</h2>
+                <span className="prep-section__who">{section.assigned.length ? section.assigned.map(nameOf).join(", ") : "unassigned"}</span>
+              </div>
+              <table className="prep-table">
+                <colgroup>
+                  <col className="prep-col-item" /><col className="prep-col-unit" /><col className="prep-col-flag" />
+                  {sheet.canSeePar && <col className="prep-col-par" />}
+                  <col className="prep-col-cell" />
+                  <col className="prep-col-cell" /><col className="prep-col-done" />
+                </colgroup>
                 <thead>
                   <tr>
-                    <th scope="col">Item</th><th scope="col">Unit</th><th scope="col">Urgent</th>
-                    {sheet.canSeePar && <th scope="col">PAR</th>}
-                    <th scope="col">OH</th>
-                    {section.mode === "pull" ? <th scope="col">Pull</th> : <th scope="col">Make</th>}
-                    <th scope="col">Done</th>
+                    <th scope="col">Item</th><th scope="col">Unit</th><th scope="col" className="prep-center">Urgent</th>
+                    {sheet.canSeePar && <th scope="col" className="prep-center">PAR</th>}
+                    <th scope="col" className="prep-center">OH</th>
+                    <th scope="col" className="prep-center">{section.mode === "pull" ? "Pull" : "Make"}</th>
+                    <th scope="col" className="prep-center">Done</th>
                   </tr>
                 </thead>
                 <tbody>
                   {section.items.map((item) => (
-                    <tr key={item.key} className={item.done ? "prep-done" : ""}>
-                      <th scope="row" className="text-left font-medium">{item.name}{item.custom ? " *" : ""}</th>
+                    <tr key={item.key} className={item.done ? "is-done" : ""}>
+                      <th scope="row">{item.name}{item.custom ? " *" : ""}</th>
                       <td>{item.unit || "—"}</td>
-                      <td className="text-center">{sheet.canManage
+                      <td className="prep-center">{sheet.canManage
                         ? <input type="checkbox" aria-label={`${item.name} urgent`} checked={item.urgent} onChange={() => void toggleUrgent(section.category, item)} />
                         : (item.urgent ? "Urgent" : "")}</td>
-                      {sheet.canSeePar && <td className="tabular-nums">{item.par ?? "—"}</td>}
+                      {sheet.canSeePar && <td className="prep-center prep-num">{item.par ?? "—"}</td>}
                       <td>
                         {sheet.canManage
-                          ? <input inputMode="decimal" className="w-14 rounded border px-1" value={item.oh} onChange={(event) => edit(section.category, item.key, "oh", event.target.value)} />
-                          : (item.oh || "—")}
+                          ? <input inputMode="decimal" className="prep-input" aria-label={`${item.name} on hand`} value={item.oh} onChange={(event) => edit(section.category, item.key, "oh", event.target.value)} />
+                          : <span className="prep-num">{item.oh || "—"}</span>}
                       </td>
                       <td>
-                        {section.mode === "pull" ? (item.pull || "—") : sheet.canManage
-                          ? <input inputMode="decimal" className="w-14 rounded border px-1" value={item.make ?? ""} onChange={(event) => edit(section.category, item.key, "make", event.target.value)} />
-                          : (item.make || "—")}
+                        {section.mode === "pull" ? <span className="prep-num">{item.pull || "—"}</span> : sheet.canManage
+                          ? <input inputMode="decimal" className="prep-input" aria-label={`${item.name} make`} value={item.make ?? ""} onChange={(event) => edit(section.category, item.key, "make", event.target.value)} />
+                          : <span className="prep-num">{item.make || "—"}</span>}
                       </td>
-                      <td className="text-center">
+                      <td className="prep-center">
                         <input type="checkbox" aria-label={`${item.name} done`} checked={item.done} onChange={(event) => edit(section.category, item.key, "done", event.target.checked)} />
                       </td>
                     </tr>
                   ))}
-                  {!section.items.length && <tr><td colSpan={7} className="text-slate-500">No items yet — the manager sets the PAR levels for this section.</td></tr>}
+                  {!section.items.length && <tr><td colSpan={sheet.canSeePar ? 7 : 6} className="prep-num">No items yet — the manager sets the PAR levels for this section.</td></tr>}
                 </tbody>
               </table>
               {sheet.canManage && (
-                <div className="no-print border-t border-slate-200 p-1 text-[11px]">
+                <div className="no-print prep-section__add">
                   {adding?.category === section.category ? (
                     <div className="flex flex-wrap items-center gap-1">
                       <input placeholder="Item name" className="w-32 rounded border px-1" value={adding.name} onChange={(event) => setAdding({ ...adding, name: event.target.value })} />

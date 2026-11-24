@@ -1,6 +1,6 @@
 import { btbRequestLocation, btbRoute, BtbApiError, dbError, readBody } from "@/lib/btb-api";
 import {
-  canSeePrepPar, isPrepCategory, parSetIsCurrent, parWeekStart, PREP_HISTORY_DAYS, prepCategoryMode,
+  canSeePrepPar, isPrepCategory, parSetIsCurrent, parWeekStart, PREP_HISTORY_DAYS, prepCategoryItems, prepCategoryMode,
   prepSubmitState, prepSubmissionNotice, visiblePrepCategories,
 } from "@/lib/btb-prep";
 import { btbToday, isIsoDate, isUuid } from "@/lib/btb-team";
@@ -15,6 +15,25 @@ const num = (value: unknown): number => {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed >= 0 && parsed <= 999_999 ? Math.round(parsed * 100) / 100 : NaN;
 };
+
+interface PrepLevel { item_key: string; item_name: string; category: string; unit: string; par: number; urgent: boolean; custom: boolean }
+
+/**
+ * The rows printed for one section.
+ *
+ * PAR levels are per location and per week, so a location whose week has not
+ * been set yet has no rows at all — the sheet then rendered nearly empty, which
+ * looks like lost data. Fall back to the printed catalog for any section with
+ * no saved levels, so the team can always record the shift. Saved levels, once
+ * present, win; a manager's custom row is never replaced by the catalog.
+ */
+function prepRowsFor(category: string, levels: PrepLevel[]): PrepLevel[] {
+  const saved = levels.filter((level) => level.category === category);
+  if (saved.length) return saved;
+  return prepCategoryItems(category).map((item) => ({
+    item_key: item.key, item_name: item.name, category, unit: item.unit, par: 0, urgent: false, custom: false,
+  }));
+}
 
 /** Reads the whole sheet for one day: PAR levels for the week, assignments,
  *  saved rows, the caller's own drafts, comments and manager notices. */
@@ -65,8 +84,7 @@ export const GET = btbRoute("prep_list", false, async (context, request) => {
     mode: prepCategoryMode(category),
     assigned: assigned.filter((row) => row.category === category).map((row) => row.employee_id),
     mine: mine.includes(category),
-    items: ((levels.data ?? []) as { item_key: string; item_name: string; category: string; unit: string; par: number; urgent: boolean; custom: boolean }[])
-      .filter((level) => level.category === category)
+    items: prepRowsFor(category, (levels.data ?? []) as { item_key: string; item_name: string; category: string; unit: string; par: number; urgent: boolean; custom: boolean }[])
       .map((level) => {
         const row = saved.get(level.item_key);
         const draft = (draftsForMe.get(category) ?? {})[level.item_key] ?? {};

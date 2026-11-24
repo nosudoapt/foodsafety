@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { prepCategoryItems } from "../src/lib/btb-prep";
 
 const page = readFileSync(
   join(__dirname, "../../src/app/btb/demo/prep-list/prep-sheet.tsx"),
@@ -35,4 +36,19 @@ test("the database column exists", () => {
     /ALTER TABLE prep_counts\s+ADD COLUMN IF NOT EXISTS urgent BOOLEAN NOT NULL DEFAULT FALSE/.test(schema),
     "prep_counts.urgent must exist with DEFAULT false"
   );
+});
+
+test("a week with no PAR levels still renders the printed catalog", () => {
+  // Rows come from btb_prep_par_levels (per location + week). A location whose
+  // week is not set yet had zero rows, so the sheet looked empty. The route now
+  // falls back to the printed catalog for sections with no saved levels.
+  assert.ok(api.includes("function prepRowsFor("), "the route has a catalog fallback");
+  assert.ok(api.includes("prepCategoryItems(category)"), "the fallback uses the printed catalog");
+  assert.ok(api.includes("if (saved.length) return saved;"), "saved PAR levels always win over the catalog");
+
+  // The catalog itself must be non-trivial — this is what the fallback serves.
+  const produce = prepCategoryItems("Produce");
+  assert.ok(produce.length >= 10, `Produce has its printed rows, got ${produce.length}`);
+  assert.ok(prepCategoryItems("Sauces").length >= 8, "Sauces has its printed rows");
+  assert.ok(prepCategoryItems("Meats").length >= 8, "Meats has its printed rows");
 });
