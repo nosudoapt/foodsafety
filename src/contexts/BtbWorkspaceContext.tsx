@@ -37,7 +37,7 @@ export function BtbWorkspaceProvider({ children }: { children: React.ReactNode }
     clearBtbPublicCapabilities();
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 12_000);
-    void fetchJson<{ authenticated: boolean; role?: string; name?: string; email?: string; employeeId?: string | null; sessionVersion?: number; access?: unknown }>("/api/btb/me", { signal: controller.signal }).then(me => {
+    void fetchJson<{ authenticated: boolean; role?: string; name?: string; email?: string; employeeId?: string | null; console?: boolean; sessionVersion?: number; access?: unknown }>("/api/btb/me", { signal: controller.signal }).then(me => {
       if (cancelled) return;
       if (!me.authenticated) {
         syncBtbCapabilityIdentity(null);
@@ -45,7 +45,7 @@ export function BtbWorkspaceProvider({ children }: { children: React.ReactNode }
         return;
       }
       const identity = isBtbRole(me.role)
-        ? { role: me.role, name: me.name || "Your team", email: me.email || "", employeeId: me.employeeId ?? null, sessionVersion: me.sessionVersion } : null;
+        ? { role: me.role, name: me.name || "Your team", email: me.email || "", employeeId: me.employeeId ?? null, console: me.console === true, sessionVersion: me.sessionVersion } : null;
       const access = isBtbEffectiveAccess(me.access) ? me.access : null;
       syncBtbCapabilityIdentity(access ? identity : null);
       setState({ key, identity, access,

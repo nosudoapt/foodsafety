@@ -1,4 +1,5 @@
 import { btbRoute, BtbApiError, dbError, readBody } from "@/lib/btb-api";
+import { btbAuthority } from "@/lib/btb-access";
 import { policyFromRow } from "@/lib/btb-clock-policy";
 import { isUuid } from "@/lib/btb-team";
 
@@ -14,7 +15,7 @@ export const GET = btbRoute(undefined, false, async ({ db, access }, request) =>
 }, { allowLocationWorkspace: true });
 
 export const POST = btbRoute("staff_schedule", true, async ({ db, identity, access }, request) => {
-  if (identity.role !== "manager") throw new BtbApiError("Only a branch manager can change the clock-in location policy.", 403);
+  if (btbAuthority(identity.role, identity.console === true) !== "manager") throw new BtbApiError("Only a branch manager can change the clock-in location policy.", 403);
   const body = await readBody(request, 8192);
   const location = String(body.location_id ?? "");
   if (!access.locations.some((site) => site.id === location && site.active)) throw new BtbApiError("Choose an active branch you manage.", 403);

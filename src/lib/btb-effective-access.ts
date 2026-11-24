@@ -6,19 +6,25 @@ import { isUuid, type BtbIdentity } from "./btb-team";
 import { serviceDb } from "./supabase-server";
 
 /** A console (tenant super-admin) inside a branch workspace: every page of its
- *  own estate, restricted only by the owner role's saved page matrix. It has no
- *  per-employee page grants, so `pageGrants: null` means "unrestricted" exactly
- *  as the legacy aggregate view meant it. */
+ *  own estate, restricted only by the owner role's saved page matrix, plus the
+ *  branch-manager authority of the branch it entered. It has no per-employee
+ *  page grants, so `pageGrants: null` means "unrestricted" exactly as the legacy
+ *  aggregate view meant it.
+ *
+ *  Records, however, are strictly the branch the session is pinned to. The
+ *  console's estate stays in `identity.branchIds` (that is what its admin RPCs
+ *  use); this object describes *this* workspace, and a branch workspace that
+ *  listed six locations or summed their numbers would not be a branch. */
 export async function loadConsoleBtbAccess(
   infra: SupabaseClient,
   identity: BtbIdentity,
-  branchIds: string[],
 ): Promise<BtbEffectiveAccess> {
   if (!identity.tenantId || !identity.currentLocationId) throw new BtbApiError("No active workspace assigned — contact your manager", 403);
+  const branchId = identity.currentLocationId;
   const [restrictions, names, settings] = await Promise.all([
     infra.from("role_page_access").select("role,page,allowed").eq("role", identity.role),
-    branchIds.length ? infra.from("locations").select("id,name,slug,tenant_id").in("id", branchIds) : Promise.resolve({ data: [], error: null }),
-    branchIds.length ? infra.from("btb_location_settings").select("location_id,active").in("location_id", branchIds) : Promise.resolve({ data: [], error: null }),
+    infra.from("locations").select("id,name,slug,tenant_id").eq("id", branchId),
+    infra.from("btb_location_settings").select("location_id,active").eq("location_id", branchId),
   ]);
   if (restrictions.error || names.error || settings.error || !Array.isArray(restrictions.data) || !restrictions.data.every(isBtbPageAccess)) {
     throw new BtbApiError("Page access could not be verified. Please try again.", 503, restrictions.error ?? names.error ?? settings.error);
@@ -30,11 +36,10 @@ export async function loadConsoleBtbAccess(
       id: site.id, name: site.name, slug: site.slug ?? "",
       active: (settings.data ?? []).some((row: { location_id: string; active: boolean }) => row.location_id === site.id && row.active),
     }));
-  locations.sort((a, b) => a.name.localeCompare(b.name));
   const locationIds = locations.map((site) => site.id);
   return {
     rows, locationIds, pageGrants: null, locations,
-    pages: accessibleBtbCards(identity.role, rows, null).map(pageSlug),
+    pages: accessibleBtbCards(identity.role, rows, null, true).map(pageSlug),
     locationWorkspace: true,
   };
 }
@@ -44,7 +49,7 @@ export async function loadConsoleBtbAccess(
 export async function loadBtbEffectiveAccess(db: SupabaseClient, identity: BtbIdentity): Promise<BtbEffectiveAccess> {
   // A console is not an employee, so it never has per-employee page grants: its
   // page set comes from the estate it administers.
-  if (identity.console) return loadConsoleBtbAccess(serviceDb(), identity, identity.branchIds ?? []);
+  if (identity.console) return loadConsoleBtbAccess(serviceDb(), identity);
   if (!identity.employeeId || !identity.tenantId || !identity.currentLocationId) throw new BtbApiError("No active workspace assigned — contact your manager", 403);
   let query = db.from("role_page_access").select("role,page,allowed");
   if (identity.role !== "admin") query = query.eq("role", identity.role);

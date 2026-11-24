@@ -53,7 +53,10 @@ export function btbToday(now = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Regina", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
 
-export function employeeEditableBy(actor: BtbRole, employeeRole: EmployeeRole): boolean {
+/** Who may change a person's record. A console that entered the branch works it
+ *  as its manager, so it manages the same tiers a manager does. */
+export function employeeEditableBy(actor: BtbRole, employeeRole: EmployeeRole, console = false): boolean {
+  if (console) actor = "manager";
   return (actor === "manager" && ["staff", "supervisor", "manager"].includes(employeeRole)) || (actor === "supervisor" && employeeRole === "staff");
 }
 

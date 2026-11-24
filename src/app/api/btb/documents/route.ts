@@ -17,7 +17,7 @@ export const GET = btbRoute("documents", false, async ({ db, identity }, request
   }
   const [documents, uploader] = await Promise.all([
     readAll((from, to) => db.from("business_documents").select(COLUMNS).eq("restaurant_name", BTB_RESTAURANT).is("expiry_date", null).order("created_at", { ascending: false }).order("id").range(from, to), "The document register couldn’t be loaded. Please try again."),
-    btbCanEdit("documents", identity.role) ? btbUploaderConnection(db) : null,
+    btbCanEdit("documents", identity.role, identity.console === true) ? btbUploaderConnection(db) : null,
   ]);
   return { documents, uploader };
 });

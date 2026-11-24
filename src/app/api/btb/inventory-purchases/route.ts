@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { btbAuthority } from "@/lib/btb-access";
 import { databaseFailure } from "@/lib/btb-api";
 import { btbInventoryRoute, type BtbInventoryScope } from "@/lib/btb-inventory-route";
 
@@ -19,7 +20,7 @@ const PURCHASE_ROLES = ["manager", "supervisor", "corporate", "admin"];
 async function savePurchase(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
   // The workspace session already resolved and authorized this branch.
-  const role = scope.identity.role;
+  const role = btbAuthority(scope.identity.role, scope.identity.console === true);
   if (!PURCHASE_ROLES.includes(role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
   const body = await req.json().catch(() => ({}));
@@ -99,7 +100,7 @@ async function savePurchase(scope: BtbInventoryScope, req: Request) {
 async function readPurchases(scope: BtbInventoryScope, req: Request) {
   const locationId = scope.location.id;
   // The workspace session already resolved and authorized this branch.
-  const role = scope.identity.role;
+  const role = btbAuthority(scope.identity.role, scope.identity.console === true);
 
   const { searchParams } = new URL(req.url);
   const month = searchParams.get("month");

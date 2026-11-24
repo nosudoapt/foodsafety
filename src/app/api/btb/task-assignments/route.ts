@@ -1,4 +1,5 @@
 import { btbRoute, BtbApiError, dbError, readBody } from "@/lib/btb-api";
+import { btbAuthority } from "@/lib/btb-access";
 import { assignmentProblem, type TaskAssignment } from "@/lib/btb-tasks";
 import { withCompletion } from "@/lib/btb-task-completion";
 import { isIsoDate, isUuid } from "@/lib/btb-team";
@@ -16,7 +17,7 @@ export const GET = btbRoute("staff_schedule", false, async ({ db, identity, acce
   const location = params.get("location"), start = params.get("start");
   if (!isUuid(location) || !isIsoDate(start)) throw new BtbApiError("Choose a branch and a valid week.");
   if (!access.locations.some((site) => site.id === location)) throw new BtbApiError("This branch is not in your workspace.", 403);
-  const canManage = ["manager", "supervisor"].includes(identity.role);
+  const canManage = ["manager", "supervisor"].includes(btbAuthority(identity.role, identity.console === true));
   // The shared demo has no personal employee id; it has no assigned duties.
   if (!canManage && !identity.employeeId) return { assignments: [], canManage: false };
   let query = db.from("btb_task_assignments").select(COLUMNS).eq("location_id", location)

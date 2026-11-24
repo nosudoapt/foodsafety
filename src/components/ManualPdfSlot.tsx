@@ -41,7 +41,7 @@ const HEAD_STYLES: Record<string, { card: string; head: string }> = {
 export default function ManualPdfSlot({ title, category, heading, accent = "red" }: ManualPdfSlotProps) {
   const { identity, rows, pageGrants } = useBtbWorkspace();
   const manualsCard = BTB_CARDS.find(card => card.feature === "manuals")!;
-  const canUpload = !!identity && btbCanEdit("manuals", identity.role) && btbPageAllowed(manualsCard, identity.role, rows, pageGrants);
+  const canUpload = !!identity && btbCanEdit("manuals", identity.role, identity.console === true) && btbPageAllowed(manualsCard, identity.role, rows, pageGrants, identity.console === true);
   const slot = Object.entries(BTB_REFERENCE_SLOTS).find(([, value]) => value.title === title && value.category === category)?.[0];
   const [manual, setManual] = useState<StoredManual | null>(null);
   const [loaded, setLoaded] = useState(false);

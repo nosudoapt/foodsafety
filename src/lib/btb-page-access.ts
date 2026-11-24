@@ -44,17 +44,18 @@ export function isBtbEffectiveAccess(value: unknown): value is BtbEffectiveAcces
 }
 
 /** Saved restrictions narrow the role matrix. An absent row uses the role's
- * default; an unavailable matrix (null) never silently grants access. */
-export function btbPageAllowed(card: BtbCard, role: BtbRole, rows: readonly BtbPageAccess[] | null, grants: readonly string[] | null = null): boolean {
-  if (!btbCanView(card.feature, role)) return false;
+ * default; an unavailable matrix (null) never silently grants access.
+ * `console` widens only the role test (see btbCanView), never the restrictions. */
+export function btbPageAllowed(card: BtbCard, role: BtbRole, rows: readonly BtbPageAccess[] | null, grants: readonly string[] | null = null, console = false): boolean {
+  if (!btbCanView(card.feature, role, console)) return false;
   if (card.feature === "admin_dashboard") return true;
   if (rows === null) return false;
   if (grants !== null && !grants.includes(pageSlug(card))) return false;
   return !rows.some((row) => row.role === role && row.page === pageSlug(card) && !row.allowed);
 }
 
-export function accessibleBtbCards(role: BtbRole, rows: readonly BtbPageAccess[] | null, grants: readonly string[] | null = null): BtbCard[] {
-  return BTB_CARDS.filter((card) => btbPageAllowed(card, role, rows, grants));
+export function accessibleBtbCards(role: BtbRole, rows: readonly BtbPageAccess[] | null, grants: readonly string[] | null = null, console = false): BtbCard[] {
+  return BTB_CARDS.filter((card) => btbPageAllowed(card, role, rows, grants, console));
 }
 
 export function validateAccessChanges(body: unknown): BtbPageAccess[] | null {

@@ -283,8 +283,12 @@ test("BTB navigation and authentication stay independent, with an explicit legac
     const hrefs = [...source.matchAll(/href="([^"]+)"/g)].map((m) => m[1]);
     for (const href of hrefs) {
       const legacyHistory = file === join(root, "temperatures/view.tsx") && href === "/temperatures";
+      // A console that entered a branch gets one click back to the group
+      // console. It is the only outward link in this tree, and it is rendered
+      // only for that session (asserted below), never for a branch employee.
+      const consoleReturn = file === join(root, "shell.tsx") && href === "/btb/admin";
       assert.ok(
-        href === "/btb/demo" || href.startsWith("/btb/demo/") || href.startsWith("#") || legacyHistory,
+        href === "/btb/demo" || href.startsWith("/btb/demo/") || href.startsWith("#") || legacyHistory || consoleReturn,
         `${file} must not link out to ${href}`
       );
     }
@@ -296,6 +300,11 @@ test("BTB navigation and authentication stay independent, with an explicit legac
       `${file} must not use Supabase for auth`
     );
   }
+
+  // The only way out of this tree is the console's own return link, and it is
+  // gated on the session being a console.
+  const shell = readFileSync(join(root, "shell.tsx"), "utf8");
+  assert.ok(shell.includes('{identity?.console && <Link href="/btb/admin"'), "the return link is console-only");
 
   const sidebar = readFileSync(join(ROOT, "src/components/Sidebar.tsx"), "utf8");
   assert.ok(!sidebar.includes("btb/demo"));

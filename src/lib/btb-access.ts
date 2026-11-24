@@ -122,14 +122,40 @@ export const BTB_MATRIX: Record<BtbFeature, Access> = {
   platform:          { view: PLATFORM, edit: OPS_EDIT },
 };
 
-/** True if the role can at least see the feature. */
-export function btbCanView(feature: BtbFeature, role: BtbRole): boolean {
-  return BTB_MATRIX[feature].view.includes(role);
+/**
+ * The role a session acts with inside a branch.
+ *
+ * A console (tenant super-admin) that entered the branch works it as that
+ * branch's manager for operational actions — schedules, policy, inventory,
+ * approvals — while its claims keep `role: owner` so every owner-tier gate and
+ * every attribution ("Nitpreet Singh (Owner)") is unchanged.
+ */
+export function btbAuthority(role: BtbRole, console = false): BtbRole {
+  return console ? "manager" : role;
 }
 
-/** True if the role can create / edit / delete within the feature. */
-export function btbCanEdit(feature: BtbFeature, role: BtbRole): boolean {
-  return BTB_MATRIX[feature].edit.includes(role);
+/**
+ * True if the role can at least see the feature.
+ *
+ * A `console` is a tenant super-admin that has switched into a branch. Inside
+ * that branch it also works it as its manager, so it sees either tier's pages;
+ * its own role still decides everything it shows up as (and how it is named in
+ * an edit log).
+ */
+export function btbCanView(feature: BtbFeature, role: BtbRole, console = false): boolean {
+  const cell = BTB_MATRIX[feature];
+  return cell.view.includes(role) || (console && cell.view.includes("manager"));
+}
+
+/**
+ * True if the role can create / edit / delete within the feature.
+ *
+ * Same console rule: entering a branch grants that branch's manager write
+ * authority. The owner tier on its own stays view-only on operations.
+ */
+export function btbCanEdit(feature: BtbFeature, role: BtbRole, console = false): boolean {
+  const cell = BTB_MATRIX[feature];
+  return cell.edit.includes(role) || (console && cell.edit.includes("manager"));
 }
 
 // --- self-check (dev-only, tree-shaken in prod) ---

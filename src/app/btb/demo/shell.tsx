@@ -67,6 +67,9 @@ function BtbShell({ slug, children }: { slug: string; children: React.ReactNode 
       <div className="btb-header__inner">
         <Link href="/btb/demo" className="btb-header__brand" aria-label="Between the Buns overview"><BtbWordmark className="text-lg sm:text-xl" /><span>Team workspace · powered by Pholo</span></Link>
         <div className="btb-header__actions">
+          {/* A console that entered this branch can go back to the group console
+              in one click; a branch employee never sees this. */}
+          {identity?.console && <Link href="/btb/admin" className="btb-header__console" aria-label="Back to the group console"><ArrowLeft size={15} aria-hidden="true" /><span>Back to Console</span></Link>}
           {identity && <Link href="/btb/demo/account" className="btb-identity" aria-label={`My account: ${identity.name}`}><span>{identity.name}</span><span className="ui-badge ui-tone--purple">{BTB_ROLE_LABELS[identity.role]}</span></Link>}
           <button className="btb-header__signout" onClick={signOut} disabled={signingOut} aria-label={signingOut ? "Signing out" : "Sign out"}><LogOut size={17} aria-hidden="true" /><span>{signingOut ? "Signing out…" : "Sign out"}</span></button>
         </div>

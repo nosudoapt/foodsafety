@@ -73,14 +73,21 @@ export const BTB_DASHBOARD_VIEWS: Record<BtbRole, BtbView> = {
   },
 };
 
-export function btbMetricIds(role: BtbRole, rows: readonly BtbPageAccess[], grants: readonly string[] | null = null, legacy = true): BtbMetricId[] {
-  const view = BTB_DASHBOARD_VIEWS[role];
+/** The dashboard a session reads. A console that entered a branch reads that
+ *  branch manager's dashboard — the group-wide owner briefing belongs to the
+ *  console, not to a branch workspace. */
+export function btbDashboardRole(role: BtbRole, console = false): BtbRole {
+  return console ? "manager" : role;
+}
+
+export function btbMetricIds(role: BtbRole, rows: readonly BtbPageAccess[], grants: readonly string[] | null = null, legacy = true, console = false): BtbMetricId[] {
+  const view = BTB_DASHBOARD_VIEWS[btbDashboardRole(role, console)];
   return [...new Set([...view.metrics, ...view.attention])].filter((id) => {
     const page = BTB_METRICS[id].page;
     if (!page) return true;
     if (!legacy) return false;
     const card = BTB_CARDS.find((item) => pageSlug(item) === page);
-    return !!card && btbPageAllowed(card, role, rows, grants);
+    return !!card && btbPageAllowed(card, role, rows, grants, console);
   });
 }
 
@@ -93,23 +100,29 @@ export function btbDateWindow(day: string) {
   return { today: day, soon: soon.toISOString().slice(0, 10), monthStart: `${day.slice(0, 7)}-01`, inventoryMonth: previous.toISOString().slice(0, 7) };
 }
 
-export function btbCountQuery(id: BtbMetricId, day: string): { table: string; filters: CountFilter[] } | null {
+export function btbCountQuery(id: BtbMetricId, day: string, locationId: string | null = null): { table: string; filters: CountFilter[] } | null {
   const dates = btbDateWindow(day);
   if (!dates) return null;
   // These existing registers explicitly belong to BTB. Location-less tables
   // from other workspaces are not included in this restaurant overview.
   const filters: CountFilter[] = [{ column: "restaurant_name", op: "eq", value: "Between the Buns" }];
   const onDay = (column: string) => filters.push({ column, op: "eq", value: day });
+  // One branch reads only its own rows. Without a branch (the legacy aggregate)
+  // the registers that predate branch scoping are read as their unowned rows.
+  const scope = () => {
+    if (locationId) filters.push({ column: "location_id", op: "eq", value: locationId });
+    else filters.push({ column: "location_id", op: "isNull" });
+  };
   let table: string;
   switch (id) {
-    case "checksToday": case "checksPending": table = "btb_shift_checks"; onDay("check_date"); filters.push({ column: "completed", op: "eq", value: id === "checksToday" }); break;
-    case "prepToday": table = "prep_counts"; onDay("count_date"); break;
-    case "cleaningToday": table = "cleaning_logs"; onDay("done_date"); break;
-    case "ordersToday": table = "btb_order_sheets"; onDay("order_date"); break;
-    case "renewals": table = "compliance_documents"; filters.push({ column: "expiry_date", op: "lte", value: dates.soon }); break;
-    case "licensesDue": table = "btb_staff_licences"; filters.push({ column: "expiry_date", op: "lte", value: dates.soon }); break;
-    case "inspectionsMonth": table = "corporate_inspections"; filters.push({ column: "inspection_date", op: "gte", value: dates.monthStart }, { column: "inspection_date", op: "lte", value: day }); break;
-    case "campaigns": table = "marketing_promotions"; filters.push({ column: "status", op: "eq", value: "active" }); break;
+    case "checksToday": case "checksPending": table = "btb_shift_checks"; onDay("check_date"); filters.push({ column: "completed", op: "eq", value: id === "checksToday" }); scope(); break;
+    case "prepToday": table = "prep_counts"; onDay("count_date"); scope(); break;
+    case "cleaningToday": table = "cleaning_logs"; onDay("done_date"); scope(); break;
+    case "ordersToday": table = "btb_order_sheets"; onDay("order_date"); scope(); break;
+    case "renewals": table = "compliance_documents"; filters.push({ column: "expiry_date", op: "lte", value: dates.soon }); scope(); break;
+    case "licensesDue": table = "btb_staff_licences"; filters.push({ column: "expiry_date", op: "lte", value: dates.soon }); scope(); break;
+    case "inspectionsMonth": table = "corporate_inspections"; filters.push({ column: "inspection_date", op: "gte", value: dates.monthStart }, { column: "inspection_date", op: "lte", value: day }); scope(); break;
+    case "campaigns": table = "marketing_promotions"; filters.push({ column: "status", op: "eq", value: "active" }); scope(); break;
     default: return null;
   }
   return { table, filters };
@@ -132,7 +145,7 @@ export function btbCardGroup(card: BtbCard): string {
   return "Business & standards";
 }
 
-export function searchBtbCards(role: BtbRole, rows: readonly BtbPageAccess[] | null, query: string, grants: readonly string[] | null = null): BtbCard[] {
+export function searchBtbCards(role: BtbRole, rows: readonly BtbPageAccess[] | null, query: string, grants: readonly string[] | null = null, console = false): BtbCard[] {
   const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  return accessibleBtbCards(role, rows, grants).filter((card) => card.hub !== false && terms.every((term) => `${card.title} ${card.desc} ${btbCardGroup(card)}`.toLowerCase().includes(term)));
+  return accessibleBtbCards(role, rows, grants, console).filter((card) => card.hub !== false && terms.every((term) => `${card.title} ${card.desc} ${btbCardGroup(card)}`.toLowerCase().includes(term)));
 }

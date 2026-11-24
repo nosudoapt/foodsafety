@@ -108,15 +108,16 @@ export async function requireBtbAccess(feature?: BtbFeature, edit = false, optio
   const access = await loadBtbEffectiveAccess(db, identity);
   if (feature) {
     if (feature === "platform" && !identity.employeeId) throw new BtbApiError("Sign in with your individual employee account to use the location workspace.", 401);
-    // The console administers the store, so it acts with store-manager authority;
-    // everyone else keeps exactly the role the matrix gives them.
-    const mayEdit = btbCanEdit(feature, identity.console ? "manager" : identity.role);
-    if (!btbCanView(feature, identity.role) || (edit && !mayEdit)) throw new BtbApiError("Your role cannot make this change.", 403);
+    // Inside a branch a console also works it as that branch's manager, so it
+    // keeps store-manager authority for writes while its own role (owner) keeps
+    // every owner-tier page. Everyone else keeps exactly the role they hold.
+    const mayEdit = btbCanEdit(feature, identity.role, identity.console === true);
+    if (!btbCanView(feature, identity.role, identity.console === true) || (edit && !mayEdit)) throw new BtbApiError("Your role cannot make this change.", 403);
     // Shared feature buckets (reference) must name their exact page. Never let
     // granting prep-manual implicitly authorize menu/allergen/fryer URLs.
     const candidates = BTB_CARDS.filter(item => item.feature === feature);
     const card = options?.page ? candidates.find(item => item.href === `/btb/demo/${options.page}`) : candidates.length === 1 ? candidates[0] : undefined;
-    if (!card || !btbPageAllowed(card, identity.role, access.rows, access.pageGrants)) throw new BtbApiError("This page is not enabled in your workspace.", 403);
+    if (!card || !btbPageAllowed(card, identity.role, access.rows, access.pageGrants, identity.console === true)) throw new BtbApiError("This page is not enabled in your workspace.", 403);
   }
   return { db, identity, access, session };
 }

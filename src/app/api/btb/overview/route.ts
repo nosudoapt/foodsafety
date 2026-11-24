@@ -14,6 +14,9 @@ export async function GET(request: Request) {
     if (!btbDateWindow(day)) return NextResponse.json({ error: "Choose a valid dashboard date." }, { status: 400, headers });
     const signal = AbortSignal.timeout(10_000);
     const location = await btbRequestLocation(context, request);
-    return NextResponse.json(await loadBtbOverview(db, identity.role, access.rows, day, signal, access.pageGrants, false, location!.id), { headers });
+    // A console inside a branch reads that branch's figures only; the same view
+    // it had in the console (group-wide) is not what a branch workspace shows.
+    const branchConsole = identity.console === true;
+    return NextResponse.json(await loadBtbOverview(db, identity.role, access.rows, day, signal, access.pageGrants, branchConsole, location!.id, branchConsole), { headers });
   } catch (error) { return apiFailure(error, request); }
 }

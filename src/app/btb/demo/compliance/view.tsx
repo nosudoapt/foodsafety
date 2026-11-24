@@ -56,11 +56,11 @@ function ComplianceHub({ readOnly }: { readOnly: boolean }) {
   const [tab, setTab] = useState<Tab>("home");
   const { identity, rows, pageGrants } = useBtbWorkspace();
   if (!identity) return null;
-  const allowed = accessibleBtbCards(identity.role, rows, pageGrants);
+  const allowed = accessibleBtbCards(identity.role, rows, pageGrants, identity.console === true);
   const sectionTabs = SECTIONS.filter((section) => allowed.some((card) => card.href === `/btb/demo/${section.page}`));
   const tabs: { id: Tab; label: string }[] = [
     { id: "home", label: "Home" },
-    ...(btbCanEdit("compliance", identity.role) && !readOnly ? [{ id: "upload" as Tab, label: "Add documents" }] : []),
+    ...(btbCanEdit("compliance", identity.role, identity.console === true) && !readOnly ? [{ id: "upload" as Tab, label: "Add documents" }] : []),
     ...sectionTabs.map((s) => ({ id: s.id as Tab, label: s.label })),
   ];
   const active = tabs.some((t) => t.id === tab) ? tab : "home";
@@ -95,12 +95,12 @@ function ComplianceHub({ readOnly }: { readOnly: boolean }) {
 
       <div role="tabpanel" aria-label={tabs.find((t) => t.id === active)?.label} className="compliance-hub__panel">
       {active === "home" && <ComplianceHome readOnly={readOnly} onOpen={(next) => setTab(next)} tabs={tabs.map((t) => t.id)} />}
-      {active === "upload" && <MultiDocumentUpload restaurant={BTB_RESTAURANT} destinations={allowed.filter(card => btbCanEdit(card.feature, identity.role)).map(card => card.href.slice("/btb/demo/".length))} />}
+      {active === "upload" && <MultiDocumentUpload restaurant={BTB_RESTAURANT} destinations={allowed.filter(card => btbCanEdit(card.feature, identity.role, identity.console === true)).map(card => card.href.slice("/btb/demo/".length))} />}
       {active === "renewals" && <ComplianceRegister readOnly={readOnly} restaurant={BTB_RESTAURANT} showHeader={false} embedded />}
       {active === "certs" && <StaffLicencesPage />}
-      {active === "dates" && <TaxDatesPanel readOnly={!btbCanEdit("tax_dates", identity.role)} showHeader={false} embedded />}
+      {active === "dates" && <TaxDatesPanel readOnly={!btbCanEdit("tax_dates", identity.role, identity.console === true)} showHeader={false} embedded />}
       {active === "documents" && <DocumentVault title="Business documents" subtitle="Forms, SOPs, brand assets & menus — files that don’t expire."
-        readOnly={!btbCanEdit("documents", identity.role)} showHeader={false} embedded uploader={{ restaurantName: BTB_RESTAURANT }} />}
+        readOnly={!btbCanEdit("documents", identity.role, identity.console === true)} showHeader={false} embedded uploader={{ restaurantName: BTB_RESTAURANT }} />}
       {active === "reminders" && <LicenceRemindersPage />}
       </div>
     </div>

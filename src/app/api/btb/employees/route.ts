@@ -37,7 +37,7 @@ export const POST = btbRoute("employees", true, async (context, request) => {
   if (error) throw new BtbApiError(error);
   if (!isVersion(body.version) || (body.id != null && !isUuid(body.id))) throw new BtbApiError("Reload this employee record before saving.");
   const role = body.role as BtbEmployee["role"];
-  if (!employeeEditableBy(identity.role, role)) throw new BtbApiError("Supervisors can manage staff accounts. A manager manages supervisor and manager accounts.", 403);
+  if (!employeeEditableBy(identity.role, role, identity.console === true)) throw new BtbApiError("Supervisors can manage staff accounts. A manager manages supervisor and manager accounts.", 403);
   let existing: BtbEmployee | null = null;
   if (body.id) {
     const result = await db.from("btb_employees").select(EMPLOYEE_COLUMNS).eq("restaurant_name", BTB_RESTAURANT).eq("id", body.id).maybeSingle();

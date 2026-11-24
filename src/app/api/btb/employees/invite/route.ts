@@ -34,7 +34,7 @@ export const POST = btbRoute("employees", true, async ({ db, identity, access },
     dbError(result.error, "The employee record could not be verified.");
     const person = result.data as BtbEmployee | null;
     if (!person?.email) throw new BtbApiError("Add an email address before inviting this person.", 400);
-    if (!employeeEditableBy(identity.role, person.role)) throw new BtbApiError("Your role cannot invite this employee.", 403);
+    if (!employeeEditableBy(identity.role, person.role, identity.console === true)) throw new BtbApiError("Your role cannot invite this employee.", 403);
     name = person.name;
     email = person.email;
     role = person.role;
@@ -42,7 +42,7 @@ export const POST = btbRoute("employees", true, async ({ db, identity, access },
     const invalid = validateBtbAdminPerson(body);
     if (invalid) throw new BtbApiError(invalid);
     role = String(body.role);
-    if (!employeeEditableBy(identity.role, role as BtbEmployee["role"])) {
+    if (!employeeEditableBy(identity.role, role as BtbEmployee["role"], identity.console === true)) {
       throw new BtbApiError("Your role cannot invite that level of employee.", 403);
     }
     name = String(body.name).trim();

@@ -397,6 +397,8 @@ a.dash-metric:hover { border-color: var(--brand); background: white; }
 .btb-header__brand > span, .btb-auth__brand > span { font-size: 0.6875rem; color: var(--muted); }
 .btb-header__actions { display: flex; align-items: center; gap: 20px; }
 .btb-identity { display: flex; align-items: center; gap: 10px; font-size: 0.8125rem; color: var(--muted-2); }
+.btb-header__console { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 0.8125rem; font-weight: 500; color: var(--brand); }
+.btb-header__console:hover { background: var(--paper-2); }
 .btb-header__signout { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 0.8125rem; }
 .btb-header__signout:hover { background: var(--paper-2); }
 .btb-header__signout:disabled { opacity: 0.5; }

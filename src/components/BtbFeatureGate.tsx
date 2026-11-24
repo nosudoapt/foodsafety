@@ -15,7 +15,7 @@ export function BtbPageBoundary({ children }: { children: React.ReactNode }) {
   const card = btbCardForPath(usePathname());
   if (loading) return <div className="workspace-loading btb-loading" role="status"><span className="ui-loader" aria-hidden="true" /><p>Opening your workspace…</p></div>;
   if (error || !rows) return <div className="ui-empty btb-loading"><CircleAlert size={30} /><h1>Let’s reconnect your workspace.</h1><p role="alert">{error || accessError}</p><button className="ui-button" onClick={reload}>Try again</button></div>;
-  if (!identity || (card && !btbPageAllowed(card, identity.role, rows, pageGrants))) return <div className="ui-empty btb-loading"><LockKeyhole size={30} /><h1>This page isn’t in your workspace.</h1><p>Your overview shows the tools available to your role and assigned locations.</p><Link className="ui-button ui-button--ghost" href="/btb/demo">Back to overview</Link></div>;
+  if (!identity || (card && !btbPageAllowed(card, identity.role, rows, pageGrants, identity.console === true))) return <div className="ui-empty btb-loading"><LockKeyhole size={30} /><h1>This page isn’t in your workspace.</h1><p>Your overview shows the tools available to your role and assigned locations.</p><Link className="ui-button ui-button--ghost" href="/btb/demo">Back to overview</Link></div>;
   return <>{children}</>;
 }
 
@@ -27,6 +27,8 @@ export default function BtbFeatureGate({ feature, wide = false, children }: {
   const { identity, rows, pageGrants } = useBtbWorkspace();
   const current = btbCardForPath(usePathname());
   const card = current?.feature === feature ? current : BTB_CARDS.find(item => item.feature === feature);
-  if (!identity || !card || !btbCanView(feature, identity.role) || !btbPageAllowed(card, identity.role, rows, pageGrants)) return null;
-  return <div className={wide ? "btb-page btb-page--wide" : "btb-page"}>{children(!btbCanEdit(feature, identity.role), identity.role)}</div>;
+  // A console that entered the branch acts with that branch's manager authority.
+  const console = identity?.console === true;
+  if (!identity || !card || !btbCanView(feature, identity.role, console) || !btbPageAllowed(card, identity.role, rows, pageGrants, console)) return null;
+  return <div className={wide ? "btb-page btb-page--wide" : "btb-page"}>{children(!btbCanEdit(feature, identity.role, console), identity.role)}</div>;
 }

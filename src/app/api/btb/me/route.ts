@@ -20,6 +20,7 @@ export async function GET(request: Request) {
       email: identity.email,
       name: identity.name,
       employeeId: identity.employeeId,
+      console: identity.console === true,
       sessionVersion: identity.sessionVersion,
       restaurant: BTB_RESTAURANT,
       locationId: session.claims.locationId,

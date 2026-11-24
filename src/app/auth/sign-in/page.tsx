@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowRight, Mail } from "lucide-react";
@@ -45,6 +45,13 @@ export default function SignIn() {
     password: false,
   });
   const [loading, setLoading] = useState(false);
+  // A synchronous single-flight flag. `loading` is state and only updates on the
+  // next render, so two submits in the same tick (a click plus an Enter, or a
+  // double click) would both get through and one late 401 could paint "wrong
+  // password" over a sign-in that had already succeeded.
+  const inFlight = useRef(false);
+  // Once the session is issued the form is done; nothing may repaint an error.
+  const signedIn = useRef(false);
   const router = useRouter();
 
   const emailError =
@@ -60,7 +67,8 @@ export default function SignIn() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setTouched({ email: true, password: true });
-    if (!canSubmit || loading) return;
+    if (!canSubmit || inFlight.current || signedIn.current) return;
+    inFlight.current = true;
     setLoading(true);
     setError("");
 
@@ -72,17 +80,27 @@ export default function SignIn() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: email.trim(), password }),
       });
-      const data = (await res.json().catch(() => ({}))) as { permittedView?: string; error?: string };
+      const data = (await res.json().catch(() => null)) as { permittedView?: string; error?: string } | null;
       if (!res.ok) {
-        setError(res.status === 429 ? "Too many attempts. Wait a few minutes, then try again." : friendlyAuthError(data.error ?? "Invalid email or password"));
+        // A missing body is the platform failing (cold start, gateway timeout),
+        // not a wrong password — never tell someone their password is wrong
+        // when we never got an answer.
+        const detail = data?.error;
+        setError(res.status === 429
+          ? "Too many attempts. Wait a few minutes, then try again."
+          : detail ? friendlyAuthError(detail) : "We couldn’t sign you in just now. Try again in a moment.");
         return;
       }
+      signedIn.current = true;
       setPassword("");
-      router.replace(safeNextPath(data.permittedView ?? null));
-      router.refresh();
+      // Keep the spinner up: the cookie is set, the next document is authorized.
+      router.replace(safeNextPath(data?.permittedView ?? null));
     } catch {
-      setError("Couldn’t reach the server. Check your connection and try again.");
-    } finally { setLoading(false); }
+      if (!signedIn.current) setError("Couldn’t reach the server. Check your connection and try again.");
+    } finally {
+      inFlight.current = false;
+      if (!signedIn.current) setLoading(false);
+    }
   };
 
   return (
