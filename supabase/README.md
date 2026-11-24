@@ -115,6 +115,7 @@ are idempotent (safe to re-run).
 | 58 | `schema-workspace-session-scope.sql` | Request-bound SQL and atomic session switching; owner/corporate/console roles still require explicit same-tenant assignments. Retires browser bearer tokens and raw data/RPC access. Adds nullable scope columns without legacy backfills. |
 | 59 | `schema-btb-console-locations-fix.sql` | Repair the console location list: `btb_admin_locations()` no longer reads a `created_at` column that `workspace_console_locations` does not have, and lists every location in the console's tenant instead of only the current branch. |
 | 60 | `schema-btb-console-monitoring-tenant.sql` | Console monitoring covers the whole tenant: one `btb_console_site_ids()` helper now feeds the site list, people count, activity heatmap and recent feed, so `locations`/`active_locations` and every per-branch aggregate report the real estate instead of one pinned branch. |
+| 61 | `schema-btb-console-any-branch.sql` | A console may act on any branch of its estate: `btb_admin_assert_location()` keeps the console-session, explicit-assignment, same-tenant and active checks but no longer requires the branch to equal the session's pinned location, which locked every other branch out of people, invitations, passwords and location settings. |
 
 
 ## Role set — single source of truth
