@@ -114,6 +114,7 @@ are idempotent (safe to re-run).
 | 57 | `schema-workspace-auth-cutover.sql` | Unified auth prerequisites: canonical tenants/principals, linked collision credential archives, protected signup/profile privileges, explicit console assignments, durable limits and revocable sessions. Unresolved legacy ownership stays unassigned. Apply once through the checksum-tracked runner. |
 | 58 | `schema-workspace-session-scope.sql` | Request-bound SQL and atomic session switching; owner/corporate/console roles still require explicit same-tenant assignments. Retires browser bearer tokens and raw data/RPC access. Adds nullable scope columns without legacy backfills. |
 | 59 | `schema-btb-console-locations-fix.sql` | Repair the console location list: `btb_admin_locations()` no longer reads a `created_at` column that `workspace_console_locations` does not have, and lists every location in the console's tenant instead of only the current branch. |
+| 60 | `schema-btb-console-monitoring-tenant.sql` | Console monitoring covers the whole tenant: one `btb_console_site_ids()` helper now feeds the site list, people count, activity heatmap and recent feed, so `locations`/`active_locations` and every per-branch aggregate report the real estate instead of one pinned branch. |
 
 
 ## Role set — single source of truth
