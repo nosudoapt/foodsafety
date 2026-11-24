@@ -294,6 +294,11 @@
       "step": 61,
       "file": "schema-btb-console-any-branch.sql",
       "description": "A console may act on any branch of its estate: btb_admin_assert_location() keeps the console-session, explicit-assignment, same-tenant and active checks but no longer requires the branch to equal the session's pinned location, which locked every other branch out of people, invitations, passwords and location settings."
+    },
+    {
+      "step": 62,
+      "file": "schema-btb-scope-trigger-fix.sql",
+      "description": "Repair the scoped-row trigger: workspace_guard_scoped_row() no longer runs an unfinished parent-FK loop that projected parent.relname on a pg_attribute row (42703), which broke every session-scoped write (prep comments, temperatures, cleaning, orders) since step 58. All other guards are unchanged."
     }
   ]
 }
