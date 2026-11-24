@@ -41,7 +41,7 @@ export function BtbWorkspaceProvider({ children }: { children: React.ReactNode }
       if (cancelled) return;
       if (!me.authenticated) {
         syncBtbCapabilityIdentity(null);
-        router.replace(`/btb/login?next=${encodeURIComponent(pathname)}`);
+        router.replace(`/auth/sign-in?next=${encodeURIComponent(pathname)}`);
         return;
       }
       const identity = isBtbRole(me.role)

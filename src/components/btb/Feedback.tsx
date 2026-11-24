@@ -11,7 +11,7 @@ export function LoadState({ loading, error, onRetry }: { loading: boolean; error
 }
 
 export function IndividualLoginNotice({ next }: { next: string }) {
-  return <div className="ui-notice"><UserRound size={20} aria-hidden="true" /><div><strong>Your work, under your name.</strong><p>Use your individual employee login to save checks and submit training. Ask your manager or supervisor to set up your account.</p><Link className="ops-text-link" href={`/btb/login?next=${encodeURIComponent(next)}`}>Sign in to my employee account</Link></div></div>;
+  return <div className="ui-notice"><UserRound size={20} aria-hidden="true" /><div><strong>Your work, under your name.</strong><p>Use your individual employee login to save checks and submit training. Ask your manager or supervisor to set up your account.</p><Link className="ops-text-link" href={`/auth/sign-in?next=${encodeURIComponent(next)}`}>Sign in to my employee account</Link></div></div>;
 }
 
 export const messageOf = (cause: unknown) => cause instanceof Error ? cause.message : "This change could not be saved. Please try again.";

@@ -4,7 +4,7 @@ import { BtbApiError } from "./api-errors";
 import type { WorkspaceAuthContext, WorkspaceClaims } from "./workspace-auth-types";
 
 export interface WorkspaceTable { name: string; columns: string[]; uuidTenant: boolean }
-export interface WorkspaceDatabaseScope { claims: WorkspaceClaims; principal: WorkspaceAuthContext; tables: WorkspaceTable[]; employeeIds: string[] }
+export interface WorkspaceDatabaseScope { claims: WorkspaceClaims; principal: WorkspaceAuthContext; tables: WorkspaceTable[]; employeeIds: string[]; consoleLocationIds: string[] }
 
 const REGISTERS = new Set([
   "allergen_records", "app_activity", "branding_requests", "business_documents", "cash_outs", "cleaning_logs", "cleaning_records",
@@ -39,6 +39,16 @@ const RPCS = new Set([...UUID_ACTOR_RPCS, ...LEGACY_RPCS, "workspace_btb_page_gr
 const deny = (message = "This request is not permitted in the current workspace."): never => { throw new BtbApiError(message, 403); };
 const readMethod = (method: string) => method === "GET" || method === "HEAD";
 function assertBinding(value: unknown, expected: unknown): void { if (value !== expected) deny(); }
+
+/** A location argument may name the session's own branch, or — for a console —
+ *  any branch of its estate. Its session is pinned to one branch, but a console
+ *  manages them all, so equality with that id would lock it out of every other
+ *  one. Employees are unaffected: their set is empty. */
+function assertLocation(value: unknown, scope: WorkspaceDatabaseScope): void {
+  if (value === scope.claims.locationId) return;
+  if (scope.claims.principalType === "console" && typeof value === "string" && scope.consoleLocationIds.includes(value)) return;
+  deny("This location is not the current workspace.");
+}
 
 /** Append a separate AND predicate. Caller filters, OR groups, aliased selects,
  * and null-location filters cannot replace the server's scope. Embedded reads
@@ -107,7 +117,7 @@ export function scopeRpcRequest(name: string, method: string, body: unknown, sco
   }
   if (claims.tenantSlug !== "between-the-buns" || !["employee", "console"].includes(claims.principalType)) deny();
   if (name.startsWith("btb_admin_") ? claims.principalType !== "console" : claims.principalType !== "employee") deny();
-  for (const key of ["p_location", "p_location_id"]) if (key in args) assertBinding(args[key], claims.locationId);
+  for (const key of ["p_location", "p_location_id"]) if (key in args) assertLocation(args[key], scope);
   if (UUID_ACTOR_RPCS.has(name)) {
     if ("p_actor" in args) assertBinding(args.p_actor, principal.credentialId);
     if ("p_session" in args) assertBinding(args.p_session, principal.sourceVersion);

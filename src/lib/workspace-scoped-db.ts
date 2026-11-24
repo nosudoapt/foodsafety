@@ -3,13 +3,17 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { BtbApiError } from "./api-errors";
 import { authUuid, type WorkspaceAuthContext, type WorkspaceClaims } from "./workspace-auth-types";
 import { scopeRpcRequest, scopeTableRequest, type WorkspaceDatabaseScope, type WorkspaceTable } from "./workspace-db-policy";
+import { consoleBranchIds } from "./workspace-console-sites";
 
 export async function scopedWorkspaceDb(base: SupabaseClient, claims: WorkspaceClaims, principal: WorkspaceAuthContext): Promise<SupabaseClient> {
-  const [catalog, members] = await Promise.all([
+  const [catalog, members, consoleSites] = await Promise.all([
     base.rpc("workspace_scope_catalog"),
     claims.principalType === "employee" || claims.principalType === "console"
       ? base.from("btb_location_access").select("employee_id").eq("location_id", claims.locationId)
       : Promise.resolve({ data: [], error: null }),
+    // A console's estate: its own assignments inside the session's tenant. The
+    // session is pinned to one branch, but the console may act on all of them.
+    consoleBranchIds(base, claims, principal),
   ]);
   if (catalog.error || members.error || !Array.isArray(catalog.data)) throw new BtbApiError("Your workspace scope could not be verified. Please retry.", 503, catalog.error ?? members.error);
   if (!catalog.data.every((table: WorkspaceTable) => table && /^[a-z_][a-z_0-9]*$/.test(table.name) && Array.isArray(table.columns)
@@ -18,7 +22,7 @@ export async function scopedWorkspaceDb(base: SupabaseClient, claims: WorkspaceC
   const ids = (members.data ?? []).map(row => row.employee_id).filter(authUuid);
   const employees = ids.length ? await base.from("btb_employees").select("id").in("id", ids).eq("tenant_id", claims.tenantId) : { data: [], error: null };
   if (employees.error) throw new BtbApiError("Your workspace team could not be verified.", 503, employees.error);
-  const scope: WorkspaceDatabaseScope = { claims, principal, tables, employeeIds: (employees.data ?? []).map(row => row.id) };
+  const scope: WorkspaceDatabaseScope = { claims, principal, tables, employeeIds: (employees.data ?? []).map(row => row.id), consoleLocationIds: consoleSites };
   const serverUrl = process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   if (!serverUrl || !key) throw new BtbApiError("Authentication is not configured.", 503);
