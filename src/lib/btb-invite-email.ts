@@ -2,6 +2,7 @@
 // and can deliver it immediately instead of waiting for the daily outbox
 // worker. Retries still go through the same job row and Resend idempotency
 // key, so an immediate send followed by a cron retry cannot double-send.
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /** Same sender check as ./btb-email, kept local so this module stays free of
@@ -19,6 +20,8 @@ export interface InvitationJob {
   subject: string;
   body: string;
   attempts: number;
+  /** Claim token for this immediate send; a fresh one is generated when absent. */
+  lease?: string;
 }
 
 export type InvitationDeliveryStatus = "pending" | "accepted" | "failed";
@@ -78,23 +81,34 @@ export function invitationEmailHtml(body: string): string {
 </body></html>`;
 }
 
-async function markFailed(db: SupabaseClient, job: InvitationJob, error: string, uncertain: boolean): Promise<void> {
+async function markFailed(db: SupabaseClient, job: InvitationJob, lease: string, error: string, uncertain: boolean): Promise<void> {
   const attempts = job.attempts + 1;
   const delayMs = Math.min(60, 2 ** Math.min(attempts, 6)) * 60_000;
   await db.from("btb_email_jobs").update({
     status: "failed", error, attempts, uncertain, lease_token: null, lease_until: null,
     available_at: new Date(Date.now() + delayMs).toISOString(),
-  }).eq("id", job.id).in("status", ["pending", "failed"]);
+  }).eq("id", job.id).eq("lease_token", lease).eq("status", "sending");
 }
 
 /** Send now, then settle the existing outbox row so the cron does not send a
- *  second copy. Any failure keeps the row retryable for the daily worker. */
+ *  second copy. The job is claimed first: a superseded invitation (its job is
+ *  cancelled) or a job another worker owns is never emailed. Any failure keeps
+ *  the row retryable for the daily worker under the same Resend idempotency key. */
 export async function deliverInvitationEmail(db: SupabaseClient, job: InvitationJob): Promise<{ status: InvitationDeliveryStatus; error?: string }> {
   if (!senderConfigured()) return { status: "pending" };
+  const lease = job.lease ?? randomUUID();
+  const claim = await db.from("btb_email_jobs").update({
+    status: "sending", lease_token: lease, lease_until: new Date(Date.now() + 120_000).toISOString(),
+  }).eq("id", job.id).in("status", ["pending", "failed"]).select("id");
+  if (claim.error) return { status: "failed", error: "The email could not be claimed for delivery." };
+  if (!claim.data?.length) return { status: "pending" };
   try {
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
-      signal: AbortSignal.timeout(12_000),
+      // This runs after the HTTP response was sent, inside the post-response
+      // window. A slow provider must give up quickly and leave the row for the
+      // outbox rather than hold the invocation open.
+      signal: AbortSignal.timeout(6_000),
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY!.trim()}`,
         "Content-Type": "application/json",
@@ -114,23 +128,23 @@ export async function deliverInvitationEmail(db: SupabaseClient, job: Invitation
         ? `: ${((detail as { message: string }).message).slice(0, 300)}`
         : "";
       const error = `The email provider returned HTTP ${response.status}${message}`;
-      await markFailed(db, job, error, response.status >= 500 || response.status === 408);
+      await markFailed(db, job, lease, error, response.status >= 500 || response.status === 408);
       return { status: "failed", error };
     }
     const body = await response.json() as { id?: unknown } | null;
     if (typeof body?.id !== "string" || !body.id) {
       const error = "The email provider did not confirm a message ID.";
-      await markFailed(db, job, error, true);
+      await markFailed(db, job, lease, error, true);
       return { status: "failed", error };
     }
     await db.from("btb_email_jobs").update({
       status: "accepted", provider_id: body.id, accepted_at: new Date().toISOString(),
       error: null, lease_token: null, lease_until: null,
-    }).eq("id", job.id).in("status", ["pending", "failed"]);
+    }).eq("id", job.id).eq("lease_token", lease).eq("status", "sending");
     return { status: "accepted" };
   } catch (cause) {
     const error = cause instanceof Error ? `Delivery could not be confirmed: ${cause.message}` : "Delivery could not be confirmed.";
-    await markFailed(db, job, error, true).catch(() => undefined);
+    await markFailed(db, job, lease, error, true).catch(() => undefined);
     return { status: "failed", error };
   }
 }

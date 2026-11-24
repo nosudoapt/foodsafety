@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { btbAdminRoute, btbAdminRpc } from "@/lib/btb-admin-api";
 import { consoleUuid } from "@/lib/btb-admin-locations";
 import { issueBtbAdminInvitation } from "@/lib/btb-admin-invitations";
@@ -20,8 +21,13 @@ export async function POST(request: Request, route: Context) {
     const body = await readBody(req, 4096);
     const error = validateBtbAdminPerson(body);
     if (error) throw new BtbApiError(error);
-    return issueBtbAdminInvitation(context, req, locationId, {
+    const { dispatch, ...receipt } = await issueBtbAdminInvitation(context, req, locationId, {
       name: (body.name as string).trim(), email: (body.email as string).trim().toLowerCase(), role: body.role as BtbInviteRole,
     });
+    // The invitation and its setup token are already committed. The email is
+    // dispatched after this response, so a cold start or a slow mail provider
+    // can never make a successful invitation look like a timeout.
+    if (dispatch) after(dispatch);
+    return receipt;
   })(request);
 }

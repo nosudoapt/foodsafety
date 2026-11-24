@@ -119,6 +119,7 @@ are idempotent (safe to re-run).
 | 62 | `schema-btb-scope-trigger-fix.sql` | Repair the scoped-row trigger: `workspace_guard_scoped_row()` no longer runs an unfinished parent-FK loop that projected `parent.relname` on a `pg_attribute` row (42703), which broke every session-scoped write since step 58. All other guards are unchanged. |
 | 63 | `schema-btb-remove-membership.sql` | Remove-from-location works: the scoped-row guard accepts rows of any branch a console administers (not only its pinned one), and the employee target check accepts a person whose last membership was just deleted instead of demanding the membership it is removing. |
 | 64 | `schema-btb-remove-revokes-sessions.sql` | Blocking a person, or removing their last membership, now revokes their durable `workspace_auth_sessions` rows as well as bumping the principal version, so no usable session survives a disabled account. |
+| 65 | `schema-btb-invite-idempotent.sql` | Inviting is idempotent by normalised email: retrying after a timeout reuses the existing employee even if the typed name differs, while a role mismatch still refuses. Concurrent retries serialise on the email, so one person and one live invitation result. |
 
 
 ## Role set — single source of truth

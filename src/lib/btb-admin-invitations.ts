@@ -1,16 +1,25 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import { BtbApiError } from "./btb-api";
 import { btbAdminRpc, type BtbAdminContext } from "./btb-admin-api";
 import { btbAdminLocation } from "./btb-admin-locations";
 import { createBtbInvitation } from "./btb-invitations";
 import { reminderServiceStatus } from "./btb-email";
 import { deliverInvitationEmail } from "./btb-invite-email";
+import { serviceDb } from "./supabase-server";
 import type { BtbAdminPerson, BtbInvitationReceipt, BtbInviteRole } from "./btb-admin";
 
 type InvitationRpcResult = Omit<BtbInvitationReceipt, "emailService"> & { job_id?: string };
 
+export interface IssuedBtbInvitation extends BtbInvitationReceipt {
+  /** Runs after the response is sent (see after() in the route). The invitation
+   *  row and setup token are already committed, so a cold start or a slow mail
+   *  provider can never turn a successful invitation into a client timeout. */
+  dispatch?: () => Promise<void>;
+}
+
 export async function issueBtbAdminInvitation(context: BtbAdminContext, request: Request, locationId: string,
-  person: { name: string; email: string; role: BtbInviteRole } | { id: string }) {
+  person: { name: string; email: string; role: BtbInviteRole } | { id: string }): Promise<IssuedBtbInvitation> {
   const location = await btbAdminLocation(context, locationId);
   if (!location.active) throw new BtbApiError("Activate this location before inviting people.");
   let name: string;
@@ -34,18 +43,25 @@ export async function issueBtbAdminInvitation(context: BtbAdminContext, request:
       p_token_hash: invitation.tokenHash, p_subject: invitation.subject, p_body: invitation.body },
     "The invitation could not be created. Check the person and location, then retry.");
   const emailService = reminderServiceStatus();
-  // Clicking invite sends immediately. The queued row is settled afterwards so
-  // the daily cron cannot deliver a second copy.
-  const delivery = emailService.senderConfigured && data.job_id && email && process.env.BTB_INVITE_SEND_NOW !== "0"
-    ? await deliverInvitationEmail(context.db, {
-        id: data.job_id, recipient: email, subject: invitation.subject, body: invitation.body,
-        attempts: 0,
-      })
-    : { status: data.email_status as BtbInvitationReceipt["email_status"], error: undefined };
+  const jobId = data.job_id;
+  // A console may manage a branch other than the one its session is pinned to,
+  // so the outbox row is settled with the service client by its exact job id:
+  // the RPC above already authorized the location, and the request-scoped client
+  // is pinned to the session's branch. This is never a browser client.
+  const dispatch = emailService.senderConfigured && jobId && email && process.env.BTB_INVITE_SEND_NOW !== "0"
+    ? async () => {
+        await deliverInvitationEmail(serviceDb(), {
+          id: jobId, recipient: email, subject: invitation.subject, body: invitation.body,
+          attempts: 0, lease: randomUUID(),
+        }).catch(() => undefined);
+      }
+    : undefined;
   return { employee_id: data.employee_id, invitation_id: data.invitation_id, expires_at: data.expires_at,
-    email_status: delivery.status as BtbInvitationReceipt["email_status"],
-    ...(delivery.error ? { email_error: delivery.error } : {}), emailService,
+    // The send happens after this response, so "queued" is the honest status.
+    email_status: dispatch ? "pending" : data.email_status as BtbInvitationReceipt["email_status"],
+    emailService,
     // Only the missing-sender fallback may expose the one-time raw link. It is
     // never saved in client storage, an audit event or the people list response.
-    ...(!emailService.senderConfigured ? { manualLink: invitation.link } : {}) } satisfies BtbInvitationReceipt;
+    ...(!emailService.senderConfigured ? { manualLink: invitation.link } : {}),
+    ...(dispatch ? { dispatch } : {}) };
 }

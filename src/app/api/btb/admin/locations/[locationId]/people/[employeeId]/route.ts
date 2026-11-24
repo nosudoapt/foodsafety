@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { btbAdminRoute, btbAdminRpc } from "@/lib/btb-admin-api";
 import { consoleUuid } from "@/lib/btb-admin-locations";
 import { issueBtbAdminInvitation } from "@/lib/btb-admin-invitations";
@@ -11,7 +12,12 @@ export async function PATCH(request: Request, route: Context) {
     const params = await route.params;
     const locationId = consoleUuid(params.locationId), employeeId = consoleUuid(params.employeeId);
     const body = await readBody(req, 4096);
-    if (body.action === "reinvite") return issueBtbAdminInvitation(context, req, locationId, { id: employeeId });
+    if (body.action === "reinvite") {
+      const { dispatch, ...receipt } = await issueBtbAdminInvitation(context, req, locationId, { id: employeeId });
+      // Same contract as the invite form: committed first, emailed afterwards.
+      if (dispatch) after(dispatch);
+      return receipt;
+    }
     if (body.action === "password") {
       if (!validEmployeePassword(body.password)) throw new BtbApiError("Set a password of 10–128 characters.");
       await btbAdminRpc(context, "btb_admin_reset_password", {

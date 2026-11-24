@@ -63,7 +63,7 @@ function InviteForm({ endpoint, onClose, onInvited }: { endpoint: string; onClos
     event.preventDefault(); if (saving) return;
     const invalid = validateBtbAdminPerson(form); if (invalid) { setError(invalid); return; }
     setSaving(true); setError("");
-    try { onInvited(await fetchJson<BtbInvitationReceipt>(endpoint, jsonRequest(form))); }
+    try { onInvited(await fetchJson<BtbInvitationReceipt>(endpoint, { ...jsonRequest(form), signal: AbortSignal.timeout(20_000) })); }
     catch (cause) { setError(messageOf(cause)); }
     finally { setSaving(false); }
   }
@@ -86,7 +86,8 @@ function PersonActionDialog({ person, action, endpoint, onClose, onChanged, onIn
     if (action === "password" && (password.length < 10 || password.length > 128)) { setError("Set a password of 10–128 characters."); return; }
     setSaving(true); setError("");
     try {
-      const result = await fetchJson<BtbInvitationReceipt>(`${endpoint}/${person.id}`, action === "remove" ? { method: "DELETE" } : jsonRequest({ action, ...(action === "password" ? { password } : {}) }, "PATCH"));
+      const request = action === "remove" ? { method: "DELETE" } : jsonRequest({ action, ...(action === "password" ? { password } : {}) }, "PATCH");
+      const result = await fetchJson<BtbInvitationReceipt>(`${endpoint}/${person.id}`, { ...request, signal: AbortSignal.timeout(20_000) });
       if (action === "reinvite") onInvited(result); else onChanged();
     } catch (cause) { setError(messageOf(cause)); }
     finally { setSaving(false); }

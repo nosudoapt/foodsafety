@@ -309,6 +309,11 @@
       "step": 64,
       "file": "schema-btb-remove-revokes-sessions.sql",
       "description": "Blocking a person, or removing their last membership, now revokes their durable workspace sessions as well as bumping the principal version, so no usable session row survives a disabled account."
+    },
+    {
+      "step": 65,
+      "file": "schema-btb-invite-idempotent.sql",
+      "description": "Inviting is idempotent by normalised email: retrying after a timeout reuses the existing employee even if the typed name differs, while a role mismatch still refuses. Concurrent retries serialise on the email, so one live invitation and one person result."
     }
   ]
 }
