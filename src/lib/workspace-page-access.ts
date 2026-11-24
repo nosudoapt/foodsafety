@@ -25,3 +25,23 @@ export function workspacePageAllowed(path: string, claims: WorkspaceClaims, bran
 export function assertCurrentLocation(claims: WorkspaceClaims, value: unknown): boolean {
   return value === undefined || value === claims.locationId;
 }
+
+/** Where the internal `/btb/demo` folder belongs for this session.
+ *
+ *  The proxy rewrites `/btb/<slug>/…` onto `/btb/demo/…`, but a hard navigation
+ *  or a client link still goes to the folder path. Sending it to `permittedView`
+ *  dropped the sub-path and, for a console, ejected the visitor straight out of
+ *  the branch to `/btb/admin`. Keep the branch the session is in and the rest of
+ *  the path instead.
+ */
+export function legacyFolderTarget(
+  path: string,
+  claims: WorkspaceClaims,
+  sites: readonly { id: string; slug: string }[],
+): string {
+  if (claims.principalType !== "employee" && claims.principalType !== "console") return claims.permittedView;
+  const site = sites.find((item) => item.id === claims.locationId);
+  if (!site) return claims.permittedView;
+  const rest = path.startsWith("/btb/demo") ? path.slice("/btb/demo".length) : "";
+  return `/btb/${site.slug}${rest}`;
+}

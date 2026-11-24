@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { isProtectedPath } from "@/lib/route-guards";
-import { workspacePageAllowed, pathWithin } from "@/lib/workspace-page-access";
+import { workspacePageAllowed, pathWithin, legacyFolderTarget } from "@/lib/workspace-page-access";
 import { workspaceSessionFromValue, AUTH_PRIVATE_HEADERS } from "@/lib/workspace-auth-server";
 import { WORKSPACE_COOKIE } from "@/lib/workspace-auth-types";
 import { btbOriginAllowed } from "@/lib/btb-origin";
@@ -45,10 +45,13 @@ export async function proxy(request: NextRequest) {
   if (path === "/auth/sign-in") return session ? redirectTo(session.claims.permittedView) : NextResponse.next({ request: { headers: requestHeaders } });
   if (!session) return chooser && path === "/app" ? NextResponse.next({ request: { headers: requestHeaders } }) : redirectTo("/auth/sign-in");
   const { claims } = session;
-  if (chooser || legacyFolder) return redirectTo(claims.permittedView);
+  if (chooser) return redirectTo(claims.permittedView);
+  const branchSlugs = session.principal.locations.map((site) => site.slug);
+  // Internal folder paths stay inside the branch this session is in: the
+  // sub-path is preserved, and a console is not ejected to /btb/admin.
+  if (legacyFolder) return redirectTo(legacyFolderTarget(path, claims, session.principal.locations));
   // Branches this session may open. An employee has exactly one; a console has
   // the estate it administers.
-  const branchSlugs = session.principal.locations.map((site) => site.slug);
   if (!workspacePageAllowed(path, claims, branchSlugs)) return redirectTo(claims.permittedView);
 
   requestHeaders.set("x-workspace-path", path);
