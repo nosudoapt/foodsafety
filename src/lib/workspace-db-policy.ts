@@ -25,7 +25,7 @@ const READ_ONLY = new Set(["locations", "location_members", "btb_location_access
 const REFERENCE_REGISTERS = new Set(["btb_design_formats", "btb_social_platforms", "btb_page_permissions"]);
 const UUID_ACTOR_RPCS = new Set([
   "btb_admin_locations", "btb_admin_monitoring", "btb_admin_people", "btb_admin_create_location", "btb_admin_update_location",
-  "btb_admin_add_person", "btb_admin_issue_invite", "btb_admin_remove_person", "btb_admin_block_person", "btb_admin_reset_password",
+  "btb_admin_add_person", "btb_admin_issue_invite", "btb_admin_reinvite", "btb_admin_remove_person", "btb_admin_block_person", "btb_admin_reset_password",
   "btb_employee_add_person", "btb_employee_issue_invite", "btb_ai_settings_get", "btb_ai_settings_put",
   "btb_platform_bootstrap", "btb_platform_overview", "btb_platform_read", "btb_platform_notification_read", "btb_platform_user", "btb_platform_settings",
   "btb_platform_compliance", "btb_platform_finance", "btb_platform_finance_read", "btb_platform_inventory_finance", "btb_platform_file_get", "btb_platform_file_put",
