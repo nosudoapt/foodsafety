@@ -1,5 +1,7 @@
+import { after } from "next/server";
 import { btbRoute, BtbApiError, dbError, readBody } from "@/lib/btb-api";
 import { reminderServiceStatus } from "@/lib/btb-email";
+import { issueBtbAdminInvitation } from "@/lib/btb-admin-invitations";
 import { deliverInvitationEmail } from "@/lib/btb-invite-email";
 import { createBtbInvitation } from "@/lib/btb-invitations";
 import { validateBtbAdminPerson, type BtbInvitationReceipt } from "@/lib/btb-admin";
@@ -13,7 +15,7 @@ interface InvitationRpcResult {
 // A manager or supervisor invites a teammate from the workspace. The account
 // is created without a password, the invitation is single-use, and the branded
 // email is sent immediately (the outbox row remains for retries).
-export const POST = btbRoute("employees", true, async ({ db, identity, access }, request) => {
+export const POST = btbRoute("employees", true, async ({ db, identity, access, session }, request) => {
   if (!identity.employeeId || !identity.sessionVersion) {
     throw new BtbApiError("Sign in with your individual employee account to invite teammates.", 401);
   }
@@ -50,6 +52,25 @@ export const POST = btbRoute("employees", true, async ({ db, identity, access },
   }
 
   const invitation = createBtbInvitation(request.headers.get("origin") ?? new URL(request.url).origin, name, location.name);
+  // A console (tenant super-admin) that entered this branch is not an employee
+  // manager: the manager-invite RPCs require a store manager with an individual
+  // login, so they refuse it even though it may edit people here. It uses the
+  // console's own invitation path instead — the same one its console People
+  // panel uses, with the same single-use link and outbox job.
+  if (identity.console) {
+    // The console invitation types are the store tiers it may create here; the
+    // route has already refused anything above the actor's authority above.
+    const inviteRole = role as "staff" | "supervisor" | "manager";
+    const issued = await issueBtbAdminInvitation(
+      { db, admin: { id: session.principal.credentialId, name: session.principal.name, email: session.principal.email, sessionVersion: session.principal.sourceVersion ?? 1 }, session },
+      request, location.id, employeeId !== null ? { id: employeeId } : { name, email, role: inviteRole },
+    );
+    const { dispatch } = issued;
+    if (dispatch) after(dispatch);
+    const receipt: BtbInvitationReceipt & { manualLink?: string } = { ...issued };
+    delete (receipt as { dispatch?: unknown }).dispatch;
+    return receipt;
+  }
   const { data, error } = await db.rpc(employeeId !== null ? "btb_employee_issue_invite" : "btb_employee_add_person", {
     p_actor: identity.employeeId, p_session: identity.sessionVersion, p_location: location.id,
     ...(employeeId !== null ? { p_employee: employeeId } : { p_data: { name, email, role } }),

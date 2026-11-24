@@ -105,3 +105,16 @@ test("a console reads the team of the branch it entered", () => {
   const route = read("src", "app", "api", "btb", "employees", "route.ts");
   assert.match(route, /if \(identity\.console && identity\.currentLocationId\) return identity\.currentLocationId;/);
 });
+
+test("a console invites from a branch through the console invitation path", () => {
+  const route = read("src", "app", "api", "btb", "employees", "invite", "route.ts");
+  // The manager-invite RPCs require a store manager with an individual login and
+  // refuse an owner actor, so a console must not be sent down that path.
+  assert.match(route, /if \(identity\.console\) \{/);
+  assert.match(route, /issueBtbAdminInvitation\(/);
+  assert.match(route, /sessionVersion: session\.principal\.sourceVersion/);
+  assert.match(route, /if \(dispatch\) after\(dispatch\)/, "the mail send cannot hold the response open");
+  const consoleRpc = route.indexOf("btb_employee_issue_invite");
+  assert.ok(consoleRpc > route.indexOf("issueBtbAdminInvitation("), "the employee RPC is the fallback, not the first choice");
+});
+
