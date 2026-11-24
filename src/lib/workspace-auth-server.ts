@@ -130,20 +130,23 @@ export async function setWorkspaceCookie(response: NextResponse, claims?: Worksp
 }
 
 /** Bridge the one sign-in to the provider session the existing RLS-scoped pages
- * still use. The password has already been verified against the provider, so
- * this only persists the resulting token in cookies; it grants nothing new. */
+ *  still use. The password has already been verified against the provider, so
+ *  this only persists the resulting token in cookies; it grants nothing new, and
+ *  a provider hiccup must never fail a sign-in the workspace already accepted. */
 export async function establishSupabaseBridge(email: string, password: string): Promise<void> {
   const url = process.env.SUPABASE_URL?.trim() || process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
   if (!url || !key) return;
-  const jar = await cookies();
-  const client = createServerClient(url, key, {
-    cookies: {
-      getAll: () => jar.getAll(),
-      setAll: (items) => { for (const item of items) jar.set(item.name, item.value, item.options); },
-    },
-  });
-  await client.auth.signInWithPassword({ email, password });
+  try {
+    const jar = await cookies();
+    const client = createServerClient(url, key, {
+      cookies: {
+        getAll: () => jar.getAll(),
+        setAll: (items) => { for (const item of items) jar.set(item.name, item.value, item.options); },
+      },
+    });
+    await client.auth.signInWithPassword({ email, password });
+  } catch { /* the workspace session is the authority; this is only a bridge */ }
 }
 export function publicWorkspaceSession(session: VerifiedWorkspaceSession): PublicWorkspaceSession {
   const { claims, principal } = session;

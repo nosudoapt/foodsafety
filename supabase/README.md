@@ -113,6 +113,7 @@ are idempotent (safe to re-run).
 | 56 | `schema-btb-cleaning-cashout-server.sql` | Cleaning schedule and cash-out move behind server endpoints: branch and week columns on cleaning_logs, one till count per branch per day, and browser writes revoked on cleaning_logs, cash_outs, prep_counts and order_sheets. |
 | 57 | `schema-workspace-auth-cutover.sql` | Unified auth prerequisites: canonical tenants/principals, linked collision credential archives, protected signup/profile privileges, explicit console assignments, durable limits and revocable sessions. Unresolved legacy ownership stays unassigned. Apply once through the checksum-tracked runner. |
 | 58 | `schema-workspace-session-scope.sql` | Request-bound SQL and atomic session switching; owner/corporate/console roles still require explicit same-tenant assignments. Retires browser bearer tokens and raw data/RPC access. Adds nullable scope columns without legacy backfills. |
+| 59 | `schema-btb-console-locations-fix.sql` | Repair the console location list: `btb_admin_locations()` no longer reads a `created_at` column that `workspace_console_locations` does not have, and lists every location in the console's tenant instead of only the current branch. |
 
 
 ## Role set — single source of truth
