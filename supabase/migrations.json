@@ -299,6 +299,16 @@
       "step": 62,
       "file": "schema-btb-scope-trigger-fix.sql",
       "description": "Repair the scoped-row trigger: workspace_guard_scoped_row() no longer runs an unfinished parent-FK loop that projected parent.relname on a pg_attribute row (42703), which broke every session-scoped write (prep comments, temperatures, cleaning, orders) since step 58. All other guards are unchanged."
+    },
+    {
+      "step": 63,
+      "file": "schema-btb-remove-membership.sql",
+      "description": "Remove-from-location works: the scoped-row guard accepts rows of any branch a console administers (not only its pinned one), and the employee target check accepts a person whose last membership was just deleted instead of demanding the membership it is in the middle of removing."
+    },
+    {
+      "step": 64,
+      "file": "schema-btb-remove-revokes-sessions.sql",
+      "description": "Blocking a person, or removing their last membership, now revokes their durable workspace sessions as well as bumping the principal version, so no usable session row survives a disabled account."
     }
   ]
 }

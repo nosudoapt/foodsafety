@@ -117,6 +117,8 @@ are idempotent (safe to re-run).
 | 60 | `schema-btb-console-monitoring-tenant.sql` | Console monitoring covers the whole tenant: one `btb_console_site_ids()` helper now feeds the site list, people count, activity heatmap and recent feed, so `locations`/`active_locations` and every per-branch aggregate report the real estate instead of one pinned branch. |
 | 61 | `schema-btb-console-any-branch.sql` | A console may act on any branch of its estate: `btb_admin_assert_location()` keeps the console-session, explicit-assignment, same-tenant and active checks but no longer requires the branch to equal the session's pinned location, which locked every other branch out of people, invitations, passwords and location settings. |
 | 62 | `schema-btb-scope-trigger-fix.sql` | Repair the scoped-row trigger: `workspace_guard_scoped_row()` no longer runs an unfinished parent-FK loop that projected `parent.relname` on a `pg_attribute` row (42703), which broke every session-scoped write since step 58. All other guards are unchanged. |
+| 63 | `schema-btb-remove-membership.sql` | Remove-from-location works: the scoped-row guard accepts rows of any branch a console administers (not only its pinned one), and the employee target check accepts a person whose last membership was just deleted instead of demanding the membership it is removing. |
+| 64 | `schema-btb-remove-revokes-sessions.sql` | Blocking a person, or removing their last membership, now revokes their durable `workspace_auth_sessions` rows as well as bumping the principal version, so no usable session survives a disabled account. |
 
 
 ## Role set — single source of truth
