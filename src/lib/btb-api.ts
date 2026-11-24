@@ -6,10 +6,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { btbCanEdit, btbCanView, type BtbFeature } from "./btb-access";
 import { BTB_CARDS } from "./btb-hub";
 import { btbPageAllowed, type BtbEffectiveAccess } from "./btb-page-access";
-import { loadBtbEffectiveAccess } from "./btb-effective-access";
+import { loadBtbEffectiveAccess, loadConsoleBtbAccess } from "./btb-effective-access";
 import { resolveBtbLocation, type BtbLocationContext } from "./btb-location-context";
 import { BTB_RESTAURANT, type BtbIdentity } from "./btb-team";
 import { requireWorkspaceSession, workspaceBtbIdentity, workspaceSessionFromValue, type VerifiedWorkspaceSession } from "./workspace-auth-server";
+import { consoleBranchIds } from "./workspace-console-sites";
+import { serviceDb } from "./supabase-server";
 import { inWorkspace } from "./workspace-request-context";
 import { btbOriginAllowed } from "./btb-origin";
 import { BtbApiError, failureDetails, publicFailure } from "./api-errors";
@@ -99,11 +101,19 @@ export async function btbRequestLocation(context: BtbApiContext, request: Reques
 export async function requireBtbAccess(feature?: BtbFeature, edit = false, options?: BtbAccessOptions): Promise<BtbApiContext> {
   const session = options?.session ?? await requireWorkspaceSession();
   const db = session.db;
-  const identity = workspaceBtbIdentity(session);
-  const access = await loadBtbEffectiveAccess(db, identity);
+  const identity = await workspaceBtbIdentity(session);
+  // A console acting inside a branch keeps its own principal but uses its linked
+  // employee for attribution. Its page set comes from the estate it administers,
+  // not from one employee's page grants.
+  const access = identity.console
+    ? await loadConsoleBtbAccess(serviceDb(), identity, await consoleBranchIds(serviceDb(), session.claims, session.principal))
+    : await loadBtbEffectiveAccess(db, identity);
   if (feature) {
     if (feature === "platform" && !identity.employeeId) throw new BtbApiError("Sign in with your individual employee account to use the location workspace.", 401);
-    if (!btbCanView(feature, identity.role) || (edit && !btbCanEdit(feature, identity.role))) throw new BtbApiError("Your role cannot make this change.", 403);
+    // The console administers the store, so it acts with store-manager authority;
+    // everyone else keeps exactly the role the matrix gives them.
+    const mayEdit = btbCanEdit(feature, identity.console ? "manager" : identity.role);
+    if (!btbCanView(feature, identity.role) || (edit && !mayEdit)) throw new BtbApiError("Your role cannot make this change.", 403);
     // Shared feature buckets (reference) must name their exact page. Never let
     // granting prep-manual implicitly authorize menu/allergen/fryer URLs.
     const candidates = BTB_CARDS.filter(item => item.feature === feature);

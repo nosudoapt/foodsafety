@@ -15,7 +15,7 @@ export async function POST(request: Request) {
   try {
     requireBtbOrigin(request);
     const session = await requireWorkspaceSession();
-    const identity = workspaceBtbIdentity(session);
+    const identity = await workspaceBtbIdentity(session);
     if (!identity.employeeId || !isEmployeeRole(identity.role)) throw new BtbApiError("Sign in with your individual employee account to change your password.", 403);
     const body = await readBody(request, 4096);
     if (typeof body.currentPassword !== "string" || body.currentPassword.length > 128 || !validEmployeePassword(body.password)) {

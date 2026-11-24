@@ -39,7 +39,7 @@ export function resolveBtbLocation(
     return { id: site.id, name: site.name, slug: site.slug };
   };
 
-  if (!identity.employeeId || !isUuid(identity.currentLocationId) || !identity.tenantId) {
+  if ((!identity.employeeId && !identity.console) || !isUuid(identity.currentLocationId) || !identity.tenantId) {
     throw new BtbApiError("No active workspace assigned — contact your manager", 403);
   }
   const site = pick(identity.currentLocationId);

@@ -28,6 +28,10 @@ export interface BtbIdentity {
   currentLocationId?: string;
   allowedLocationIds?: string[];
   sessionId?: string;
+  /** A console (tenant super-admin) acting inside a branch workspace. It keeps
+   *  its own principal for authorization and uses its linked employee record for
+   *  attribution, so nothing is written anonymously. */
+  console?: boolean;
 }
 
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

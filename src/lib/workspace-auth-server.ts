@@ -155,12 +155,43 @@ export function publicWorkspaceSession(session: VerifiedWorkspaceSession): Publi
     tenantName: principal.tenantName, locationId: claims.locationId, locations: principal.locations, permittedView: claims.permittedView };
 }
 
-export function workspaceBtbIdentity(session: VerifiedWorkspaceSession): BtbIdentity {
+/** The BTB identity behind a verified workspace session.
+ *
+ *  An employee is themself. A console (tenant super-admin) acts as its linked
+ *  employee record — the same person, already linked at cutover — so every write
+ *  and edit-log entry carries a real name and employee id instead of an
+ *  anonymous admin. A console with no linked record can still view and manage,
+ *  but employee-keyed writes (drafts, training) fail closed further down.
+ */
+export async function workspaceBtbIdentity(session: VerifiedWorkspaceSession): Promise<BtbIdentity> {
   const { claims, principal } = session;
-  if (claims.principalType !== "employee" || claims.tenantSlug !== "between-the-buns" || !isBtbRole(claims.role) || claims.role === "admin") {
+  if (claims.tenantSlug !== "between-the-buns") throw new BtbApiError("This surface is not in your workspace.", 403);
+  if (claims.principalType === "console") {
+    const linked = await linkedEmployee(serviceDb(), claims.sub);
+    return {
+      role: linked && isBtbRole(linked.role) && linked.role !== "admin" ? linked.role : "owner",
+      employeeId: linked?.id ?? null,
+      name: principal.name,
+      email: principal.email,
+      sessionVersion: linked?.sessionVersion,
+      sub: claims.sub, tenantId: claims.tenantId, currentLocationId: claims.locationId,
+      allowedLocationIds: claims.allowedLocationIds, sessionId: claims.sid, console: true,
+    };
+  }
+  if (claims.principalType !== "employee" || !isBtbRole(claims.role) || claims.role === "admin") {
     throw new BtbApiError("This surface is not in your workspace.", 403);
   }
   return { role: claims.role, employeeId: principal.credentialId, name: principal.name, email: principal.email,
     sessionVersion: principal.sourceVersion ?? undefined, sub: claims.sub, tenantId: claims.tenantId,
     currentLocationId: claims.locationId, allowedLocationIds: claims.allowedLocationIds, sessionId: claims.sid };
+}
+
+/** The employee record behind a console principal, if cutover linked one. The
+ *  link is keyed by principal id, which the verified claims already carry. */
+async function linkedEmployee(db: SupabaseClient, principalId: string): Promise<{ id: string; role: string; sessionVersion: number } | null> {
+  const link = await db.from("workspace_credential_links").select("employee_id").eq("principal_id", principalId).maybeSingle();
+  if (link.error || !link.data?.employee_id) return null;
+  const employee = await db.from("btb_employees").select("id, role, version").eq("id", link.data.employee_id).maybeSingle();
+  if (employee.error || !employee.data) return null;
+  return { id: employee.data.id, role: employee.data.role, sessionVersion: employee.data.version };
 }

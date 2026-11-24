@@ -11,7 +11,7 @@ import { inWorkspace } from "@/lib/workspace-request-context";
 export async function GET(request: Request) {
   try {
     const session = await requireWorkspaceSession();
-    const identity = workspaceBtbIdentity(session);
+    const identity = await workspaceBtbIdentity(session);
     const access = await inWorkspace({ claims: session.claims, db: session.db },
       () => loadBtbEffectiveAccess(session.db, identity));
     return NextResponse.json({

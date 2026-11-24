@@ -1,5 +1,6 @@
 import "server-only";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { CircleAlert, LockKeyhole } from "lucide-react";
 import { BtbApiError, requireBtbAccess } from "@/lib/btb-api";
@@ -11,7 +12,19 @@ import { workspacePageAllowed } from "@/lib/workspace-page-access";
  * Layouts/client-only gates cannot withhold leaf content from an RSC response. */
 export default async function BtbServerPage({ page, children }: { page: string; children: React.ReactNode }) {
   const session = await workspacePageSession();
-  if (session.claims.principalType !== "employee" || !workspacePageAllowed(`${session.claims.permittedView}${page ? `/${page}` : ""}`, session.claims)) redirect(session.claims.permittedView);
+  const slugs = session.principal.locations.map((site) => site.slug);
+  // The branch this render is for: the proxy pins it for an employee, and a
+  // console must have switched its session to the branch it is entering.
+  const slug = (await headers()).get("x-btb-slug")
+    ?? session.principal.locations.find((site) => site.id === session.claims.locationId)?.slug
+    ?? "";
+  const current = session.principal.locations.find((site) => site.id === session.claims.locationId);
+  const branchEntry = session.claims.principalType === "employee" || session.claims.principalType === "console";
+  const base = `/btb/${slug}`;
+  if (!branchEntry || !current || slug !== current.slug
+    || !workspacePageAllowed(`${base}${page ? `/${page}` : ""}`, session.claims, slugs)) {
+    redirect(session.claims.permittedView);
+  }
   const card = page ? btbCardForPath(`/btb/demo/${page}`) : undefined;
   let failure: BtbApiError | null = null;
   try {

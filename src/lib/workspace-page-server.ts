@@ -17,7 +17,8 @@ export const workspacePageSession = cache(async (): Promise<VerifiedWorkspaceSes
 
 export async function requireWorkspacePage(path: string, locationId?: string): Promise<VerifiedWorkspaceSession> {
   const session = await workspacePageSession();
-  if (!workspacePageAllowed(path, session.claims)) redirect(session.claims.permittedView);
+  const slugs = session.principal.locations.map((site) => site.slug);
+  if (!workspacePageAllowed(path, session.claims, slugs)) redirect(session.claims.permittedView);
   if (locationId !== undefined && locationId !== session.claims.locationId) {
     // A console manages its whole estate, so any branch it is assigned to opens —
     // not only the one its session happens to be pinned to. Employees keep the

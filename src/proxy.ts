@@ -46,16 +46,26 @@ export async function proxy(request: NextRequest) {
   if (!session) return chooser && path === "/app" ? NextResponse.next({ request: { headers: requestHeaders } }) : redirectTo("/auth/sign-in");
   const { claims } = session;
   if (chooser || legacyFolder) return redirectTo(claims.permittedView);
-  if (!workspacePageAllowed(path, claims)) return redirectTo(claims.permittedView);
+  // Branches this session may open. An employee has exactly one; a console has
+  // the estate it administers.
+  const branchSlugs = session.principal.locations.map((site) => site.slug);
+  if (!workspacePageAllowed(path, claims, branchSlugs)) return redirectTo(claims.permittedView);
 
   requestHeaders.set("x-workspace-path", path);
-  if (claims.principalType === "employee") {
-    const site = session.principal.locations.find(item => item.id === claims.locationId)!;
-    const rest = path.slice(claims.permittedView.length);
-    const url = request.nextUrl.clone();
-    url.pathname = `/btb/demo${rest}`;
-    requestHeaders.set("x-btb-slug", site.slug);
-    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+  // Both a branch's own employee and a console entering that branch render the
+  // same workspace pages behind /btb/<slug>.
+  const entered = path.match(/^\/btb\/([a-z0-9][a-z0-9-]*)(\/.*)?$/);
+  if (claims.principalType === "employee" || claims.principalType === "console") {
+    const site = claims.principalType === "employee"
+      ? session.principal.locations.find(item => item.id === claims.locationId)
+      : session.principal.locations.find(item => item.slug === entered?.[1]);
+    if (entered && site) {
+      const rest = entered[2] ?? "";
+      const url = request.nextUrl.clone();
+      url.pathname = `/btb/demo${rest}`;
+      requestHeaders.set("x-btb-slug", site.slug);
+      return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+    }
   }
   return NextResponse.next({ request: { headers: requestHeaders } });
 }

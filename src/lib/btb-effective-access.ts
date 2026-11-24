@@ -4,6 +4,40 @@ import { BtbApiError } from "./api-errors";
 import { accessibleBtbCards, isBtbPageAccess, pageSlug, type BtbEffectiveAccess } from "./btb-page-access";
 import { isUuid, type BtbIdentity } from "./btb-team";
 
+/** A console (tenant super-admin) inside a branch workspace: every page of its
+ *  own estate, restricted only by the owner role's saved page matrix. It has no
+ *  per-employee page grants, so `pageGrants: null` means "unrestricted" exactly
+ *  as the legacy aggregate view meant it. */
+export async function loadConsoleBtbAccess(
+  infra: SupabaseClient,
+  identity: BtbIdentity,
+  branchIds: string[],
+): Promise<BtbEffectiveAccess> {
+  if (!identity.tenantId || !identity.currentLocationId) throw new BtbApiError("No active workspace assigned — contact your manager", 403);
+  const [restrictions, names, settings] = await Promise.all([
+    infra.from("role_page_access").select("role,page,allowed").eq("role", identity.role),
+    branchIds.length ? infra.from("locations").select("id,name,slug,tenant_id").in("id", branchIds) : Promise.resolve({ data: [], error: null }),
+    branchIds.length ? infra.from("btb_location_settings").select("location_id,active").in("location_id", branchIds) : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (restrictions.error || names.error || settings.error || !Array.isArray(restrictions.data) || !restrictions.data.every(isBtbPageAccess)) {
+    throw new BtbApiError("Page access could not be verified. Please try again.", 503, restrictions.error ?? names.error ?? settings.error);
+  }
+  const rows = restrictions.data as import("./btb-page-access").BtbPageAccess[];
+  const locations: BtbEffectiveAccess["locations"] = (names.data ?? [])
+    .filter((site: { tenant_id: string | null }) => site.tenant_id === identity.tenantId)
+    .map((site: { id: string; name: string; slug: string | null }) => ({
+      id: site.id, name: site.name, slug: site.slug ?? "",
+      active: (settings.data ?? []).some((row: { location_id: string; active: boolean }) => row.location_id === site.id && row.active),
+    }));
+  locations.sort((a, b) => a.name.localeCompare(b.name));
+  const locationIds = locations.map((site) => site.id);
+  return {
+    rows, locationIds, pageGrants: null, locations,
+    pages: accessibleBtbCards(identity.role, rows, null).map(pageSlug),
+    locationWorkspace: true,
+  };
+}
+
 /** Request-time only. Neither restrictions nor location grants are cached across
  * requests, and a failed/missing resolver never becomes legacy access. */
 export async function loadBtbEffectiveAccess(db: SupabaseClient, identity: BtbIdentity): Promise<BtbEffectiveAccess> {

@@ -52,3 +52,50 @@ test("an empty console estate refuses even the session's own branch id collision
   assert.equal(scopeRpcRequest("btb_admin_people", "POST", { p_location: calgary }, s).p_location, calgary, "own branch always allowed");
   assert.throws(() => scopeRpcRequest("btb_admin_people", "POST", { p_location: drumheller }, s));
 });
+import { workspacePageAllowed } from "../src/lib/workspace-page-access";
+import { resolveBtbLocation } from "../src/lib/btb-location-context";
+import type { BtbEffectiveAccess } from "../src/lib/btb-page-access";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+test("a console may open the console and any branch it administers, nothing else", () => {
+  const c = claims({});
+  const slugs = ["calgary", "drumheller"];
+  assert.equal(workspacePageAllowed("/btb/admin", c, slugs), true);
+  assert.equal(workspacePageAllowed("/btb/admin/locations/x", c, slugs), true);
+  assert.equal(workspacePageAllowed("/btb/drumheller", c, slugs), true);
+  assert.equal(workspacePageAllowed("/btb/drumheller/prep-list", c, slugs), true);
+  assert.equal(workspacePageAllowed("/btb/ancoats", c, slugs), false, "not in this estate");
+  assert.equal(workspacePageAllowed("/dashboard", c, slugs), false, "a console is not a restaurant account");
+});
+
+test("an employee is still pinned to its own branch", () => {
+  const e = claims({ principalType: "employee", role: "manager", locationId: calgary, permittedView: "/btb/calgary" });
+  assert.equal(workspacePageAllowed("/btb/calgary/prep-list", e, ["calgary", "drumheller"]), true);
+  assert.equal(workspacePageAllowed("/btb/drumheller/prep-list", e, ["calgary", "drumheller"]), false);
+  assert.equal(workspacePageAllowed("/btb/admin", e, ["calgary"]), false);
+});
+
+test("a console resolves a branch without an employee record", () => {
+  const access = (id: string): BtbEffectiveAccess => ({
+    rows: [], locationIds: [id], pageGrants: null,
+    locations: [{ id, name: "Drumheller", slug: "drumheller", active: true }], pages: [], locationWorkspace: true,
+  });
+  const consoleIdentity = {
+    role: "owner" as const, name: "Nitpreet Singh", email: "nitpreetsingh05@gmail.com", employeeId: null,
+    console: true, tenantId: "60000000-0000-4000-8000-000000000001", currentLocationId: drumheller,
+  };
+  assert.deepEqual(resolveBtbLocation(consoleIdentity, access(drumheller)),
+    { id: drumheller, name: "Drumheller", slug: "drumheller" });
+  // The console still cannot invent a branch outside its scope.
+  assert.throws(() => resolveBtbLocation(consoleIdentity, access(calgary)), /not in your workspace/);
+});
+
+test("the branch boundary is enforced on the server, not just by the link", () => {
+  const boundary = readFileSync(join(__dirname, "..", "..", "src/components/btb/BtbServerPage.tsx"), "utf8");
+  assert.match(boundary, /slug !== current\.slug/, "the rendered branch must be the session's branch");
+  assert.match(boundary, /principalType === "console"/, "a console may enter a branch workspace");
+  const proxy = readFileSync(join(__dirname, "..", "..", "src/proxy.ts"), "utf8");
+  assert.match(proxy, /workspacePageAllowed\(path, claims, branchSlugs\)/);
+  assert.match(proxy, /item\.slug === entered\?\.\[1\]/, "the console branch comes from its own assignments");
+});
