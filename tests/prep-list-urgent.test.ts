@@ -39,16 +39,13 @@ test("the database column exists", () => {
 });
 
 test("a week with no PAR levels still renders the printed catalog", () => {
-  // Rows come from btb_prep_par_levels (per location + week). A location whose
-  // week is not set yet had zero rows, so the sheet looked empty. The route now
-  // falls back to the printed catalog for sections with no saved levels.
+  // Rows come from btb_prep_par_levels (per location + week), but a saved week
+  // that only had two items used to shrink Produce to two rows. The route now
+  // starts from the printed catalog and layers the week's saved rows on top.
   assert.ok(api.includes("function prepRowsFor("), "the route has a catalog fallback");
   assert.ok(api.includes("prepCategoryItems(category)"), "the fallback uses the printed catalog");
-  assert.ok(
-    api.includes("if (saved.length) return saved;")
-      || api.includes("for (const leftover of byKey.values()) catalog.push(leftover)"),
-    "saved levels are preserved and custom rows are never dropped"
-  );
+  assert.ok(api.includes("prepCategoryItems(category).map"), "the catalog is the floor for every section");
+  assert.ok(api.includes("for (const leftover of byKey.values()) catalog.push(leftover)"), "saved custom items are appended, never dropped");
 
   // The catalog itself must be non-trivial — this is what the fallback serves.
   const produce = prepCategoryItems("Produce");

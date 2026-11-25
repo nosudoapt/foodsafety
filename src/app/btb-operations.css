@@ -728,14 +728,16 @@ button.franchise-section__heading:hover { background: var(--paper-2); }
 .prep-modal__head p { margin-top: 6px; max-width: 70ch; font-size: 0.8125rem;
   line-height: 1.6; color: var(--muted); }
 .prep-modal__head > .ui-button { flex: none; }
-.prep-modal__body { display: grid; gap: 16px; padding: 20px 24px; overflow: auto;
-  flex: 1 1 auto; min-height: 0; }
-.prep-modal__section { overflow: hidden; background: #fff; border: 1px solid var(--line);
-  border-radius: var(--r-md); }
+.prep-modal__body { display: flex; flex-direction: column; gap: 16px; padding: 20px 24px;
+  overflow-y: auto; flex: 1 1 auto; min-height: 0; }
+.prep-modal__section { flex: 0 0 auto; overflow: hidden; background: #fff;
+  border: 1px solid var(--line); border-radius: var(--r-md); }
 .prep-modal__section-head { display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 10px 14px; background: var(--paper-2);
   border-bottom: 1px solid var(--line); }
 .prep-modal__section-head h3 { margin: 0; font-size: 0.875rem; font-weight: 650; color: var(--ink); }
+.prep-par-scroll { overflow-x: auto; }
+.prep-par-table { min-width: 26rem; }
 .prep-par-table td { padding: 8px 10px; }
 .prep-par-table input.prep-field { min-height: 36px; }
 .prep-modal__foot { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px;

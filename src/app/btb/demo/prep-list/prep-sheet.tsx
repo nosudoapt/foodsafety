@@ -407,21 +407,23 @@ export default function PrepSheet() {
                     <h3>{section.category}</h3>
                     <button type="button" className="ui-button ui-button--ghost prep-modal__add" onClick={() => addRow(section.category)}>+ Add item</button>
                   </header>
-                  <table className="ops-table w-full text-xs prep-par-table">
-                    <thead><tr><th scope="col">Item</th><th scope="col">Unit</th><th scope="col">PAR</th><th scope="col">Urgent</th></tr></thead>
-                    <tbody>
-                      {levels.map((row, index) => row.category !== section.category ? null : (
-                        <tr key={row.key}>
-                          <td>{row.custom
-                            ? <input className="prep-field prep-field--name" placeholder="Item name" aria-label="Custom item name" value={row.name} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, name: event.target.value } : entry))} />
-                            : <span className="prep-item__name">{row.name}</span>}</td>
-                          <td><input className="prep-field prep-field--unit" aria-label={`${row.name || "Item"} unit`} value={row.unit} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, unit: event.target.value } : entry))} /></td>
-                          <td><input inputMode="decimal" className="prep-field prep-field--par" aria-label={`${row.name || "Item"} PAR`} value={row.par} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, par: event.target.value } : entry))} /></td>
-                          <td className="text-center"><input type="checkbox" className="prep-check" aria-label={`${row.name || "Item"} urgent`} checked={row.urgent} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, urgent: event.target.checked } : entry))} /></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="prep-par-scroll">
+                    <table className="ops-table w-full text-xs prep-par-table">
+                      <thead><tr><th scope="col">Item</th><th scope="col">Unit</th><th scope="col">PAR</th><th scope="col">Urgent</th></tr></thead>
+                      <tbody>
+                        {levels.map((row, index) => row.category !== section.category ? null : (
+                          <tr key={row.key}>
+                            <td>{row.custom
+                              ? <input className="prep-field prep-field--name" placeholder="Item name" aria-label="Custom item name" value={row.name} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, name: event.target.value } : entry))} />
+                              : <span className="prep-item__name">{row.name}</span>}</td>
+                            <td><input className="prep-field prep-field--unit" aria-label={`${row.name || "Item"} unit`} value={row.unit} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, unit: event.target.value } : entry))} /></td>
+                            <td><input inputMode="decimal" className="prep-field prep-field--par" aria-label={`${row.name || "Item"} PAR`} value={row.par} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, par: event.target.value } : entry))} /></td>
+                            <td className="text-center"><input type="checkbox" className="prep-check" aria-label={`${row.name || "Item"} urgent`} checked={row.urgent} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, urgent: event.target.checked } : entry))} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                   <fieldset className="prep-assign">
                     <legend>Who does this section</legend>
                     {sheet.team.map((person) => (

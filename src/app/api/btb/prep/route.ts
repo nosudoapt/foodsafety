@@ -21,18 +21,29 @@ interface PrepLevel { item_key: string; item_name: string; category: string; uni
 /**
  * The rows printed for one section.
  *
- * PAR levels are per location and per week, so a location whose week has not
- * been set yet has no rows at all — the sheet then rendered nearly empty, which
- * looks like lost data. Fall back to the printed catalog for any section with
- * no saved levels, so the team can always record the shift. Saved levels, once
- * present, win; a manager's custom row is never replaced by the catalog.
+ * PAR levels are stored per location and per week, which means a location whose
+ * week was set with only a couple of custom items rendered a two-row Produce
+ * section while the printed catalog has fourteen — it looked like lost data.
+ *
+ * So the printed catalog is the floor: every catalog item always appears, with
+ * the saved PAR/unit/urgent for that week layered on top. A saved row that is
+ * not in the catalog (a manager's own addition) is appended, never dropped.
+ * Catalog order is preserved so the sheet reads like the paper form.
  */
 function prepRowsFor(category: string, levels: PrepLevel[]): PrepLevel[] {
   const saved = levels.filter((level) => level.category === category);
-  if (saved.length) return saved;
-  return prepCategoryItems(category).map((item) => ({
-    item_key: item.key, item_name: item.name, category, unit: item.unit, par: 0, urgent: false, custom: false,
-  }));
+  const byKey = new Map(saved.map((level) => [level.item_key, level]));
+  const catalog = prepCategoryItems(category).map((item) => {
+    const match = byKey.get(item.key);
+    if (match) { byKey.delete(item.key); return match; }
+    return {
+      item_key: item.key, item_name: item.name, category,
+      unit: item.unit, par: 0, urgent: false, custom: false,
+    };
+  });
+  // Anything saved but absent from the catalog is a branch-specific addition.
+  for (const leftover of byKey.values()) catalog.push(leftover);
+  return catalog;
 }
 
 /** Reads the whole sheet for one day: PAR levels for the week, assignments,
