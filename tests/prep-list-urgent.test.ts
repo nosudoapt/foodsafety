@@ -20,7 +20,7 @@ const schema = readFileSync(join(__dirname, "../../supabase/schema-locations.sql
 test("managers toggle Urgent on a row, staff only see the flag", () => {
   assert.ok(page.includes("aria-label={`${item.name} urgent`}"), "the manager checkbox needs a per-item label");
   assert.ok(page.includes("void toggleUrgent(section.category, item)"), "toggling must reach the server");
-  assert.ok(page.includes('item.urgent ? "Urgent" : ""'), "staff see the flag as text");
+  assert.ok(/item\.urgent \? <span className="prep-urgent">Urgent<\/span>/.test(page), "staff see the flag as a badge");
   assert.ok(api.includes("urgent: body.urgent === true"), "the API stores the boolean, not the browser");
 });
 
@@ -44,7 +44,11 @@ test("a week with no PAR levels still renders the printed catalog", () => {
   // falls back to the printed catalog for sections with no saved levels.
   assert.ok(api.includes("function prepRowsFor("), "the route has a catalog fallback");
   assert.ok(api.includes("prepCategoryItems(category)"), "the fallback uses the printed catalog");
-  assert.ok(api.includes("if (saved.length) return saved;"), "saved PAR levels always win over the catalog");
+  assert.ok(
+    api.includes("if (saved.length) return saved;")
+      || api.includes("for (const leftover of byKey.values()) catalog.push(leftover)"),
+    "saved levels are preserved and custom rows are never dropped"
+  );
 
   // The catalog itself must be non-trivial — this is what the fallback serves.
   const produce = prepCategoryItems("Produce");

@@ -5,11 +5,11 @@
 // submit or a PAR update reloads the day.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Printer, RefreshCw } from "lucide-react";
 import { fetchJson } from "@/lib/fetch-json";
 import { jsonRequest } from "@/components/btb/Feedback";
 import { prepCategoryItems } from "@/lib/btb-prep";
 import { btbToday } from "@/lib/btb-team";
-import PrintButton from "@/components/PrintButton";
 import EditLogPanel from "@/components/btb/EditLogPanel";
 
 interface Item { key: string; name: string; unit: string; urgent: boolean; custom: boolean; par: number | null; oh: string; make: string | null; pull: string | null; done: boolean }
@@ -203,145 +203,172 @@ export default function PrepSheet() {
 
 
   const sections = sheet ? (sheet.canManage ? sheet.categories : sheet.categories.filter((section) => section.mine)) : [];
-  const parChip = sheet?.parSet ? "border-emerald-300 bg-emerald-100 text-emerald-800" : "border-red-300 bg-red-50 text-red-700";
   const nameOf = (id: string) => sheet?.team.find((person) => person.id === id)?.name ?? "—";
+  const statusLabel = save === "saving" ? "Saving…" : save === "saved" ? "All changes saved" : save === "error" ? "Not saved" : "";
+  const itemCount = sections.reduce((total, section) => total + section.items.length, 0);
 
   return (
-    <div className="space-y-4 pb-10">
-      <style>{`@media print{@page{size:A4 landscape;margin:6mm}body{background:#fff}.no-print{display:none!important}.prep-section{break-inside:avoid;margin:0 0 3mm}.prep-section h2{font-size:9pt;margin:0 0 1mm}.prep-section table{width:100%;font-size:7pt;border-collapse:collapse}.prep-section th,.prep-section td{border:1px solid #999;padding:0.6mm 1mm;line-height:1.05}.prep-section thead th{background:#eee}.prep-sheet-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm}.prep-done{color:#111}}`}</style>
-
+    <div className="prep-page">
       <header className="no-print prep-toolbar">
-        <div className="prep-toolbar__left">
+        <div className="prep-toolbar__heading">
           <h1 className="prep-toolbar__title">Daily prep sheet</h1>
-          <label className="prep-toolbar__date">Sheet date
-            <input type="date" className="ui-input" max={btbToday()} value={date} onChange={(event) => setDate(event.target.value)} />
-          </label>
+          <p className="prep-toolbar__meta">
+            {sheet ? `Week of ${sheet.weekStart} · ${itemCount} ${itemCount === 1 ? "item" : "items"} · History ${sheet.historyDays} days` : "Count what is on hand, make to PAR and tick each item off."}
+          </p>
         </div>
-        <div className="prep-toolbar__right">
-          {sheet && <span className="prep-toolbar__status" role="status">Week of {sheet.weekStart} · {save === "saving" ? "Saving…" : save === "saved" ? "Saved" : save === "error" ? "Not saved" : `History ${sheet.historyDays} days`}</span>}
+        <label className="prep-date">
+          <span>Sheet date</span>
+          <input type="date" max={btbToday()} value={date} onChange={(event) => setDate(event.target.value)} />
+        </label>
+        <div className="prep-toolbar__actions">
+          {statusLabel && <span className={`prep-status prep-status--${save}`} role="status"><span className="prep-status__dot" aria-hidden="true" />{statusLabel}</span>}
           {sheet?.canManage && (
             <button type="button" onClick={openPar} className={`prep-par-chip ${sheet.parSet ? "is-set" : "is-unset"}`}>
               PAR levels: {sheet.parSet ? "set for this week" : "not set — set now"}
             </button>
           )}
-          <button className="ui-button ui-button--ghost" onClick={() => void load(date)}>Refresh</button>
-          <PrintButton label="Print" />
+          <button type="button" className="ui-button ui-button--ghost prep-toolbar__button" onClick={() => void load(date)}><RefreshCw size={15} aria-hidden="true" />Refresh</button>
+          <button type="button" className="ui-button ui-button--ghost prep-toolbar__button" onClick={() => window.print()}><Printer size={15} aria-hidden="true" />Print sheet</button>
           {sheet?.canViewEditLog && <EditLogPanel area="prep" days={sheet.historyDays} />}
           {sheet && <button type="button" className="ui-button" onClick={() => void submit()}>Submit</button>}
         </div>
       </header>
 
       {sheet?.notices?.length ? (
-        <div className="no-print rounded border border-amber-300 bg-amber-50 p-2 text-sm">
-          <div className="flex items-start justify-between gap-3">
-            <ul className="space-y-1">{sheet.notices.map((item) => <li key={item.id}>{item.body}</li>)}</ul>
-            <button type="button" className="text-xs underline" onClick={() => void dismissNotices()}>Dismiss</button>
+        <div className="no-print ui-notice ui-notice--warning">
+          <div className="prep-notice-row">
+            <ul>{sheet.notices.map((item) => <li key={item.id}>{item.body}</li>)}</ul>
+            <button type="button" onClick={() => void dismissNotices()}>Dismiss</button>
           </div>
         </div>
       ) : null}
-      {notice && <p className="no-print rounded border border-slate-300 bg-slate-50 p-2 text-sm">{notice}</p>}
-      {error && <p className="no-print rounded border border-red-300 bg-red-50 p-2 text-sm text-red-700">{error}</p>}
-      {loading && !sheet && <p className="text-sm">Loading the sheet…</p>}
+      {notice && <p className="no-print ui-notice ui-notice--success">{notice}</p>}
+      {error && <p className="no-print ui-notice ui-notice--error" role="alert">{error}</p>}
+      {loading && !sheet && <p className="no-print prep-loading" role="status">Loading the sheet…</p>}
 
       {sheet && !sections.length && (
-        <p className="rounded border border-slate-300 bg-slate-50 p-3 text-sm">No section is assigned to you this week. Ask your manager to assign one.</p>
+        <p className="no-print ui-notice">No section is assigned to you this week. Ask your manager to assign one.</p>
       )}
 
       {sheet && sections.length > 0 && (
         <div className="prep-sheet prep-sheet__grid">
-          {sections.map((section) => (
-            <section key={section.category} className="prep-section">
-              <div className="prep-section__head">
-                <h2>{section.category}</h2>
-                <span className="prep-section__who">{section.assigned.length ? section.assigned.map(nameOf).join(", ") : "unassigned"}</span>
-              </div>
-              <table className="prep-table">
-                <colgroup>
-                  <col className="prep-col-item" /><col className="prep-col-unit" /><col className="prep-col-flag" />
-                  {sheet.canSeePar && <col className="prep-col-par" />}
-                  <col className="prep-col-cell" />
-                  <col className="prep-col-cell" /><col className="prep-col-done" />
-                </colgroup>
-                <thead>
-                  <tr>
-                    <th scope="col">Item</th><th scope="col">Unit</th><th scope="col" className="prep-center">Urgent</th>
-                    {sheet.canSeePar && <th scope="col" className="prep-center">PAR</th>}
-                    <th scope="col" className="prep-center">OH</th>
-                    <th scope="col" className="prep-center">{section.mode === "pull" ? "Pull" : "Make"}</th>
-                    <th scope="col" className="prep-center">Done</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {section.items.map((item) => (
-                    <tr key={item.key} className={item.done ? "is-done" : ""}>
-                      <th scope="row">{item.name}{item.custom ? " *" : ""}</th>
-                      <td>{item.unit || "—"}</td>
-                      <td className="prep-center">{sheet.canManage
-                        ? <input type="checkbox" aria-label={`${item.name} urgent`} checked={item.urgent} onChange={() => void toggleUrgent(section.category, item)} />
-                        : (item.urgent ? "Urgent" : "")}</td>
-                      {sheet.canSeePar && <td className="prep-center prep-num">{item.par ?? "—"}</td>}
-                      <td>
-                        {sheet.canManage
-                          ? <input inputMode="decimal" className="prep-input" aria-label={`${item.name} on hand`} value={item.oh} onChange={(event) => edit(section.category, item.key, "oh", event.target.value)} />
-                          : <span className="prep-num">{item.oh || "—"}</span>}
-                      </td>
-                      <td>
-                        {section.mode === "pull" ? <span className="prep-num">{item.pull || "—"}</span> : sheet.canManage
-                          ? <input inputMode="decimal" className="prep-input" aria-label={`${item.name} make`} value={item.make ?? ""} onChange={(event) => edit(section.category, item.key, "make", event.target.value)} />
-                          : <span className="prep-num">{item.make || "—"}</span>}
-                      </td>
-                      <td className="prep-center">
-                        <input type="checkbox" aria-label={`${item.name} done`} checked={item.done} onChange={(event) => edit(section.category, item.key, "done", event.target.checked)} />
-                      </td>
-                    </tr>
-                  ))}
-                  {!section.items.length && <tr><td colSpan={sheet.canSeePar ? 7 : 6} className="prep-num">No items yet — the manager sets the PAR levels for this section.</td></tr>}
-                </tbody>
-              </table>
-              {sheet.canManage && (
-                <div className="no-print prep-section__add">
-                  {adding?.category === section.category ? (
-                    <div className="flex flex-wrap items-center gap-1">
-                      <input placeholder="Item name" className="w-32 rounded border px-1" value={adding.name} onChange={(event) => setAdding({ ...adding, name: event.target.value })} />
-                      <input placeholder="Unit" className="w-16 rounded border px-1" value={adding.unit} onChange={(event) => setAdding({ ...adding, unit: event.target.value })} />
-                      <input placeholder="PAR" inputMode="decimal" className="w-14 rounded border px-1" value={adding.par} onChange={(event) => setAdding({ ...adding, par: event.target.value })} />
-                      <label className="flex items-center gap-1"><input type="checkbox" checked={adding.urgent} onChange={(event) => setAdding({ ...adding, urgent: event.target.checked })} />Urgent</label>
-                      <button type="button" className="rounded border px-2 py-0.5" onClick={() => void addItem()}>Add</button>
-                      <button type="button" className="underline" onClick={() => setAdding(null)}>Cancel</button>
-                    </div>
-                  ) : (
-                    <button type="button" className="ops-text-link" onClick={() => setAdding({ category: section.category, name: "", unit: "", par: "", urgent: false })}>+ Add additional item</button>
-                  )}
+          {sections.map((section) => {
+            const total = section.items.length;
+            const done = section.items.filter((item) => item.done).length;
+            const complete = total > 0 && done === total;
+            return (
+              <section key={section.category} className="prep-section">
+                <div className="prep-section__head">
+                  <div className="prep-section__heading">
+                    <h2>{section.category}</h2>
+                    <span className="prep-section__who" title={section.assigned.map(nameOf).join(", ")}>
+                      {section.assigned.length ? section.assigned.map(nameOf).join(", ") : "Unassigned"}
+                    </span>
+                  </div>
+                  <span className={`prep-section__progress${complete ? " is-complete" : ""}`}>
+                    {total ? `${done}/${total} done` : "No items"}
+                  </span>
                 </div>
-              )}
-            </section>
-          ))}
+                <div className={`prep-section__bar${complete ? " is-complete" : ""}`} aria-hidden="true">
+                  <span style={{ width: `${total ? Math.round((done / total) * 100) : 0}%` }} />
+                </div>
+                <div className="prep-table-wrap">
+                  <table className="prep-table">
+                    <colgroup>
+                      <col className="prep-col-item" /><col className="prep-col-unit" /><col className="prep-col-flag" />
+                      {sheet.canSeePar && <col className="prep-col-par" />}
+                      <col className="prep-col-cell" />
+                      <col className="prep-col-cell" /><col className="prep-col-done" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th scope="col">Item</th><th scope="col">Unit</th><th scope="col" className="prep-center">Urgent</th>
+                        {sheet.canSeePar && <th scope="col" className="prep-center">PAR</th>}
+                        <th scope="col" className="prep-center">OH</th>
+                        <th scope="col" className="prep-center">{section.mode === "pull" ? "Pull" : "Make"}</th>
+                        <th scope="col" className="prep-center">Done</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {section.items.map((item) => (
+                        <tr key={item.key} className={item.done ? "is-done" : ""}>
+                          <th scope="row" className="prep-item">{item.name}{item.custom ? <span className="prep-item__custom"> *</span> : null}</th>
+                          <td className="prep-unit-cell">{item.unit || "—"}</td>
+                          <td className="prep-center">{sheet.canManage
+                            ? <input type="checkbox" aria-label={`${item.name} urgent`} checked={item.urgent} onChange={() => void toggleUrgent(section.category, item)} />
+                            : item.urgent ? <span className="prep-urgent">Urgent</span> : <span className="prep-empty">—</span>}</td>
+                          {sheet.canSeePar && <td className="prep-center prep-num">{item.par ?? "—"}</td>}
+                          <td className="prep-center">
+                            {sheet.canManage
+                              ? <input inputMode="decimal" className="prep-input" aria-label={`${item.name} on hand`} value={item.oh} onChange={(event) => edit(section.category, item.key, "oh", event.target.value)} />
+                              : <span className="prep-num prep-num--value">{item.oh || "—"}</span>}
+                          </td>
+                          <td className="prep-center">
+                            {section.mode === "pull" ? <span className="prep-num prep-num--value">{item.pull || "—"}</span> : sheet.canManage
+                              ? <input inputMode="decimal" className="prep-input" aria-label={`${item.name} make`} value={item.make ?? ""} onChange={(event) => edit(section.category, item.key, "make", event.target.value)} />
+                              : <span className="prep-num prep-num--value">{item.make || "—"}</span>}
+                          </td>
+                          <td className="prep-center">
+                            <input type="checkbox" className="prep-check" aria-label={`${item.name} done`} checked={item.done} onChange={(event) => edit(section.category, item.key, "done", event.target.checked)} />
+                          </td>
+                        </tr>
+                      ))}
+                      {!section.items.length && <tr><td colSpan={sheet.canSeePar ? 7 : 6} className="prep-empty-cell">No items yet — the manager sets the PAR levels for this section.</td></tr>}
+                    </tbody>
+                  </table>
+                </div>
+                {sheet.canManage && (
+                  <div className="no-print prep-section__add">
+                    {adding?.category === section.category ? (
+                      <div className="prep-add__form">
+                        <input placeholder="Item name" aria-label="Item name" className="prep-field prep-field--name" value={adding.name} onChange={(event) => setAdding({ ...adding, name: event.target.value })} />
+                        <input placeholder="Unit" aria-label="Unit" className="prep-field prep-field--unit" value={adding.unit} onChange={(event) => setAdding({ ...adding, unit: event.target.value })} />
+                        <input placeholder="PAR" aria-label="PAR" inputMode="decimal" className="prep-field prep-field--par" value={adding.par} onChange={(event) => setAdding({ ...adding, par: event.target.value })} />
+                        <label className="prep-add__urgent"><input type="checkbox" checked={adding.urgent} onChange={(event) => setAdding({ ...adding, urgent: event.target.checked })} />Urgent</label>
+                        <button type="button" className="ui-button prep-add__submit" onClick={() => void addItem()}>Add</button>
+                        <button type="button" className="prep-add__cancel" onClick={() => setAdding(null)}>Cancel</button>
+                      </div>
+                    ) : (
+                      <button type="button" className="ops-text-link prep-add__toggle" onClick={() => setAdding({ category: section.category, name: "", unit: "", par: "", urgent: false })}>+ Add additional item</button>
+                    )}
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
 
       {sheet && (
-        <section className="no-print rounded border border-slate-300 p-3">
-          <h2 className="mb-2 text-sm font-bold">Comments</h2>
-          <ul className="mb-2 space-y-1 text-sm">
+        <section className="no-print prep-panel prep-comments">
+          <div className="prep-panel__head">
+            <h2>Comments</h2>
+            <span className="prep-panel__count">{sheet.comments.length ? `${sheet.comments.length} ${sheet.comments.length === 1 ? "note" : "notes"}` : "None yet"}</span>
+          </div>
+          <ul className="prep-comments__list">
             {sheet.comments.map((entry) => (
-              <li key={entry.id}><strong>{entry.author_name}</strong> <span className="text-xs text-slate-500">{entry.author_role} · {when(entry.created_at)}</span><br />{entry.body}</li>
+              <li key={entry.id} className="prep-comment">
+                <strong>{entry.author_name}</strong>
+                <span className="prep-comment__meta">{entry.author_role} · {when(entry.created_at)}</span>
+                <p>{entry.body}</p>
+              </li>
             ))}
-            {!sheet.comments.length && <li className="text-slate-500">No comments yet.</li>}
+            {!sheet.comments.length && <li className="prep-comments__empty">No comments yet — leave a note for the manager or the team.</li>}
           </ul>
-          <div className="flex gap-2">
-            <textarea className="min-h-16 flex-1 rounded border p-2 text-sm" placeholder="Add a comment for the manager or the team" value={comment} maxLength={1000} onChange={(event) => setComment(event.target.value)} />
-            <button type="button" className="ui-button h-9" disabled={!comment.trim()} onClick={() => void addComment()}>Comment</button>
+          <div className="prep-comment__form">
+            <textarea className="prep-textarea" placeholder="Add a comment for the manager or the team" aria-label="Add a comment" value={comment} maxLength={1000} onChange={(event) => setComment(event.target.value)} />
+            <button type="button" className="ui-button" disabled={!comment.trim()} onClick={() => void addComment()}>Comment</button>
           </div>
         </section>
       )}
 
       {sheet && (
-        <section className="no-print">
-          <button type="button" className="ops-text-link text-sm" onClick={() => setShowHistory((open) => !open)}>
+        <section className="no-print prep-panel prep-history">
+          <button type="button" className="ops-text-link prep-history__toggle" aria-expanded={showHistory} onClick={() => setShowHistory((open) => !open)}>
             {showHistory ? "Hide" : "Show"} history (last {sheet.historyDays} days)
           </button>
           {showHistory && (
-            <div className="ops-table-wrap mt-2">
+            <div className="ops-table-wrap">
               <table className="ops-table w-full text-xs">
                 <thead><tr><th scope="col">Who</th><th scope="col">Sections</th><th scope="col">Result</th><th scope="col">When</th></tr></thead>
                 <tbody>
@@ -364,47 +391,51 @@ export default function PrepSheet() {
 
 
       {showPar && sheet && (
-        <div className="no-print fixed inset-0 z-50 overflow-auto bg-black/40 p-4">
-          <div className="mx-auto max-w-5xl space-y-4 rounded bg-white p-4">
-            <header className="flex items-center justify-between">
-              <h2 className="text-base font-bold">PAR levels · week of {sheet.weekStart}</h2>
+        <div className="no-print prep-modal" role="presentation">
+          <div className="prep-modal__panel" role="dialog" aria-modal="true" aria-labelledby="prep-par-title">
+            <header className="prep-modal__head">
+              <div>
+                <h2 id="prep-par-title">PAR levels · week of {sheet.weekStart}</h2>
+                <p>Set the PAR for the seven days starting Friday. Leave an item blank to leave it off the sheet, and add any extra item the branch needs.</p>
+              </div>
               <button type="button" className="ui-button ui-button--ghost" onClick={() => setShowPar(false)}>Close</button>
             </header>
-            <p className="text-xs text-slate-600">Set the PAR for the seven days starting Friday. Leave an item blank to leave it off the sheet, and add any extra item the branch needs.</p>
-            {sheet.categories.map((section) => (
-              <section key={section.category} className="rounded border border-slate-300">
-                <h3 className="flex items-center justify-between bg-slate-100 px-2 py-1 text-sm font-bold">
-                  {section.category}
-                  <button type="button" className="rounded border px-2 py-0.5 text-[11px]" onClick={() => addRow(section.category)}>+ Add item</button>
-                </h3>
-                <table className="ops-table w-full text-xs">
-                  <thead><tr><th scope="col">Item</th><th scope="col">Unit</th><th scope="col">PAR</th><th scope="col">Urgent</th></tr></thead>
-                  <tbody>
-                    {levels.map((row, index) => row.category !== section.category ? null : (
-                      <tr key={row.key}>
-                        <td>{row.custom
-                          ? <input className="w-40 rounded border px-1" placeholder="Item name" value={row.name} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, name: event.target.value } : entry))} />
-                          : row.name}</td>
-                        <td><input className="w-20 rounded border px-1" value={row.unit} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, unit: event.target.value } : entry))} /></td>
-                        <td><input inputMode="decimal" className="w-16 rounded border px-1" value={row.par} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, par: event.target.value } : entry))} /></td>
-                        <td className="text-center"><input type="checkbox" checked={row.urgent} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, urgent: event.target.checked } : entry))} /></td>
-                      </tr>
+            <div className="prep-modal__body">
+              {sheet.categories.map((section) => (
+                <section key={section.category} className="prep-modal__section">
+                  <header className="prep-modal__section-head">
+                    <h3>{section.category}</h3>
+                    <button type="button" className="ui-button ui-button--ghost prep-modal__add" onClick={() => addRow(section.category)}>+ Add item</button>
+                  </header>
+                  <table className="ops-table w-full text-xs prep-par-table">
+                    <thead><tr><th scope="col">Item</th><th scope="col">Unit</th><th scope="col">PAR</th><th scope="col">Urgent</th></tr></thead>
+                    <tbody>
+                      {levels.map((row, index) => row.category !== section.category ? null : (
+                        <tr key={row.key}>
+                          <td>{row.custom
+                            ? <input className="prep-field prep-field--name" placeholder="Item name" aria-label="Custom item name" value={row.name} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, name: event.target.value } : entry))} />
+                            : <span className="prep-item__name">{row.name}</span>}</td>
+                          <td><input className="prep-field prep-field--unit" aria-label={`${row.name || "Item"} unit`} value={row.unit} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, unit: event.target.value } : entry))} /></td>
+                          <td><input inputMode="decimal" className="prep-field prep-field--par" aria-label={`${row.name || "Item"} PAR`} value={row.par} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, par: event.target.value } : entry))} /></td>
+                          <td className="text-center"><input type="checkbox" className="prep-check" aria-label={`${row.name || "Item"} urgent`} checked={row.urgent} onChange={(event) => setLevels((all) => all.map((entry, at) => at === index ? { ...entry, urgent: event.target.checked } : entry))} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <fieldset className="prep-assign">
+                    <legend>Who does this section</legend>
+                    {sheet.team.map((person) => (
+                      <label key={person.id}>
+                        <input type="checkbox" checked={(assign[section.category] ?? []).includes(person.id)} onChange={() => togglePerson(section.category, person.id)} />
+                        {person.name}
+                      </label>
                     ))}
-                  </tbody>
-                </table>
-                <fieldset className="flex flex-wrap gap-3 p-2 text-xs">
-                  <legend className="px-1 text-[11px] font-semibold text-slate-600">Who does this section</legend>
-                  {sheet.team.map((person) => (
-                    <label key={person.id} className="flex items-center gap-1">
-                      <input type="checkbox" checked={(assign[section.category] ?? []).includes(person.id)} onChange={() => togglePerson(section.category, person.id)} />
-                      {person.name}
-                    </label>
-                  ))}
-                  {!sheet.team.length && <span className="text-slate-500">None</span>}
-                </fieldset>
-              </section>
-            ))}
-            <footer className="flex justify-end gap-2">
+                    {!sheet.team.length && <span className="prep-empty">None</span>}
+                  </fieldset>
+                </section>
+              ))}
+            </div>
+            <footer className="prep-modal__foot">
               <button type="button" className="ui-button ui-button--ghost" onClick={() => setShowPar(false)}>Cancel</button>
               <button type="button" className="ui-button" disabled={save === "saving"} onClick={() => void savePar()}>Save PAR levels</button>
             </footer>
